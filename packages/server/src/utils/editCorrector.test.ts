@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @license
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import * as vitest from 'vitest';
 import {
   countOccurrences,
@@ -19,18 +19,27 @@ import { ToolRegistry } from '../tools/tool-registry.js';
 const mockGenerateJson = vitest.vi.fn();
 const mockCorrectOldStringMismatch = vitest.vi.fn();
 const mockCorrectNewString = vitest.vi.fn();
+const mockStartChat = vitest.vi.fn();
+const mockSendMessageStream = vitest.vi.fn();
 
 vitest.vi.mock('../core/client.js', async (importOriginal) => {
   const actual = await importOriginal() as any;
   return {
     ...actual,
-    GeminiClient: vitest.vi.fn().mockImplementation((config: Config) => {
-      return {
+    GeminiClient: vitest.vi.fn().mockImplementation((_config: Config) => 
+      // This object is the instance of the mocked GeminiClient
+       ({
         generateJson: mockGenerateJson,
-        correctOldStringMismatch: mockCorrectOldStringMismatch,
+        // These two are not actual methods of GeminiClient but are expected by the function under test
+        // to be part of the client object passed to it. This is a common pattern for testing
+        // interactions with a dependency that might have an interface slightly different in tests.
+        correctOldStringMismatch: mockCorrectOldStringMismatch, 
         correctNewString: mockCorrectNewString,
-      };
-    }),
+        // Add actual GeminiClient methods as mocks for type compatibility with vitest.Mocked<GeminiClient>
+        startChat: mockStartChat,
+        sendMessageStream: mockSendMessageStream,
+      })
+    ),
   };
 });
 
@@ -190,15 +199,14 @@ vitest.describe('editCorrector', () => {
         setAlwaysSkipModificationConfirmation: vitest.vi.fn((skip: boolean) => { configParams.alwaysSkipModificationConfirmation = skip; }),
       } as unknown as Config; 
 
-      // When new GeminiClient() is called in the code under test, it will get the mocked constructor,
-      // which in turn uses the mockGenerateJson, etc., functions defined in the outer scope.
       const MockedGeminiClientConstructor = GeminiClient as vitest.MockedClass<typeof GeminiClient>; 
-      mockGeminiClientInstance = new MockedGeminiClientConstructor(mockConfigInstance);
+      mockGeminiClientInstance = new MockedGeminiClientConstructor(mockConfigInstance) as vitest.Mocked<GeminiClient>; 
 
-      // Clear the outer scope mocks
       mockGenerateJson.mockClear();
       mockCorrectOldStringMismatch.mockClear();
       mockCorrectNewString.mockClear();
+      mockStartChat.mockClear();
+      mockSendMessageStream.mockClear();
     });
 
     vitest.describe('Scenario Group 1: originalParams.old_string matches currentContent directly', () => {
@@ -540,8 +548,8 @@ vitest.describe('editCorrector', () => {
         const currentContent = 'const x = "a\\nbc\\\\"def\\\\"';
         const originalParams = {
           file_path: '/test/file.txt',
-          old_string: 'const x = \\\"a\\\\nbc\\\\\\\\"def\\\\\\\\"',
-          new_string: 'const y = \\\"new\\\\nval\\\\\\\\"content\\\\\\\\"',
+          old_string: 'const x = \\\\"a\\\\nbc\\\\\\\\"def\\\\\\\\"',
+          new_string: 'const y = \\\\"new\\\\nval\\\\\\\\"content\\\\\\\\"',
         };
 
         mockCorrectOldStringMismatch.mockResolvedValue(
