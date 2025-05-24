@@ -50,22 +50,26 @@ export async function ensureCorrectEdit(
   originalParams: EditToolParams,
   client: GeminiClient,
 ): Promise<CorrectedEditResult> {
-  // Always unescape new_string first, as it's independent of old_string's state.
-  const potentiallyUnescapedNewString = unescapeStringForGeminiBug(
-    originalParams.new_string,
-  );
+  let potentiallyUnescapedNewString = originalParams.new_string;
+  // Only preemptively unescape new_string if old_string does not contain literal backslashes.
+  // Standard escape sequences like \n, \t are single characters in memory and won't be matched by .includes('\\').
+  if (!originalParams.old_string.includes('\\')) {
+    potentiallyUnescapedNewString = unescapeStringForGeminiBug(
+      originalParams.new_string,
+    );
+  }
 
   let finalOldString = originalParams.old_string;
   let finalNewString = potentiallyUnescapedNewString;
   let occurrences = countOccurrences(currentContent, finalOldString);
 
   if (occurrences === 1) {
-    // originalParams.old_string is good, use it with the unescaped new_string.
+    // originalParams.old_string is good, use it with the (conditionally) unescaped new_string.
     return {
       params: {
         file_path: originalParams.file_path,
         old_string: finalOldString,
-        new_string: finalNewString,
+        new_string: finalNewString, // Already set based on the condition above
       },
       occurrences,
     };
@@ -79,7 +83,9 @@ export async function ensureCorrectEdit(
 
   if (occurrences === 1) {
     finalOldString = unescapedOldStringAttempt;
-    // new_string is already unescaped (potentiallyUnescapedNewString)
+    // If old_string was unescaped to find a match, new_string should also be unescaped,
+    // overriding the conditional unescape if it wasn't already done.
+    finalNewString = unescapeStringForGeminiBug(originalParams.new_string);
   } else if (occurrences === 0) {
     // LLM correction for old_string
     const llmCorrectedOldString = await correctOldStringMismatch(
@@ -95,12 +101,17 @@ export async function ensureCorrectEdit(
     if (llmOldOccurrences === 1) {
       finalOldString = llmCorrectedOldString;
       // Now, correct new_string based on the changes to old_string.
-      // The new_string passed to correctNewString should be the unescaped one.
+      // The new_string passed to correctNewString should be the one that corresponds to the successful old_string strategy.
+      // If unescapedOldStringAttempt led to llmCorrectedOldString, then new_string should also be unescaped.
+      const baseNewStringForLLMCorrection = unescapeStringForGeminiBug(
+        originalParams.new_string,
+      );
+
       const llmCorrectedNewString = await correctNewString(
         client,
         unescapedOldStringAttempt, // The version of old_string before LLM correction
         llmCorrectedOldString,
-        potentiallyUnescapedNewString, // Use the initially unescaped new_string
+        baseNewStringForLLMCorrection, // Use the unescaped new_string as base for LLM
       );
       // It's possible correctNewString re-introduces escaping, so unescape its output too.
       finalNewString = unescapeStringForGeminiBug(llmCorrectedNewString);
