@@ -1,153 +1,225 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @license
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as vitest from 'vitest';
 import {
   countOccurrences,
   ensureCorrectEdit,
   unescapeStringForGeminiBug,
 } from './editCorrector.js';
 import { GeminiClient } from '../core/client.js';
+import type { Config } from '../config/config.js'; 
+import { ToolRegistry } from '../tools/tool-registry.js';
+
+// Define the expected shape of the mocked module
+interface MockedClientModule {
+  GeminiClient: vitest.MockedClass<typeof GeminiClient>;
+  mockGenerateJson: vitest.Mock;
+  mockCorrectOldStringMismatch: vitest.Mock;
+  mockCorrectNewString: vitest.Mock;
+}
 
 // Mock GeminiClient
-vi.mock('../core/client.js', () => {
-  const GeminiClient = vi.fn();
-  GeminiClient.prototype.generateJson = vi.fn();
-  GeminiClient.prototype.correctOldStringMismatch = vi.fn();
-  GeminiClient.prototype.correctNewString = vi.fn();
-  return { GeminiClient };
+vitest.vi.mock('../core/client.js', () => {
+  const mockGenerateJson = vitest.vi.fn();
+  const mockCorrectOldStringMismatch = vitest.vi.fn();
+  const mockCorrectNewString = vitest.vi.fn();
+  const GeminiClient = vitest.vi.fn().mockImplementation(() => {
+    return {
+      generateJson: mockGenerateJson,
+      correctOldStringMismatch: mockCorrectOldStringMismatch,
+      correctNewString: mockCorrectNewString,
+    };
+  });
+  return { 
+    GeminiClient,
+    mockGenerateJson,
+    mockCorrectOldStringMismatch,
+    mockCorrectNewString 
+  };
 });
 
-describe('editCorrector', () => {
-  describe('countOccurrences', () => {
-    it('should return 0 for empty string', () => {
-      expect(countOccurrences('', 'a')).toBe(0);
+vitest.vi.mock('../tools/tool-registry.js');
+
+vitest.describe('editCorrector', () => {
+  vitest.describe('countOccurrences', () => {
+    vitest.it('should return 0 for empty string', () => {
+      vitest.expect(countOccurrences('', 'a')).toBe(0);
     });
 
-    it('should return 0 for empty substring', () => {
-      expect(countOccurrences('abc', '')).toBe(0);
+    vitest.it('should return 0 for empty substring', () => {
+      vitest.expect(countOccurrences('abc', '')).toBe(0);
     });
 
-    it('should return 0 if substring is not found', () => {
-      expect(countOccurrences('abc', 'd')).toBe(0);
+    vitest.it('should return 0 if substring is not found', () => {
+      vitest.expect(countOccurrences('abc', 'd')).toBe(0);
     });
 
-    it('should return 1 if substring is found once', () => {
-      expect(countOccurrences('abc', 'b')).toBe(1);
+    vitest.it('should return 1 if substring is found once', () => {
+      vitest.expect(countOccurrences('abc', 'b')).toBe(1);
     });
 
-    it('should return correct count for multiple occurrences', () => {
-      expect(countOccurrences('ababa', 'a')).toBe(3);
-      expect(countOccurrences('ababab', 'ab')).toBe(3);
+    vitest.it('should return correct count for multiple occurrences', () => {
+      vitest.expect(countOccurrences('ababa', 'a')).toBe(3);
+      vitest.expect(countOccurrences('ababab', 'ab')).toBe(3);
     });
 
-    it('should count non-overlapping occurrences', () => {
-      expect(countOccurrences('aaaaa', 'aa')).toBe(2); // Non-overlapping: aa_aa_
-      expect(countOccurrences('ababab', 'aba')).toBe(1); // Non-overlapping: aba_ab -> 1
+    vitest.it('should count non-overlapping occurrences', () => {
+      vitest.expect(countOccurrences('aaaaa', 'aa')).toBe(2); 
+      vitest.expect(countOccurrences('ababab', 'aba')).toBe(1); 
     });
 
-    it('should correctly count occurrences when substring is longer', () => {
-      expect(countOccurrences('abc', 'abcdef')).toBe(0);
+    vitest.it('should correctly count occurrences when substring is longer', () => {
+      vitest.expect(countOccurrences('abc', 'abcdef')).toBe(0);
     });
 
-    it('should be case sensitive', () => {
-      expect(countOccurrences('abcABC', 'a')).toBe(1);
-      expect(countOccurrences('abcABC', 'A')).toBe(1);
+    vitest.it('should be case sensitive', () => {
+      vitest.expect(countOccurrences('abcABC', 'a')).toBe(1);
+      vitest.expect(countOccurrences('abcABC', 'A')).toBe(1);
     });
   });
 
-  describe('unescapeStringForGeminiBug', () => {
-    it('should unescape common sequences', () => {
-      expect(unescapeStringForGeminiBug('\\n')).toBe('\n');
-      expect(unescapeStringForGeminiBug('\\t')).toBe('\t');
-      expect(unescapeStringForGeminiBug("\\'")).toBe("'");
-      expect(unescapeStringForGeminiBug('\\"')).toBe('"');
-      expect(unescapeStringForGeminiBug('\\`')).toBe('`');
+  vitest.describe('unescapeStringForGeminiBug', () => {
+    vitest.it('should unescape common sequences', () => {
+      vitest.expect(unescapeStringForGeminiBug('\\n')).toBe('\n');
+      vitest.expect(unescapeStringForGeminiBug('\\t')).toBe('\t');
+      vitest.expect(unescapeStringForGeminiBug("\\'")).toBe("'");
+      vitest.expect(unescapeStringForGeminiBug('\\"')).toBe('"');
+      vitest.expect(unescapeStringForGeminiBug('\\`')).toBe('`');
     });
 
-    it('should handle multiple escaped sequences', () => {
-      expect(unescapeStringForGeminiBug('Hello\\nWorld\\tTest')).toBe(
+    vitest.it('should handle multiple escaped sequences', () => {
+      vitest.expect(unescapeStringForGeminiBug('Hello\\nWorld\\tTest')).toBe(
         'Hello\nWorld\tTest',
       );
     });
 
-    it('should not alter already correct sequences', () => {
-      expect(unescapeStringForGeminiBug('\n')).toBe('\n');
-      expect(unescapeStringForGeminiBug('Correct string')).toBe(
+    vitest.it('should not alter already correct sequences', () => {
+      vitest.expect(unescapeStringForGeminiBug('\n')).toBe('\n');
+      vitest.expect(unescapeStringForGeminiBug('Correct string')).toBe(
         'Correct string',
       );
     });
 
-    it('should handle mixed correct and incorrect sequences', () => {
-      expect(unescapeStringForGeminiBug('\\nCorrect\t\\`')).toBe(
+    vitest.it('should handle mixed correct and incorrect sequences', () => {
+      vitest.expect(unescapeStringForGeminiBug('\\nCorrect\t\\`')).toBe(
         '\nCorrect\t`',
       );
     });
 
-    it('should handle backslash followed by actual newline character', () => {
-      expect(unescapeStringForGeminiBug('\\\n')).toBe('\n');
-      expect(unescapeStringForGeminiBug('First line\\\nSecond line')).toBe(
+    vitest.it('should handle backslash followed by actual newline character', () => {
+      vitest.expect(unescapeStringForGeminiBug('\\\n')).toBe('\n');
+      vitest.expect(unescapeStringForGeminiBug('First line\\\nSecond line')).toBe(
         'First line\nSecond line',
       );
     });
 
-    it('should handle multiple backslashes before an escapable character', () => {
-      expect(unescapeStringForGeminiBug('\\\\n')).toBe('\n'); // \\n -> \n
-
-      expect(unescapeStringForGeminiBug('\\\\\\t')).toBe('\t'); // \\\t -> \t
-      expect(unescapeStringForGeminiBug('\\\\\\\\`')).toBe('`'); // \\\\` -> `
+    vitest.it('should handle multiple backslashes before an escapable character', () => {
+      vitest.expect(unescapeStringForGeminiBug('\\\\n')).toBe('\n');
+      vitest.expect(unescapeStringForGeminiBug('\\\\\\t')).toBe('\t');
+      vitest.expect(unescapeStringForGeminiBug('\\\\\\\\`')).toBe('`');
     });
 
-    it('should return empty string for empty input', () => {
-      expect(unescapeStringForGeminiBug('')).toBe('');
+    vitest.it('should return empty string for empty input', () => {
+      vitest.expect(unescapeStringForGeminiBug('')).toBe('');
     });
 
-    it('should not alter strings with no targeted escape sequences', () => {
-      expect(unescapeStringForGeminiBug('abc def')).toBe('abc def');
-      // \\F and \\S are not targeted escapes, so they should remain as \\F and \\S
-      expect(unescapeStringForGeminiBug('C:\\Folder\\File')).toBe(
+    vitest.it('should not alter strings with no targeted escape sequences', () => {
+      vitest.expect(unescapeStringForGeminiBug('abc def')).toBe('abc def');
+      vitest.expect(unescapeStringForGeminiBug('C:\\Folder\\File')).toBe(
         'C:\\Folder\\File',
       );
     });
 
-    it('should correctly process strings with some targeted escapes', () => {
-      // \\U is not targeted, \\n is.
-      expect(unescapeStringForGeminiBug('C:\\Users\\name')).toBe(
+    vitest.it('should correctly process strings with some targeted escapes', () => {
+      vitest.expect(unescapeStringForGeminiBug('C:\\Users\\name')).toBe(
         'C:\\Users\name',
       );
     });
 
-    it('should handle complex cases with mixed slashes and characters', () => {
-      expect(
+    vitest.it('should handle complex cases with mixed slashes and characters', () => {
+      vitest.expect(
         unescapeStringForGeminiBug('\\\\\\nLine1\\\nLine2\\tTab\\\\`Tick\\"'),
       ).toBe('\nLine1\nLine2\tTab`Tick"');
     });
   });
 
-  describe('ensureCorrectEdit', () => {
-    // Mock GeminiClient instance
-    let mockGeminiClient: vi.Mocked<GeminiClient>;
+  vitest.describe('ensureCorrectEdit', () => {
+    let mockGeminiClient: vitest.Mocked<GeminiClient>;
+    let clientModule: MockedClientModule;
+    let mockToolRegistry: vitest.Mocked<ToolRegistry>;
+    let mockConfigInstance: Config;
 
-    beforeEach(() => {
-      // Reset mocks before each test
-      mockGeminiClient = new GeminiClient({
+    vitest.beforeEach(() => {
+      clientModule = require('../core/client.js') as MockedClientModule;
+      mockToolRegistry = new ToolRegistry({} as Config) as vitest.Mocked<ToolRegistry>; // Basic mock for ToolRegistry
+
+      // Create a plain object that adheres to the Config constructor's parameters
+      // and can be used by the mocked getters.
+      const configParams = {
         apiKey: 'test-api-key',
-      }) as vi.Mocked<GeminiClient>;
-      vi.clearAllMocks();
+        model: 'test-model',
+        sandbox: false as boolean | string, // Ensure type matches constructor
+        targetDir: '/test',
+        debugMode: false,
+        question: undefined as string | undefined,
+        fullContext: false,
+        coreTools: undefined as string[] | undefined,
+        toolDiscoveryCommand: undefined as string | undefined,
+        toolCallCommand: undefined as string | undefined,
+        mcpServerCommand: undefined as string | undefined,
+        mcpServers: undefined as Record<string, any> | undefined, // Use any for MCPServerConfig for simplicity in mock
+        userAgent: 'test-agent',
+        userMemory: '',
+        geminiMdFileCount: 0,
+        alwaysSkipModificationConfirmation: false,
+      };
+
+      // Mock the Config class instance and its methods
+      mockConfigInstance = {
+        ...configParams,
+        getApiKey: vitest.vi.fn(() => configParams.apiKey),
+        getModel: vitest.vi.fn(() => configParams.model),
+        getSandbox: vitest.vi.fn(() => configParams.sandbox),
+        getTargetDir: vitest.vi.fn(() => configParams.targetDir),
+        getToolRegistry: vitest.vi.fn(() => mockToolRegistry),
+        getDebugMode: vitest.vi.fn(() => configParams.debugMode),
+        getQuestion: vitest.vi.fn(() => configParams.question),
+        getFullContext: vitest.vi.fn(() => configParams.fullContext),
+        getCoreTools: vitest.vi.fn(() => configParams.coreTools),
+        getToolDiscoveryCommand: vitest.vi.fn(() => configParams.toolDiscoveryCommand),
+        getToolCallCommand: vitest.vi.fn(() => configParams.toolCallCommand),
+        getMcpServerCommand: vitest.vi.fn(() => configParams.mcpServerCommand),
+        getMcpServers: vitest.vi.fn(() => configParams.mcpServers),
+        getUserAgent: vitest.vi.fn(() => configParams.userAgent),
+        getUserMemory: vitest.vi.fn(() => configParams.userMemory),
+        setUserMemory: vitest.vi.fn((mem: string) => { configParams.userMemory = mem; }),
+        getGeminiMdFileCount: vitest.vi.fn(() => configParams.geminiMdFileCount),
+        setGeminiMdFileCount: vitest.vi.fn((count: number) => { configParams.geminiMdFileCount = count; }),
+        getAlwaysSkipModificationConfirmation: vitest.vi.fn(() => configParams.alwaysSkipModificationConfirmation),
+        setAlwaysSkipModificationConfirmation: vitest.vi.fn((skip: boolean) => { configParams.alwaysSkipModificationConfirmation = skip; }),
+      } as unknown as Config; // Cast to Config, acknowledging it's a mock
+
+      mockGeminiClient = new clientModule.GeminiClient(mockConfigInstance) as vitest.Mocked<GeminiClient>; 
+
+      clientModule.mockGenerateJson.mockClear();
+      clientModule.mockCorrectOldStringMismatch.mockClear();
+      clientModule.mockCorrectNewString.mockClear();
     });
 
-    describe('Scenario Group 1: originalParams.old_string matches currentContent directly', () => {
-      it('Test 1.1: old_string (no literal \\), new_string (escaped by Gemini) -> new_string unescaped', async () => {
+    vitest.describe('Scenario Group 1: originalParams.old_string matches currentContent directly', () => {
+      vitest.it('Test 1.1: old_string (no literal \\), new_string (escaped by Gemini) -> new_string unescaped', async () => {
         const currentContent = 'This is a test string to find me.';
         const originalParams = {
           file_path: '/test/file.txt',
           old_string: 'find me',
           new_string: 'replace with \\\\"this\\\\"',
         };
-        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
           'find me',
         );
 
@@ -157,19 +229,19 @@ describe('editCorrector', () => {
           mockGeminiClient,
         );
 
-        expect(result.params.new_string).toBe('replace with "this"');
-        expect(result.params.old_string).toBe('find me');
-        expect(result.occurrences).toBe(1);
+        vitest.expect(result.params.new_string).toBe('replace with "this"');
+        vitest.expect(result.params.old_string).toBe('find me');
+        vitest.expect(result.occurrences).toBe(1);
       });
 
-      it('Test 1.2: old_string (no literal \\), new_string (correctly formatted) -> new_string unchanged', async () => {
+      vitest.it('Test 1.2: old_string (no literal \\), new_string (correctly formatted) -> new_string unchanged', async () => {
         const currentContent = 'This is a test string to find me.';
         const originalParams = {
           file_path: '/test/file.txt',
           old_string: 'find me',
           new_string: 'replace with this',
         };
-        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
           'find me',
         );
 
@@ -179,19 +251,19 @@ describe('editCorrector', () => {
           mockGeminiClient,
         );
 
-        expect(result.params.new_string).toBe('replace with this');
-        expect(result.params.old_string).toBe('find me');
-        expect(result.occurrences).toBe(1);
+        vitest.expect(result.params.new_string).toBe('replace with this');
+        vitest.expect(result.params.old_string).toBe('find me');
+        vitest.expect(result.occurrences).toBe(1);
       });
 
-      it('Test 1.3: old_string (with literal \\), new_string (escaped by Gemini) -> new_string unchanged (still escaped)', async () => {
+      vitest.it('Test 1.3: old_string (with literal \\), new_string (escaped by Gemini) -> new_string unchanged (still escaped)', async () => {
         const currentContent = 'This is a test string to find\\me.';
         const originalParams = {
           file_path: '/test/file.txt',
           old_string: 'find\\me',
           new_string: 'replace with \\\\"this\\\\"',
         };
-        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
           'find\\me',
         );
 
@@ -201,19 +273,19 @@ describe('editCorrector', () => {
           mockGeminiClient,
         );
 
-        expect(result.params.new_string).toBe('replace with \\\\"this\\\\"');
-        expect(result.params.old_string).toBe('find\\me');
-        expect(result.occurrences).toBe(1);
+        vitest.expect(result.params.new_string).toBe('replace with \\\\"this\\\\"');
+        vitest.expect(result.params.old_string).toBe('find\\me');
+        vitest.expect(result.occurrences).toBe(1);
       });
 
-      it('Test 1.4: old_string (with literal \\), new_string (correctly formatted) -> new_string unchanged', async () => {
+      vitest.it('Test 1.4: old_string (with literal \\), new_string (correctly formatted) -> new_string unchanged', async () => {
         const currentContent = 'This is a test string to find\\me.';
         const originalParams = {
           file_path: '/test/file.txt',
           old_string: 'find\\me',
           new_string: 'replace with this',
         };
-        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
           'find\\me',
         );
 
@@ -223,22 +295,21 @@ describe('editCorrector', () => {
           mockGeminiClient,
         );
 
-        expect(result.params.new_string).toBe('replace with this');
-        expect(result.params.old_string).toBe('find\\me');
-        expect(result.occurrences).toBe(1);
+        vitest.expect(result.params.new_string).toBe('replace with this');
+        vitest.expect(result.params.old_string).toBe('find\\me');
+        vitest.expect(result.occurrences).toBe(1);
       });
     });
 
-    describe('Scenario Group 2: originalParams.old_string does NOT match, but unescapeStringForGeminiBug(originalParams.old_string) DOES match', () => {
-      it('Test 2.1: old_string (over-escaped, no intended literal \\), new_string (escaped by Gemini) -> new_string unescaped', async () => {
+    vitest.describe('Scenario Group 2: originalParams.old_string does NOT match, but unescapeStringForGeminiBug(originalParams.old_string) DOES match', () => {
+      vitest.it('Test 2.1: old_string (over-escaped, no intended literal \\), new_string (escaped by Gemini) -> new_string unescaped', async () => {
         const currentContent = 'This is a test string to find "me".';
         const originalParams = {
           file_path: '/test/file.txt',
           old_string: 'find \\\\"me\\\\"',
           new_string: 'replace with \\\\"this\\\\"',
         };
-        // Mock LLM correction path to not be taken for this test
-        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
           unescapeStringForGeminiBug(originalParams.old_string),
         );
 
@@ -248,19 +319,19 @@ describe('editCorrector', () => {
           mockGeminiClient,
         );
 
-        expect(result.params.new_string).toBe('replace with "this"');
-        expect(result.params.old_string).toBe('find "me"');
-        expect(result.occurrences).toBe(1);
+        vitest.expect(result.params.new_string).toBe('replace with "this"');
+        vitest.expect(result.params.old_string).toBe('find "me"');
+        vitest.expect(result.occurrences).toBe(1);
       });
 
-      it('Test 2.2: old_string (over-escaped, no intended literal \\), new_string (correctly formatted) -> new_string unescaped (harmlessly)', async () => {
+      vitest.it('Test 2.2: old_string (over-escaped, no intended literal \\), new_string (correctly formatted) -> new_string unescaped (harmlessly)', async () => {
         const currentContent = 'This is a test string to find "me".';
         const originalParams = {
           file_path: '/test/file.txt',
-          old_string: 'find \\\\"me\\\\"', // "find \"me\""
+          old_string: 'find \\\\"me\\\\"', 
           new_string: 'replace with this',
         };
-        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
           unescapeStringForGeminiBug(originalParams.old_string),
         );
 
@@ -270,19 +341,19 @@ describe('editCorrector', () => {
           mockGeminiClient,
         );
 
-        expect(result.params.new_string).toBe('replace with this');
-        expect(result.params.old_string).toBe('find "me"');
-        expect(result.occurrences).toBe(1);
+        vitest.expect(result.params.new_string).toBe('replace with this');
+        vitest.expect(result.params.old_string).toBe('find "me"');
+        vitest.expect(result.occurrences).toBe(1);
       });
 
-      it('Test 2.3: old_string (over-escaped, with intended literal \\), new_string (escaped by Gemini) -> new_string unescaped', async () => {
-        const currentContent = 'This is a test string to find \\me.'; // Content has one literal backslash
+      vitest.it('Test 2.3: old_string (over-escaped, with intended literal \\), new_string (escaped by Gemini) -> new_string unescaped', async () => {
+        const currentContent = 'This is a test string to find \\me.';
         const originalParams = {
           file_path: '/test/file.txt',
-          old_string: 'find \\\\\\\\me', // "find \\\\me" -> unescapes to "find \\me"
-          new_string: 'replace with \\\\"this\\\\"', // "replace with \"this\""
+          old_string: 'find \\\\\\\\me', 
+          new_string: 'replace with \\\\"this\\\\"',
         };
-        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
           unescapeStringForGeminiBug(originalParams.old_string),
         );
 
@@ -292,14 +363,14 @@ describe('editCorrector', () => {
           mockGeminiClient,
         );
 
-        expect(result.params.new_string).toBe('replace with "this"');
-        expect(result.params.old_string).toBe('find \\me');
-        expect(result.occurrences).toBe(1);
+        vitest.expect(result.params.new_string).toBe('replace with "this"');
+        vitest.expect(result.params.old_string).toBe('find \\me');
+        vitest.expect(result.occurrences).toBe(1);
       });
     });
 
-    describe('Scenario Group 3: LLM Correction Path', () => {
-      it('Test 3.1: old_string (no literal \\), new_string (escaped by Gemini), LLM re-escapes new_string -> final new_string is double unescaped', async () => {
+    vitest.describe('Scenario Group 3: LLM Correction Path', () => {
+      vitest.it('Test 3.1: old_string (no literal \\), new_string (escaped by Gemini), LLM re-escapes new_string -> final new_string is double unescaped', async () => {
         const currentContent = 'This is a test string to corrected find me.';
         const originalParams = {
           file_path: '/test/file.txt',
@@ -309,10 +380,10 @@ describe('editCorrector', () => {
         const llmCorrectedOldString = 'corrected find me';
         const llmNewString = 'LLM says replace with \\\\"that\\\\"';
 
-        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
           llmCorrectedOldString,
         );
-        mockGeminiClient.correctNewString.mockResolvedValue(llmNewString);
+        clientModule.mockCorrectNewString.mockResolvedValue(llmNewString);
 
         const result = await ensureCorrectEdit(
           currentContent,
@@ -320,22 +391,17 @@ describe('editCorrector', () => {
           mockGeminiClient,
         );
 
-        expect(mockGeminiClient.correctOldStringMismatch).toHaveBeenCalledWith(
+        vitest.expect(clientModule.mockCorrectNewString).toHaveBeenCalledWith(
           currentContent,
-          originalParams.old_string,
-          unescapeStringForGeminiBug(originalParams.old_string),
+          llmCorrectedOldString, 
+          unescapeStringForGeminiBug(originalParams.new_string), 
         );
-        expect(mockGeminiClient.correctNewString).toHaveBeenCalledWith(
-          currentContent,
-          llmCorrectedOldString, // it should be called with the version of old_string that matches
-          unescapeStringForGeminiBug(originalParams.new_string), // new_string is unescaped because original old_string had no literal backslash
-        );
-        expect(result.params.new_string).toBe('LLM says replace with "that"');
-        expect(result.params.old_string).toBe(llmCorrectedOldString);
-        expect(result.occurrences).toBe(1);
+        vitest.expect(result.params.new_string).toBe('LLM says replace with "that"');
+        vitest.expect(result.params.old_string).toBe(llmCorrectedOldString);
+        vitest.expect(result.occurrences).toBe(1);
       });
 
-      it('Test 3.2: old_string (with literal \\), new_string (escaped by Gemini), LLM re-escapes new_string -> final new_string is unescaped once', async () => {
+      vitest.it('Test 3.2: old_string (with literal \\), new_string (escaped by Gemini), LLM re-escapes new_string -> final new_string is unescaped once', async () => {
         const currentContent = 'This is a test string to corrected find\\me.';
         const originalParams = {
           file_path: '/test/file.txt',
@@ -345,32 +411,27 @@ describe('editCorrector', () => {
         const llmCorrectedOldString = 'corrected find\\me';
         const llmNewString = 'LLM says replace with \\\\"that\\\\"';
 
-        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
           llmCorrectedOldString,
         );
-        mockGeminiClient.correctNewString.mockResolvedValue(llmNewString);
+        clientModule.mockCorrectNewString.mockResolvedValue(llmNewString);
 
         const result = await ensureCorrectEdit(
           currentContent,
           originalParams,
           mockGeminiClient,
         );
-        expect(mockGeminiClient.correctOldStringMismatch).toHaveBeenCalledWith(
-          currentContent,
-          originalParams.old_string,
-          unescapeStringForGeminiBug(originalParams.old_string),
-        );
-        expect(mockGeminiClient.correctNewString).toHaveBeenCalledWith(
+        vitest.expect(clientModule.mockCorrectNewString).toHaveBeenCalledWith(
           currentContent,
           llmCorrectedOldString,
-          originalParams.new_string, // new_string is NOT unescaped because original old_string HAD a literal backslash
+          originalParams.new_string, 
         );
-        expect(result.params.new_string).toBe('LLM says replace with "that"');
-        expect(result.params.old_string).toBe(llmCorrectedOldString);
-        expect(result.occurrences).toBe(1);
+        vitest.expect(result.params.new_string).toBe('LLM says replace with "that"');
+        vitest.expect(result.params.old_string).toBe(llmCorrectedOldString);
+        vitest.expect(result.occurrences).toBe(1);
       });
 
-      it('Test 3.3: LLM correction path, correctNewString returns correctly formatted string -> final new_string is correct (harmlessly unescaped)', async () => {
+      vitest.it('Test 3.3: LLM correction path, correctNewString returns correctly formatted string -> final new_string is correct (harmlessly unescaped)', async () => {
         const currentContent = 'This is a test string to corrected find me.';
         const originalParams = {
           file_path: '/test/file.txt',
@@ -378,12 +439,12 @@ describe('editCorrector', () => {
           new_string: 'replace with "this"',
         };
         const llmCorrectedOldString = 'corrected find me';
-        const llmNewString = 'LLM says replace with "that"'; // Correctly formatted
+        const llmNewString = 'LLM says replace with "that"'; 
 
-        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
           llmCorrectedOldString,
         );
-        mockGeminiClient.correctNewString.mockResolvedValue(llmNewString);
+        clientModule.mockCorrectNewString.mockResolvedValue(llmNewString);
 
         const result = await ensureCorrectEdit(
           currentContent,
@@ -391,31 +452,30 @@ describe('editCorrector', () => {
           mockGeminiClient,
         );
 
-        expect(mockGeminiClient.correctNewString).toHaveBeenCalledWith(
+        vitest.expect(clientModule.mockCorrectNewString).toHaveBeenCalledWith(
           currentContent,
           llmCorrectedOldString,
-          unescapeStringForGeminiBug(originalParams.new_string), // "replace with "this""
+          unescapeStringForGeminiBug(originalParams.new_string), 
         );
-        expect(result.params.new_string).toBe('LLM says replace with "that"');
-        expect(result.params.old_string).toBe(llmCorrectedOldString);
-        expect(result.occurrences).toBe(1);
+        vitest.expect(result.params.new_string).toBe('LLM says replace with "that"');
+        vitest.expect(result.params.old_string).toBe(llmCorrectedOldString);
+        vitest.expect(result.occurrences).toBe(1);
       });
 
-      it('Test 3.4: LLM correction path, correctNewString returns the originalNewString it was passed (which was unescaped) -> final new_string is unescaped', async () => {
+      vitest.it('Test 3.4: LLM correction path, correctNewString returns the originalNewString it was passed (which was unescaped) -> final new_string is unescaped', async () => {
         const currentContent = 'This is a test string to corrected find me.';
         const originalParams = {
           file_path: '/test/file.txt',
           old_string: 'find me',
-          new_string: 'replace with \\\\"this\\\\"', // Gemini-escaped
+          new_string: 'replace with \\\\"this\\\\"',
         };
         const llmCorrectedOldString = 'corrected find me';
-        // This is what correctNewString will be called with as new_string_to_correct, and what it will return
         const newStringForLLMAndReturnedByLLM = 'replace with "this"';
 
-        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
           llmCorrectedOldString,
         );
-        mockGeminiClient.correctNewString.mockResolvedValue(
+        clientModule.mockCorrectNewString.mockResolvedValue(
           newStringForLLMAndReturnedByLLM,
         );
 
@@ -425,19 +485,19 @@ describe('editCorrector', () => {
           mockGeminiClient,
         );
 
-        expect(mockGeminiClient.correctNewString).toHaveBeenCalledWith(
+        vitest.expect(clientModule.mockCorrectNewString).toHaveBeenCalledWith(
           currentContent,
           llmCorrectedOldString,
-          newStringForLLMAndReturnedByLLM, // Based on unescape(originalParams.new_string)
+          newStringForLLMAndReturnedByLLM, 
         );
-        expect(result.params.new_string).toBe(newStringForLLMAndReturnedByLLM);
-        expect(result.params.old_string).toBe(llmCorrectedOldString);
-        expect(result.occurrences).toBe(1);
+        vitest.expect(result.params.new_string).toBe(newStringForLLMAndReturnedByLLM);
+        vitest.expect(result.params.old_string).toBe(llmCorrectedOldString);
+        vitest.expect(result.occurrences).toBe(1);
       });
     });
 
-    describe('Scenario Group 4: No Match Found / Multiple Matches', () => {
-      it('Test 4.1: No version of old_string (original, unescaped, LLM-corrected) matches -> returns original params, 0 occurrences', async () => {
+    vitest.describe('Scenario Group 4: No Match Found / Multiple Matches', () => {
+      vitest.it('Test 4.1: No version of old_string (original, unescaped, LLM-corrected) matches -> returns original params, 0 occurrences', async () => {
         const currentContent = 'This content has nothing to find.';
         const originalParams = {
           file_path: '/test/file.txt',
@@ -445,8 +505,7 @@ describe('editCorrector', () => {
           new_string: 'some new string',
         };
 
-        // Mock LLM correction to also return a non-matching string
-        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
           'still nonexistent',
         );
 
@@ -456,22 +515,21 @@ describe('editCorrector', () => {
           mockGeminiClient,
         );
 
-        expect(result.params).toEqual(originalParams);
-        expect(result.occurrences).toBe(0);
-        expect(mockGeminiClient.correctNewString).not.toHaveBeenCalled();
+        vitest.expect(result.params).toEqual(originalParams);
+        vitest.expect(result.occurrences).toBe(0);
+        vitest.expect(clientModule.mockCorrectNewString).not.toHaveBeenCalled();
       });
 
-      it('Test 4.2: unescapedOldStringAttempt results in >1 occurrences -> returns original params, count occurrences', async () => {
+      vitest.it('Test 4.2: unescapedOldStringAttempt results in >1 occurrences -> returns original params, count occurrences', async () => {
         const currentContent =
           'This content has find "me" and also find "me" again.';
         const originalParams = {
           file_path: '/test/file.txt',
-          old_string: 'find "me"', // unescapes to 'find "me"'
+          old_string: 'find "me"', 
           new_string: 'some new string',
         };
 
-        // Mock LLM correction to simulate it doesn't find a unique match either
-        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
           'llm corrected non-unique',
         );
 
@@ -481,27 +539,22 @@ describe('editCorrector', () => {
           mockGeminiClient,
         );
 
-        expect(result.params).toEqual(originalParams);
-        // unescapedOldStringAttempt ('find "me"') occurs 2 times
-        // originalParams.old_string ('find "me"') occurs 0 times
-        // llmCorrectedOldString ('llm corrected non-unique') occurs 0 times
-        // The function should report the occurrences of unescapedOldStringAttempt if it's > 1
-        expect(result.occurrences).toBe(2);
-        expect(mockGeminiClient.correctNewString).not.toHaveBeenCalled();
+        vitest.expect(result.params).toEqual(originalParams);
+        vitest.expect(result.occurrences).toBe(2);
+        vitest.expect(clientModule.mockCorrectNewString).not.toHaveBeenCalled();
       });
     });
 
-    describe('Scenario Group 5: Specific unescapeStringForGeminiBug checks (integrated into ensureCorrectEdit)', () => {
-      it('Test 5.1: old_string matches after unescaping mixed legitimate and Gemini escapes, new_string also unescaped', async () => {
-        const currentContent = 'const x = "a\\nbc\\\\"def\\\\"'; // Legitimate escapes
+    vitest.describe('Scenario Group 5: Specific unescapeStringForGeminiBug checks (integrated into ensureCorrectEdit)', () => {
+      vitest.it('Test 5.1: old_string matches after unescaping mixed legitimate and Gemini escapes, new_string also unescaped', async () => {
+        const currentContent = 'const x = "a\\nbc\\\\"def\\\\"';
         const originalParams = {
           file_path: '/test/file.txt',
-          old_string: 'const x = \\"a\\\\nbc\\\\\\\\"def\\\\\\\\"',
-          new_string: 'const y = \\"new\\\\nval\\\\\\\\"content\\\\\\\\"',
+          old_string: 'const x = \\\"a\\\\nbc\\\\\\\\"def\\\\\\\\"',
+          new_string: 'const y = \\\"new\\\\nval\\\\\\\\"content\\\\\\\\"',
         };
 
-        // Mock LLM correction path to not be taken
-        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
           unescapeStringForGeminiBug(originalParams.old_string),
         );
 
@@ -511,11 +564,11 @@ describe('editCorrector', () => {
           mockGeminiClient,
         );
 
-        expect(result.params.old_string).toBe(currentContent);
-        expect(result.params.new_string).toBe(
+        vitest.expect(result.params.old_string).toBe(currentContent);
+        vitest.expect(result.params.new_string).toBe(
           'const y = "new\\nval\\\\"content\\\\"'
         );
-        expect(result.occurrences).toBe(1);
+        vitest.expect(result.occurrences).toBe(1);
       });
     });
   });
