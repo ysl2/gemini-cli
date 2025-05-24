@@ -50,52 +50,80 @@ export async function ensureCorrectEdit(
   originalParams: EditToolParams,
   client: GeminiClient,
 ): Promise<CorrectedEditResult> {
-  let occurrences = countOccurrences(currentContent, originalParams.old_string);
-  const currentParams = { ...originalParams };
+  // Always unescape new_string first, as it's independent of old_string's state.
+  const potentiallyUnescapedNewString = unescapeStringForGeminiBug(
+    originalParams.new_string,
+  );
+
+  let finalOldString = originalParams.old_string;
+  let finalNewString = potentiallyUnescapedNewString;
+  let occurrences = countOccurrences(currentContent, finalOldString);
 
   if (occurrences === 1) {
-    return { params: currentParams, occurrences };
+    // originalParams.old_string is good, use it with the unescaped new_string.
+    return {
+      params: {
+        file_path: originalParams.file_path,
+        old_string: finalOldString,
+        new_string: finalNewString,
+      },
+      occurrences,
+    };
   }
 
-  const unescapedOldString = unescapeStringForGeminiBug(
-    currentParams.old_string,
+  // Try unescaping old_string
+  const unescapedOldStringAttempt = unescapeStringForGeminiBug(
+    originalParams.old_string,
   );
-  occurrences = countOccurrences(currentContent, unescapedOldString);
+  occurrences = countOccurrences(currentContent, unescapedOldStringAttempt);
 
   if (occurrences === 1) {
-    currentParams.old_string = unescapedOldString;
-    currentParams.new_string = unescapeStringForGeminiBug(
-      currentParams.new_string,
-    );
+    finalOldString = unescapedOldStringAttempt;
+    // new_string is already unescaped (potentiallyUnescapedNewString)
   } else if (occurrences === 0) {
+    // LLM correction for old_string
     const llmCorrectedOldString = await correctOldStringMismatch(
       client,
       currentContent,
-      unescapedOldString,
+      unescapedOldStringAttempt, // Pass the already unescaped old_string attempt
     );
-    occurrences = countOccurrences(currentContent, llmCorrectedOldString);
+    const llmOldOccurrences = countOccurrences(
+      currentContent,
+      llmCorrectedOldString,
+    );
 
-    if (occurrences === 1) {
+    if (llmOldOccurrences === 1) {
+      finalOldString = llmCorrectedOldString;
+      // Now, correct new_string based on the changes to old_string.
+      // The new_string passed to correctNewString should be the unescaped one.
       const llmCorrectedNewString = await correctNewString(
         client,
-        unescapedOldString,
+        unescapedOldStringAttempt, // The version of old_string before LLM correction
         llmCorrectedOldString,
-        currentParams.new_string,
+        potentiallyUnescapedNewString, // Use the initially unescaped new_string
       );
-      currentParams.old_string = llmCorrectedOldString;
-      currentParams.new_string = llmCorrectedNewString;
+      // It's possible correctNewString re-introduces escaping, so unescape its output too.
+      finalNewString = unescapeStringForGeminiBug(llmCorrectedNewString);
+      occurrences = 1; // We have a success case here
     } else {
-      // If LLM correction also results in 0 or >1 occurrences,
-      // return the original params and 0 occurrences,
-      // letting the caller handle the "still not found" case.
+      // LLM correction also failed to find a unique match for old_string
+      // Return original params (original old_string, and original new_string) and 0 occurrences
       return { params: originalParams, occurrences: 0 };
     }
   } else {
-    // If unescaping resulted in >1 occurrences, return original params and that count.
+    // Unescaping old_string resulted in >1 occurrences
+    // Return original params (original old_string, and original new_string) and the >1 count.
     return { params: originalParams, occurrences };
   }
 
-  return { params: currentParams, occurrences };
+  return {
+    params: {
+      file_path: originalParams.file_path,
+      old_string: finalOldString,
+      new_string: finalNewString,
+    },
+    occurrences,
+  };
 }
 
 /**
