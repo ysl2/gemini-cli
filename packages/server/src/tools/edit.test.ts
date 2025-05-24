@@ -337,9 +337,11 @@ describe('EditTool', () => {
       };
       // The default mockEnsureCorrectEdit will return 0 occurrences for 'nonexistent'
       const result = await tool.execute(params, new AbortController().signal);
-      expect(result.llmContent).toMatch(/0 occurrences found/);
+      expect(result.llmContent).toMatch(
+        /0 occurrences found for old_string in/,
+      );
       expect(result.returnDisplay).toMatch(
-        /Failed to edit, could not find the string to replace/,
+        /Failed to edit, could not find the string to replace./,
       );
     });
 
@@ -352,7 +354,9 @@ describe('EditTool', () => {
       };
       // The default mockEnsureCorrectEdit will return 2 occurrences for 'old'
       const result = await tool.execute(params, new AbortController().signal);
-      expect(result.llmContent).toMatch(/Expected 1 occurrences but found 2/);
+      expect(result.llmContent).toMatch(
+        /Expected 1 occurrences but found 2 for old_string in file/,
+      );
       expect(result.returnDisplay).toMatch(
         /Failed to edit, expected 1 occurrence\(s\) but found 2/,
       );

@@ -21,7 +21,7 @@ import { isNodeError } from '../utils/errors.js';
 import { ReadFileTool } from './read-file.js';
 import { GeminiClient } from '../core/client.js';
 import { Config } from '../config/config.js';
-import { countOccurrences, ensureCorrectEdit } from '../utils/editCorrector.js';
+import { ensureCorrectEdit } from '../utils/editCorrector.js';
 
 /**
  * Parameters for the Edit tool
@@ -186,7 +186,14 @@ Expectation for parameters:
       };
     } else if (currentContent !== null) {
       // Editing an existing file
-      occurrences = countOccurrences(currentContent, params.old_string);
+      const {
+        params: correctedParamsFromEnsure,
+        occurrences: correctedOccurrences,
+      } = await ensureCorrectEdit(currentContent, params, this.client);
+
+      params.old_string = correctedParamsFromEnsure.old_string;
+      params.new_string = correctedParamsFromEnsure.new_string;
+      occurrences = correctedOccurrences;
 
       if (params.old_string === '') {
         // Error: Trying to create a file that already exists
@@ -197,7 +204,7 @@ Expectation for parameters:
       } else if (occurrences === 0) {
         error = {
           display: `Failed to edit, could not find the string to replace.`,
-          raw: `Failed to edit, 0 occurrences found for old_string in ${params.file_path}. No edits made. The exact text in old_string was not found. Ensure you're not escaping content incorrectly and check whitespace, indentation, and context. Use ReadFile tool to verify.`,
+          raw: `Failed to edit, 0 occurrences found for old_string in ${params.file_path}. No edits made. The exact text in old_string was not found. Ensure you're not escaping content incorrectly and check whitespace, indentation, and context. Use ${ReadFileTool.Name} tool to verify.`,
         };
       } else if (occurrences !== expectedReplacements) {
         error = {
