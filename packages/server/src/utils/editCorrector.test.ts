@@ -15,31 +15,22 @@ import { GeminiClient } from '../core/client.js';
 import type { Config } from '../config/config.js'; 
 import { ToolRegistry } from '../tools/tool-registry.js';
 
-// Define the expected shape of the mocked module
-interface MockedClientModule {
-  GeminiClient: vitest.MockedClass<typeof GeminiClient>;
-  mockGenerateJson: vitest.Mock;
-  mockCorrectOldStringMismatch: vitest.Mock;
-  mockCorrectNewString: vitest.Mock;
-}
+// Define mocks at a scope accessible by both the mock factory and tests
+const mockGenerateJson = vitest.vi.fn();
+const mockCorrectOldStringMismatch = vitest.vi.fn();
+const mockCorrectNewString = vitest.vi.fn();
 
-// Mock GeminiClient
-vitest.vi.mock('../core/client.js', () => {
-  const mockGenerateJson = vitest.vi.fn();
-  const mockCorrectOldStringMismatch = vitest.vi.fn();
-  const mockCorrectNewString = vitest.vi.fn();
-  const GeminiClient = vitest.vi.fn().mockImplementation(() => {
-    return {
-      generateJson: mockGenerateJson,
-      correctOldStringMismatch: mockCorrectOldStringMismatch,
-      correctNewString: mockCorrectNewString,
-    };
-  });
-  return { 
-    GeminiClient,
-    mockGenerateJson,
-    mockCorrectOldStringMismatch,
-    mockCorrectNewString 
+vitest.vi.mock('../core/client.js', async (importOriginal) => {
+  const actual = await importOriginal() as any;
+  return {
+    ...actual,
+    GeminiClient: vitest.vi.fn().mockImplementation((config: Config) => {
+      return {
+        generateJson: mockGenerateJson,
+        correctOldStringMismatch: mockCorrectOldStringMismatch,
+        correctNewString: mockCorrectNewString,
+      };
+    }),
   };
 });
 
@@ -149,21 +140,17 @@ vitest.describe('editCorrector', () => {
   });
 
   vitest.describe('ensureCorrectEdit', () => {
-    let mockGeminiClient: vitest.Mocked<GeminiClient>;
-    let clientModule: MockedClientModule;
+    let mockGeminiClientInstance: vitest.Mocked<GeminiClient>;
     let mockToolRegistry: vitest.Mocked<ToolRegistry>;
     let mockConfigInstance: Config;
 
     vitest.beforeEach(() => {
-      clientModule = require('../core/client.js') as MockedClientModule;
-      mockToolRegistry = new ToolRegistry({} as Config) as vitest.Mocked<ToolRegistry>; // Basic mock for ToolRegistry
+      mockToolRegistry = new ToolRegistry({} as Config) as vitest.Mocked<ToolRegistry>; 
 
-      // Create a plain object that adheres to the Config constructor's parameters
-      // and can be used by the mocked getters.
       const configParams = {
         apiKey: 'test-api-key',
         model: 'test-model',
-        sandbox: false as boolean | string, // Ensure type matches constructor
+        sandbox: false as boolean | string, 
         targetDir: '/test',
         debugMode: false,
         question: undefined as string | undefined,
@@ -172,14 +159,13 @@ vitest.describe('editCorrector', () => {
         toolDiscoveryCommand: undefined as string | undefined,
         toolCallCommand: undefined as string | undefined,
         mcpServerCommand: undefined as string | undefined,
-        mcpServers: undefined as Record<string, any> | undefined, // Use any for MCPServerConfig for simplicity in mock
+        mcpServers: undefined as Record<string, any> | undefined, 
         userAgent: 'test-agent',
         userMemory: '',
         geminiMdFileCount: 0,
         alwaysSkipModificationConfirmation: false,
       };
 
-      // Mock the Config class instance and its methods
       mockConfigInstance = {
         ...configParams,
         getApiKey: vitest.vi.fn(() => configParams.apiKey),
@@ -202,13 +188,17 @@ vitest.describe('editCorrector', () => {
         setGeminiMdFileCount: vitest.vi.fn((count: number) => { configParams.geminiMdFileCount = count; }),
         getAlwaysSkipModificationConfirmation: vitest.vi.fn(() => configParams.alwaysSkipModificationConfirmation),
         setAlwaysSkipModificationConfirmation: vitest.vi.fn((skip: boolean) => { configParams.alwaysSkipModificationConfirmation = skip; }),
-      } as unknown as Config; // Cast to Config, acknowledging it's a mock
+      } as unknown as Config; 
 
-      mockGeminiClient = new clientModule.GeminiClient(mockConfigInstance) as vitest.Mocked<GeminiClient>; 
+      // When new GeminiClient() is called in the code under test, it will get the mocked constructor,
+      // which in turn uses the mockGenerateJson, etc., functions defined in the outer scope.
+      const MockedGeminiClientConstructor = GeminiClient as vitest.MockedClass<typeof GeminiClient>; 
+      mockGeminiClientInstance = new MockedGeminiClientConstructor(mockConfigInstance);
 
-      clientModule.mockGenerateJson.mockClear();
-      clientModule.mockCorrectOldStringMismatch.mockClear();
-      clientModule.mockCorrectNewString.mockClear();
+      // Clear the outer scope mocks
+      mockGenerateJson.mockClear();
+      mockCorrectOldStringMismatch.mockClear();
+      mockCorrectNewString.mockClear();
     });
 
     vitest.describe('Scenario Group 1: originalParams.old_string matches currentContent directly', () => {
@@ -219,14 +209,14 @@ vitest.describe('editCorrector', () => {
           old_string: 'find me',
           new_string: 'replace with \\\\"this\\\\"',
         };
-        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
+        mockCorrectOldStringMismatch.mockResolvedValue(
           'find me',
         );
 
         const result = await ensureCorrectEdit(
           currentContent,
           originalParams,
-          mockGeminiClient,
+          mockGeminiClientInstance, 
         );
 
         vitest.expect(result.params.new_string).toBe('replace with "this"');
@@ -241,14 +231,14 @@ vitest.describe('editCorrector', () => {
           old_string: 'find me',
           new_string: 'replace with this',
         };
-        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
+        mockCorrectOldStringMismatch.mockResolvedValue(
           'find me',
         );
 
         const result = await ensureCorrectEdit(
           currentContent,
           originalParams,
-          mockGeminiClient,
+          mockGeminiClientInstance,
         );
 
         vitest.expect(result.params.new_string).toBe('replace with this');
@@ -263,14 +253,14 @@ vitest.describe('editCorrector', () => {
           old_string: 'find\\me',
           new_string: 'replace with \\\\"this\\\\"',
         };
-        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
+        mockCorrectOldStringMismatch.mockResolvedValue(
           'find\\me',
         );
 
         const result = await ensureCorrectEdit(
           currentContent,
           originalParams,
-          mockGeminiClient,
+          mockGeminiClientInstance,
         );
 
         vitest.expect(result.params.new_string).toBe('replace with \\\\"this\\\\"');
@@ -285,14 +275,14 @@ vitest.describe('editCorrector', () => {
           old_string: 'find\\me',
           new_string: 'replace with this',
         };
-        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
+        mockCorrectOldStringMismatch.mockResolvedValue(
           'find\\me',
         );
 
         const result = await ensureCorrectEdit(
           currentContent,
           originalParams,
-          mockGeminiClient,
+          mockGeminiClientInstance,
         );
 
         vitest.expect(result.params.new_string).toBe('replace with this');
@@ -309,14 +299,14 @@ vitest.describe('editCorrector', () => {
           old_string: 'find \\\\"me\\\\"',
           new_string: 'replace with \\\\"this\\\\"',
         };
-        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
+        mockCorrectOldStringMismatch.mockResolvedValue(
           unescapeStringForGeminiBug(originalParams.old_string),
         );
 
         const result = await ensureCorrectEdit(
           currentContent,
           originalParams,
-          mockGeminiClient,
+          mockGeminiClientInstance,
         );
 
         vitest.expect(result.params.new_string).toBe('replace with "this"');
@@ -331,14 +321,14 @@ vitest.describe('editCorrector', () => {
           old_string: 'find \\\\"me\\\\"', 
           new_string: 'replace with this',
         };
-        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
+        mockCorrectOldStringMismatch.mockResolvedValue(
           unescapeStringForGeminiBug(originalParams.old_string),
         );
 
         const result = await ensureCorrectEdit(
           currentContent,
           originalParams,
-          mockGeminiClient,
+          mockGeminiClientInstance,
         );
 
         vitest.expect(result.params.new_string).toBe('replace with this');
@@ -353,14 +343,14 @@ vitest.describe('editCorrector', () => {
           old_string: 'find \\\\\\\\me', 
           new_string: 'replace with \\\\"this\\\\"',
         };
-        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
+        mockCorrectOldStringMismatch.mockResolvedValue(
           unescapeStringForGeminiBug(originalParams.old_string),
         );
 
         const result = await ensureCorrectEdit(
           currentContent,
           originalParams,
-          mockGeminiClient,
+          mockGeminiClientInstance,
         );
 
         vitest.expect(result.params.new_string).toBe('replace with "this"');
@@ -380,18 +370,18 @@ vitest.describe('editCorrector', () => {
         const llmCorrectedOldString = 'corrected find me';
         const llmNewString = 'LLM says replace with \\\\"that\\\\"';
 
-        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
+        mockCorrectOldStringMismatch.mockResolvedValue(
           llmCorrectedOldString,
         );
-        clientModule.mockCorrectNewString.mockResolvedValue(llmNewString);
+        mockCorrectNewString.mockResolvedValue(llmNewString);
 
         const result = await ensureCorrectEdit(
           currentContent,
           originalParams,
-          mockGeminiClient,
+          mockGeminiClientInstance,
         );
 
-        vitest.expect(clientModule.mockCorrectNewString).toHaveBeenCalledWith(
+        vitest.expect(mockCorrectNewString).toHaveBeenCalledWith(
           currentContent,
           llmCorrectedOldString, 
           unescapeStringForGeminiBug(originalParams.new_string), 
@@ -411,17 +401,17 @@ vitest.describe('editCorrector', () => {
         const llmCorrectedOldString = 'corrected find\\me';
         const llmNewString = 'LLM says replace with \\\\"that\\\\"';
 
-        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
+        mockCorrectOldStringMismatch.mockResolvedValue(
           llmCorrectedOldString,
         );
-        clientModule.mockCorrectNewString.mockResolvedValue(llmNewString);
+        mockCorrectNewString.mockResolvedValue(llmNewString);
 
         const result = await ensureCorrectEdit(
           currentContent,
           originalParams,
-          mockGeminiClient,
+          mockGeminiClientInstance,
         );
-        vitest.expect(clientModule.mockCorrectNewString).toHaveBeenCalledWith(
+        vitest.expect(mockCorrectNewString).toHaveBeenCalledWith(
           currentContent,
           llmCorrectedOldString,
           originalParams.new_string, 
@@ -441,18 +431,18 @@ vitest.describe('editCorrector', () => {
         const llmCorrectedOldString = 'corrected find me';
         const llmNewString = 'LLM says replace with "that"'; 
 
-        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
+        mockCorrectOldStringMismatch.mockResolvedValue(
           llmCorrectedOldString,
         );
-        clientModule.mockCorrectNewString.mockResolvedValue(llmNewString);
+        mockCorrectNewString.mockResolvedValue(llmNewString);
 
         const result = await ensureCorrectEdit(
           currentContent,
           originalParams,
-          mockGeminiClient,
+          mockGeminiClientInstance,
         );
 
-        vitest.expect(clientModule.mockCorrectNewString).toHaveBeenCalledWith(
+        vitest.expect(mockCorrectNewString).toHaveBeenCalledWith(
           currentContent,
           llmCorrectedOldString,
           unescapeStringForGeminiBug(originalParams.new_string), 
@@ -472,20 +462,20 @@ vitest.describe('editCorrector', () => {
         const llmCorrectedOldString = 'corrected find me';
         const newStringForLLMAndReturnedByLLM = 'replace with "this"';
 
-        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
+        mockCorrectOldStringMismatch.mockResolvedValue(
           llmCorrectedOldString,
         );
-        clientModule.mockCorrectNewString.mockResolvedValue(
+        mockCorrectNewString.mockResolvedValue(
           newStringForLLMAndReturnedByLLM,
         );
 
         const result = await ensureCorrectEdit(
           currentContent,
           originalParams,
-          mockGeminiClient,
+          mockGeminiClientInstance,
         );
 
-        vitest.expect(clientModule.mockCorrectNewString).toHaveBeenCalledWith(
+        vitest.expect(mockCorrectNewString).toHaveBeenCalledWith(
           currentContent,
           llmCorrectedOldString,
           newStringForLLMAndReturnedByLLM, 
@@ -505,19 +495,19 @@ vitest.describe('editCorrector', () => {
           new_string: 'some new string',
         };
 
-        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
+        mockCorrectOldStringMismatch.mockResolvedValue(
           'still nonexistent',
         );
 
         const result = await ensureCorrectEdit(
           currentContent,
           originalParams,
-          mockGeminiClient,
+          mockGeminiClientInstance,
         );
 
         vitest.expect(result.params).toEqual(originalParams);
         vitest.expect(result.occurrences).toBe(0);
-        vitest.expect(clientModule.mockCorrectNewString).not.toHaveBeenCalled();
+        vitest.expect(mockCorrectNewString).not.toHaveBeenCalled();
       });
 
       vitest.it('Test 4.2: unescapedOldStringAttempt results in >1 occurrences -> returns original params, count occurrences', async () => {
@@ -529,19 +519,19 @@ vitest.describe('editCorrector', () => {
           new_string: 'some new string',
         };
 
-        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
+        mockCorrectOldStringMismatch.mockResolvedValue(
           'llm corrected non-unique',
         );
 
         const result = await ensureCorrectEdit(
           currentContent,
           originalParams,
-          mockGeminiClient,
+          mockGeminiClientInstance,
         );
 
         vitest.expect(result.params).toEqual(originalParams);
         vitest.expect(result.occurrences).toBe(2);
-        vitest.expect(clientModule.mockCorrectNewString).not.toHaveBeenCalled();
+        vitest.expect(mockCorrectNewString).not.toHaveBeenCalled();
       });
     });
 
@@ -554,14 +544,14 @@ vitest.describe('editCorrector', () => {
           new_string: 'const y = \\\"new\\\\nval\\\\\\\\"content\\\\\\\\"',
         };
 
-        clientModule.mockCorrectOldStringMismatch.mockResolvedValue(
+        mockCorrectOldStringMismatch.mockResolvedValue(
           unescapeStringForGeminiBug(originalParams.old_string),
         );
 
         const result = await ensureCorrectEdit(
           currentContent,
           originalParams,
-          mockGeminiClient,
+          mockGeminiClientInstance,
         );
 
         vitest.expect(result.params.old_string).toBe(currentContent);
