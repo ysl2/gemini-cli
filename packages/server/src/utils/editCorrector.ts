@@ -73,6 +73,9 @@ export async function ensureCorrectEdit(
       },
       occurrences,
     };
+  } else if (occurrences > 1) {
+    // Already mathcing more than we can handle, bail early.
+    return { params: originalParams, occurrences };
   }
 
   // Try unescaping old_string
@@ -113,8 +116,21 @@ export async function ensureCorrectEdit(
         llmCorrectedOldString,
         baseNewStringForLLMCorrection, // Use the unescaped new_string as base for LLM
       );
-      // It's possible correctNewString re-introduces escaping, so unescape its output too.
-      finalNewString = unescapeStringForGeminiBug(llmCorrectedNewString);
+
+      const trimmedLlmCorrectedOldString = llmCorrectedOldString.trim();
+      const trmmedLlmOldOccurrences = countOccurrences(
+        currentContent,
+        trimmedLlmCorrectedOldString,
+      );
+
+      if (trmmedLlmOldOccurrences === 1) {
+        // Trimmed content still resulted in a match, lets trim both the new and old. The LLM will typically space things out unnecessarily
+        finalOldString = trimmedLlmCorrectedOldString;
+        finalNewString = llmCorrectedNewString.trim();
+      } else {
+        finalNewString = llmCorrectedNewString;
+      }
+
       occurrences = 1; // We have a success case here
     } else {
       // LLM correction also failed to find a unique match for old_string
