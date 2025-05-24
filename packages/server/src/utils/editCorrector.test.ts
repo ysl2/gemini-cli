@@ -129,111 +129,393 @@ describe('editCorrector', () => {
 
   describe('ensureCorrectEdit', () => {
     // Mock GeminiClient instance
-    let mockGeminiClient;
+    let mockGeminiClient: vi.Mocked<GeminiClient>;
 
     beforeEach(() => {
       // Reset mocks before each test
-      mockGeminiClient = new GeminiClient();
+      mockGeminiClient = new GeminiClient({
+        apiKey: 'test-api-key',
+      }) as vi.Mocked<GeminiClient>;
       vi.clearAllMocks();
     });
 
     describe('Scenario Group 1: originalParams.old_string matches currentContent directly', () => {
       it('Test 1.1: old_string (no literal \\), new_string (escaped by Gemini) -> new_string unescaped', async () => {
-        // originalParams.old_string: Contains no literal `\` characters (e.g., "find me").
-        // originalParams.new_string: Contains Gemini-style over-escaping (e.g., "replace with \"this\"").
-        // Expected: finalNewString should be the unescaped version of originalParams.new_string (e.g., "replace with "this"").
+        const currentContent = 'This is a test string to find me.';
+        const originalParams = {
+          file_path: '/test/file.txt',
+          old_string: 'find me',
+          new_string: 'replace with \\\\"this\\\\"',
+        };
+        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+          'find me',
+        );
+
+        const result = await ensureCorrectEdit(
+          currentContent,
+          originalParams,
+          mockGeminiClient,
+        );
+
+        expect(result.params.new_string).toBe('replace with "this"');
+        expect(result.params.old_string).toBe('find me');
+        expect(result.occurrences).toBe(1);
       });
 
       it('Test 1.2: old_string (no literal \\), new_string (correctly formatted) -> new_string unchanged', async () => {
-        // originalParams.old_string: Contains no literal `\` characters.
-        // originalParams.new_string: Is correctly formatted (no over-escaping).
-        // Expected: finalNewString should be identical to originalParams.new_string.
+        const currentContent = 'This is a test string to find me.';
+        const originalParams = {
+          file_path: '/test/file.txt',
+          old_string: 'find me',
+          new_string: 'replace with this',
+        };
+        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+          'find me',
+        );
+
+        const result = await ensureCorrectEdit(
+          currentContent,
+          originalParams,
+          mockGeminiClient,
+        );
+
+        expect(result.params.new_string).toBe('replace with this');
+        expect(result.params.old_string).toBe('find me');
+        expect(result.occurrences).toBe(1);
       });
 
       it('Test 1.3: old_string (with literal \\), new_string (escaped by Gemini) -> new_string unchanged (still escaped)', async () => {
-        // originalParams.old_string: Contains literal `\` characters (e.g., "find\\me").
-        // originalParams.new_string: Contains Gemini-style over-escaping (e.g., "replace with \"this\"").
-        // Expected: finalNewString should be identical to originalParams.new_string (i.e., still escaped).
+        const currentContent = 'This is a test string to find\\me.';
+        const originalParams = {
+          file_path: '/test/file.txt',
+          old_string: 'find\\me',
+          new_string: 'replace with \\\\"this\\\\"',
+        };
+        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+          'find\\me',
+        );
+
+        const result = await ensureCorrectEdit(
+          currentContent,
+          originalParams,
+          mockGeminiClient,
+        );
+
+        expect(result.params.new_string).toBe('replace with \\\\"this\\\\"');
+        expect(result.params.old_string).toBe('find\\me');
+        expect(result.occurrences).toBe(1);
       });
 
       it('Test 1.4: old_string (with literal \\), new_string (correctly formatted) -> new_string unchanged', async () => {
-        // originalParams.old_string: Contains literal `\` characters.
-        // originalParams.new_string: Is correctly formatted.
-        // Expected: finalNewString should be identical to originalParams.new_string.
+        const currentContent = 'This is a test string to find\\me.';
+        const originalParams = {
+          file_path: '/test/file.txt',
+          old_string: 'find\\me',
+          new_string: 'replace with this',
+        };
+        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+          'find\\me',
+        );
+
+        const result = await ensureCorrectEdit(
+          currentContent,
+          originalParams,
+          mockGeminiClient,
+        );
+
+        expect(result.params.new_string).toBe('replace with this');
+        expect(result.params.old_string).toBe('find\\me');
+        expect(result.occurrences).toBe(1);
       });
     });
 
     describe('Scenario Group 2: originalParams.old_string does NOT match, but unescapeStringForGeminiBug(originalParams.old_string) DOES match', () => {
       it('Test 2.1: old_string (over-escaped, no intended literal \\), new_string (escaped by Gemini) -> new_string unescaped', async () => {
-        // originalParams.old_string: Over-escaped, but contains no *intended* literal `\` (e.g., "find \"me\""). Becomes "find "me"" after unescaping.
-        // originalParams.new_string: Contains Gemini-style over-escaping (e.g., "replace with \"this\"").
-        // Expected: finalNewString should be the unescaped version of originalParams.new_string.
+        const currentContent = 'This is a test string to find "me".';
+        const originalParams = {
+          file_path: '/test/file.txt',
+          old_string: 'find \\\\"me\\\\"',
+          new_string: 'replace with \\\\"this\\\\"',
+        };
+        // Mock LLM correction path to not be taken for this test
+        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+          unescapeStringForGeminiBug(originalParams.old_string),
+        );
+
+        const result = await ensureCorrectEdit(
+          currentContent,
+          originalParams,
+          mockGeminiClient,
+        );
+
+        expect(result.params.new_string).toBe('replace with "this"');
+        expect(result.params.old_string).toBe('find "me"');
+        expect(result.occurrences).toBe(1);
       });
 
       it('Test 2.2: old_string (over-escaped, no intended literal \\), new_string (correctly formatted) -> new_string unescaped (harmlessly)', async () => {
-        // originalParams.old_string: Over-escaped, but contains no *intended* literal `\`.
-        // originalParams.new_string: Is correctly formatted.
-        // Expected: finalNewString should be the (harmlessly) unescaped version of originalParams.new_string.
+        const currentContent = 'This is a test string to find "me".';
+        const originalParams = {
+          file_path: '/test/file.txt',
+          old_string: 'find \\\\"me\\\\"', // "find \"me\""
+          new_string: 'replace with this',
+        };
+        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+          unescapeStringForGeminiBug(originalParams.old_string),
+        );
+
+        const result = await ensureCorrectEdit(
+          currentContent,
+          originalParams,
+          mockGeminiClient,
+        );
+
+        expect(result.params.new_string).toBe('replace with this');
+        expect(result.params.old_string).toBe('find "me"');
+        expect(result.occurrences).toBe(1);
       });
 
       it('Test 2.3: old_string (over-escaped, with intended literal \\), new_string (escaped by Gemini) -> new_string unescaped', async () => {
-        // originalParams.old_string: Over-escaped, and *does* contain an intended literal `\` (e.g., "find \\\\me"). Becomes "find \\me" after unescaping.
-        // originalParams.new_string: Contains Gemini-style over-escaping.
-        // Expected: finalNewString should be the unescaped version of originalParams.new_string.
+        const currentContent = 'This is a test string to find \\me.'; // Content has one literal backslash
+        const originalParams = {
+          file_path: '/test/file.txt',
+          old_string: 'find \\\\\\\\me', // "find \\\\me" -> unescapes to "find \\me"
+          new_string: 'replace with \\\\"this\\\\"', // "replace with \"this\""
+        };
+        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+          unescapeStringForGeminiBug(originalParams.old_string),
+        );
+
+        const result = await ensureCorrectEdit(
+          currentContent,
+          originalParams,
+          mockGeminiClient,
+        );
+
+        expect(result.params.new_string).toBe('replace with "this"');
+        expect(result.params.old_string).toBe('find \\me');
+        expect(result.occurrences).toBe(1);
       });
     });
 
     describe('Scenario Group 3: LLM Correction Path', () => {
       it('Test 3.1: old_string (no literal \\), new_string (escaped by Gemini), LLM re-escapes new_string -> final new_string is double unescaped', async () => {
-        // originalParams.old_string: "find me" (no literal `\`).
-        // originalParams.new_string: "replace with \"this\"".
-        // Mock correctOldStringMismatch to return a valid llmCorrectedOldString.
-        // Mock correctNewString to receive unescapedOldStringAttempt ("find me") and baseNewStringForLLMCorrection (which should be "replace with "this"" due to initial conditional unescape). Let it return, for example, "LLM says replace with \"that\"" (i.e., LLM re-escapes).
-        // Expected: finalNewString should be "LLM says replace with "that"" (double unescaped: baseNewStringForLLMCorrection is unescaped, and then the output of correctNewString is unescaped).
+        const currentContent = 'This is a test string to corrected find me.';
+        const originalParams = {
+          file_path: '/test/file.txt',
+          old_string: 'find me',
+          new_string: 'replace with \\\\"this\\\\"',
+        };
+        const llmCorrectedOldString = 'corrected find me';
+        const llmNewString = 'LLM says replace with \\\\"that\\\\"';
+
+        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+          llmCorrectedOldString,
+        );
+        mockGeminiClient.correctNewString.mockResolvedValue(llmNewString);
+
+        const result = await ensureCorrectEdit(
+          currentContent,
+          originalParams,
+          mockGeminiClient,
+        );
+
+        expect(mockGeminiClient.correctOldStringMismatch).toHaveBeenCalledWith(
+          currentContent,
+          originalParams.old_string,
+          unescapeStringForGeminiBug(originalParams.old_string),
+        );
+        expect(mockGeminiClient.correctNewString).toHaveBeenCalledWith(
+          currentContent,
+          llmCorrectedOldString, // it should be called with the version of old_string that matches
+          unescapeStringForGeminiBug(originalParams.new_string), // new_string is unescaped because original old_string had no literal backslash
+        );
+        expect(result.params.new_string).toBe('LLM says replace with "that"');
+        expect(result.params.old_string).toBe(llmCorrectedOldString);
+        expect(result.occurrences).toBe(1);
       });
 
       it('Test 3.2: old_string (with literal \\), new_string (escaped by Gemini), LLM re-escapes new_string -> final new_string is unescaped once', async () => {
-        // originalParams.old_string: "find\\me" (with literal `\`).
-        // originalParams.new_string: "replace with \"this\"".
-        // Mock correctOldStringMismatch for unescapeStringForGeminiBug("find\\me") (which is "find\\me").
-        // Mock correctNewString to receive unescapedOldStringAttempt ("find\\me") and baseNewStringForLLMCorrection (which should be originalParams.new_string i.e. "replace with \"this\"" because initial conditional unescape for new_string was skipped). baseNewStringForLLMCorrection inside the LLM path logic then becomes unescapeStringForGeminiBug(originalParams.new_string). Let correctNewString return "LLM says replace with \"that\"".
-        // Expected: finalNewString should be "LLM says replace with "that"".
+        const currentContent = 'This is a test string to corrected find\\me.';
+        const originalParams = {
+          file_path: '/test/file.txt',
+          old_string: 'find\\me',
+          new_string: 'replace with \\\\"this\\\\"',
+        };
+        const llmCorrectedOldString = 'corrected find\\me';
+        const llmNewString = 'LLM says replace with \\\\"that\\\\"';
+
+        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+          llmCorrectedOldString,
+        );
+        mockGeminiClient.correctNewString.mockResolvedValue(llmNewString);
+
+        const result = await ensureCorrectEdit(
+          currentContent,
+          originalParams,
+          mockGeminiClient,
+        );
+        expect(mockGeminiClient.correctOldStringMismatch).toHaveBeenCalledWith(
+          currentContent,
+          originalParams.old_string,
+          unescapeStringForGeminiBug(originalParams.old_string),
+        );
+        expect(mockGeminiClient.correctNewString).toHaveBeenCalledWith(
+          currentContent,
+          llmCorrectedOldString,
+          originalParams.new_string, // new_string is NOT unescaped because original old_string HAD a literal backslash
+        );
+        expect(result.params.new_string).toBe('LLM says replace with "that"');
+        expect(result.params.old_string).toBe(llmCorrectedOldString);
+        expect(result.occurrences).toBe(1);
       });
 
       it('Test 3.3: LLM correction path, correctNewString returns correctly formatted string -> final new_string is correct (harmlessly unescaped)', async () => {
-        // Similar to 3.1 or 3.2, but correctNewString returns "LLM says replace with "that"" (already correct).
-        // Expected: finalNewString should be "LLM says replace with "that"" (final unescape of correctNewString output is harmless).
+        const currentContent = 'This is a test string to corrected find me.';
+        const originalParams = {
+          file_path: '/test/file.txt',
+          old_string: 'find me',
+          new_string: 'replace with "this"',
+        };
+        const llmCorrectedOldString = 'corrected find me';
+        const llmNewString = 'LLM says replace with "that"'; // Correctly formatted
+
+        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+          llmCorrectedOldString,
+        );
+        mockGeminiClient.correctNewString.mockResolvedValue(llmNewString);
+
+        const result = await ensureCorrectEdit(
+          currentContent,
+          originalParams,
+          mockGeminiClient,
+        );
+
+        expect(mockGeminiClient.correctNewString).toHaveBeenCalledWith(
+          currentContent,
+          llmCorrectedOldString,
+          unescapeStringForGeminiBug(originalParams.new_string), // "replace with "this""
+        );
+        expect(result.params.new_string).toBe('LLM says replace with "that"');
+        expect(result.params.old_string).toBe(llmCorrectedOldString);
+        expect(result.occurrences).toBe(1);
       });
 
       it('Test 3.4: LLM correction path, correctNewString returns the originalNewString it was passed (which was unescaped) -> final new_string is unescaped', async () => {
-        // originalParams.old_string: "find me".
-        // originalParams.new_string: "replace with \"this\"".
-        // baseNewStringForLLMCorrection will be "replace with "this"".
-        // Mock correctNewString to return the originalNewString it received (i.e., "replace with "this"").
-        // Expected: finalNewString should be "replace with "this"" (as the output of correctNewString is unescaped, and unescaping an already unescaped string is harmless).
+        const currentContent = 'This is a test string to corrected find me.';
+        const originalParams = {
+          file_path: '/test/file.txt',
+          old_string: 'find me',
+          new_string: 'replace with \\\\"this\\\\"', // Gemini-escaped
+        };
+        const llmCorrectedOldString = 'corrected find me';
+        // This is what correctNewString will be called with as new_string_to_correct, and what it will return
+        const newStringForLLMAndReturnedByLLM = 'replace with "this"';
+
+        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+          llmCorrectedOldString,
+        );
+        mockGeminiClient.correctNewString.mockResolvedValue(
+          newStringForLLMAndReturnedByLLM,
+        );
+
+        const result = await ensureCorrectEdit(
+          currentContent,
+          originalParams,
+          mockGeminiClient,
+        );
+
+        expect(mockGeminiClient.correctNewString).toHaveBeenCalledWith(
+          currentContent,
+          llmCorrectedOldString,
+          newStringForLLMAndReturnedByLLM, // Based on unescape(originalParams.new_string)
+        );
+        expect(result.params.new_string).toBe(newStringForLLMAndReturnedByLLM);
+        expect(result.params.old_string).toBe(llmCorrectedOldString);
+        expect(result.occurrences).toBe(1);
       });
     });
 
     describe('Scenario Group 4: No Match Found / Multiple Matches', () => {
       it('Test 4.1: No version of old_string (original, unescaped, LLM-corrected) matches -> returns original params, 0 occurrences', async () => {
-        // originalParams.old_string, unescapedOldStringAttempt, and llmCorrectedOldString all result in 0 occurrences.
-        // Expected: Returns { params: originalParams, occurrences: 0 }. originalParams.new_string should not have been modified if it was returned as part of originalParams.
+        const currentContent = 'This content has nothing to find.';
+        const originalParams = {
+          file_path: '/test/file.txt',
+          old_string: 'nonexistent string',
+          new_string: 'some new string',
+        };
+
+        // Mock LLM correction to also return a non-matching string
+        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+          'still nonexistent',
+        );
+
+        const result = await ensureCorrectEdit(
+          currentContent,
+          originalParams,
+          mockGeminiClient,
+        );
+
+        expect(result.params).toEqual(originalParams);
+        expect(result.occurrences).toBe(0);
+        expect(mockGeminiClient.correctNewString).not.toHaveBeenCalled();
       });
 
       it('Test 4.2: unescapedOldStringAttempt results in >1 occurrences -> returns original params, count occurrences', async () => {
-        // unescapedOldStringAttempt results in >1 occurrences.
-        // Expected: Returns { params: originalParams, occurrences: count }. originalParams.new_string should not have been modified.
+        const currentContent =
+          'This content has find "me" and also find "me" again.';
+        const originalParams = {
+          file_path: '/test/file.txt',
+          old_string: 'find "me"', // unescapes to 'find "me"'
+          new_string: 'some new string',
+        };
+
+        // Mock LLM correction to simulate it doesn't find a unique match either
+        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+          'llm corrected non-unique',
+        );
+
+        const result = await ensureCorrectEdit(
+          currentContent,
+          originalParams,
+          mockGeminiClient,
+        );
+
+        expect(result.params).toEqual(originalParams);
+        // unescapedOldStringAttempt ('find "me"') occurs 2 times
+        // originalParams.old_string ('find "me"') occurs 0 times
+        // llmCorrectedOldString ('llm corrected non-unique') occurs 0 times
+        // The function should report the occurrences of unescapedOldStringAttempt if it's > 1
+        expect(result.occurrences).toBe(2);
+        expect(mockGeminiClient.correctNewString).not.toHaveBeenCalled();
       });
     });
 
     describe('Scenario Group 5: Specific unescapeStringForGeminiBug checks (integrated into ensureCorrectEdit)', () => {
       it('Test 5.1: old_string matches after unescaping mixed legitimate and Gemini escapes, new_string also unescaped', async () => {
-        // This test ensures that if old_string requires unescaping of a complex string (like "const x = \"a\\nbc\\\"def\\\"") to match,
-        // the new_string is also correctly unescaped.
-        // Example old_string (Gemini escaped): "const x = \"a\\\\nbc\\\\\\\"def\\\\\\\""
-        // Example currentContent: "const x = "a\\nbc\\\"def\\\"" (This is how it would be if it had legitimate escapes and Gemini over-escaped it)
-        // Example new_string (Gemini escaped): "const y = \"new\\\\nval\\\\\\\"content\\\\\\\""
-        // Expected finalNewString: "const y = "new\\nval\\\"content\\\""
+        const currentContent = 'const x = "a\\nbc\\\\"def\\\\"'; // Legitimate escapes
+        const originalParams = {
+          file_path: '/test/file.txt',
+          old_string: 'const x = \\"a\\\\nbc\\\\\\\\"def\\\\\\\\"',
+          new_string: 'const y = \\"new\\\\nval\\\\\\\\"content\\\\\\\\"',
+        };
+
+        // Mock LLM correction path to not be taken
+        mockGeminiClient.correctOldStringMismatch.mockResolvedValue(
+          unescapeStringForGeminiBug(originalParams.old_string),
+        );
+
+        const result = await ensureCorrectEdit(
+          currentContent,
+          originalParams,
+          mockGeminiClient,
+        );
+
+        expect(result.params.old_string).toBe(currentContent);
+        expect(result.params.new_string).toBe(
+          'const y = "new\\nval\\\\"content\\\\"'
+        );
+        expect(result.occurrences).toBe(1);
       });
     });
   });
