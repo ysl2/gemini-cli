@@ -66,6 +66,10 @@ export async function ensureCorrectEdit(
         finalOldString, // This is originalParams.old_string at this point
         originalParams.new_string, // The original new_string that might be badly escaped
       );
+
+      const { targetString, reactiveString } = trimPairIfPossible(finalOldString, finalNewString, currentContent);
+      finalOldString = targetString;
+      finalNewString = reactiveString;
     }
 
     return {
@@ -122,24 +126,15 @@ export async function ensureCorrectEdit(
 
       const llmCorrectedNewString = await correctNewString(
         client,
-        unescapedOldStringAttempt, // The version of old_string before LLM correction
+        originalParams.old_string,
         llmCorrectedOldString,
         baseNewStringForLLMCorrection, // Use the unescaped new_string as base for LLM
       );
 
-      const trimmedLlmCorrectedOldString = llmCorrectedOldString.trim();
-      const trmmedLlmOldOccurrences = countOccurrences(
-        currentContent,
-        trimmedLlmCorrectedOldString,
-      );
+      const { targetString, reactiveString } = trimPairIfPossible(llmCorrectedOldString, llmCorrectedNewString, currentContent);
 
-      if (trmmedLlmOldOccurrences === 1) {
-        // Trimmed content still resulted in a match, lets trim both the new and old. The LLM will typically space things out unnecessarily
-        finalOldString = trimmedLlmCorrectedOldString;
-        finalNewString = llmCorrectedNewString.trim();
-      } else {
-        finalNewString = llmCorrectedNewString;
-      }
+      finalOldString = targetString;
+      finalNewString = reactiveString;
 
       occurrences = 1; // We have a success case here
     } else {
@@ -161,6 +156,22 @@ export async function ensureCorrectEdit(
     },
     occurrences,
   };
+}
+
+function trimPairIfPossible(targetStringToTrim: string, reactiveStringToTrim: string, currentContent: string) {
+  const trimmedTargetString = targetStringToTrim.trim();
+  const trimmedTargetOccurrences = countOccurrences(
+    currentContent,
+    trimmedTargetString
+  );
+
+  if (trimmedTargetOccurrences === 1) {
+    // Trimmed content still resulted in a match, lets trim both the new and old. The LLM will typically space things out unnecessarily
+    const trimmedReactiveString = reactiveStringToTrim.trim();
+    return { targetString: trimmedTargetString, reactiveString: trimmedReactiveString };
+  }
+
+  return { targetString: targetStringToTrim, reactiveString: reactiveStringToTrim };
 }
 
 /**
