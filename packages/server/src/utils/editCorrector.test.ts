@@ -8,17 +8,39 @@
 import { vi, describe, it, expect, beforeEach, type Mocked } from 'vitest';
 
 // MOCKS
-const mockGenerateJson = vi.fn();
+let callCount = 0;
+const mockResponses:any = [];
+
+const mockGenerateJson = vi.fn().mockImplementation(() => {
+  const response = mockResponses[callCount];
+  callCount++;
+  if (response === undefined) {
+    // Default to a generic success if no specific response is queued, to avoid undefined errors
+    // Or, make this an error: return Promise.reject(new Error(`Mock response not found for call ${callCount}`));
+    console.warn(`Mock response not found for call ${callCount}, returning empty object.`);
+    return Promise.resolve({}); 
+  }
+  return Promise.resolve(response);
+});
+
 const mockStartChat = vi.fn();
 const mockSendMessageStream = vi.fn();
 
-vi.mock('../core/client.js', () => ({
-  GeminiClient: vi.fn().mockImplementation(() => ({
-    generateJson: mockGenerateJson,
-    startChat: mockStartChat,
-    sendMessageStream: mockSendMessageStream,
-  })),
-}));
+vi.mock('../core/client.js', () => {
+  // Define the mock class INSIDE the factory to avoid hoisting issues
+  class MockGeminiClientInFactory {
+    constructor(_config: Config) {
+      this.generateJson = mockGenerateJson; // These spies are from the outer scope, which is fine
+      this.startChat = mockStartChat;
+      this.sendMessageStream = mockSendMessageStream;
+    }
+    generateJson: typeof mockGenerateJson;
+    startChat: typeof mockStartChat;
+    sendMessageStream: typeof mockSendMessageStream;
+    // Define other methods if they are part of the GeminiClient interface and might be called
+  }
+  return { GeminiClient: MockGeminiClientInFactory };
+});
 // END MOCKS
 
 import {
@@ -27,7 +49,7 @@ import {
   unescapeStringForGeminiBug,
   resetEditCorrectorCaches_TEST_ONLY,
 } from './editCorrector.js';
-import { GeminiClient } from '../core/client.js';
+import { GeminiClient } from '../core/client.js'; // This will now import MockGeminiClientInFactory
 import type { Config } from '../config/config.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
 
@@ -160,6 +182,8 @@ describe('editCorrector', () => {
       mockGeminiClientInstance = new GeminiClient(mockConfigInstance) as Mocked<GeminiClient>;
 
       mockGenerateJson.mockClear();
+      callCount = 0;
+      mockResponses.length = 0;
       mockStartChat.mockClear();
       mockSendMessageStream.mockClear();
       resetEditCorrectorCaches_TEST_ONLY();
@@ -287,7 +311,7 @@ describe('editCorrector', () => {
         const originalParams = {
           file_path: '/test/file.txt',
           old_string: 'find \\\\me', // value: find \me
-          new_string: 'replace with \n this', // value: replace with \n this
+          new_string: 'replace with \\n this', // value: replace with \n this
         };
         // This mock is for correctNewStringEscaping, as old_string matches after unescape, and new_string is "potentially escaped"
         mockGenerateJson.mockResolvedValueOnce({ corrected_new_string_escaping: 'replace with \n this' });
@@ -310,13 +334,23 @@ describe('editCorrector', () => {
         const originalParams = {
           file_path: '/test/file.txt',
           old_string: 'find me',
-          new_string: 'replace with \\\\"this\\\\"',
+          new_string: 'replace with \\"this\\"',
         };
         const llmCorrectedOldString = 'corrected find me';
         const llmNewString = 'LLM says replace with "that"';
 
-        mockGenerateJson.mockResolvedValueOnce({ corrected_target_snippet: llmCorrectedOldString });
-        mockGenerateJson.mockResolvedValueOnce({ corrected_new_string: llmNewString });
+        let callNum = 0;
+        mockGenerateJson.mockImplementation(() => {
+          callNum++;
+          console.log(`mockGenerateJson called for Test 3.1, call #${callNum}`);
+          if (callNum === 1) {
+            return Promise.resolve({ corrected_target_snippet: llmCorrectedOldString });
+          }
+          if (callNum === 2) {
+            return Promise.resolve({ corrected_new_string: llmNewString });
+          }
+          return Promise.resolve({}); // Default for unexpected calls
+        });
 
         const result = await ensureCorrectEdit(
           currentContent,
@@ -442,14 +476,14 @@ describe('editCorrector', () => {
 
     describe('Scenario Group 5: Specific unescapeStringForGeminiBug checks (integrated into ensureCorrectEdit)', () => {
       it('Test 5.1: old_string needs LLM to become currentContent, new_string also needs correction', async () => {
-        const currentContent = 'const x = "a\nbc\\"def\\"'; // This is what old_string unescapes to
+        const currentContent = 'const x = "a\\nbc\\\\"def\\\\"'; // This is what old_string unescapes to
         const originalParams = {
           file_path: '/test/file.txt',
-          old_string: 'const x = \\"a\\nbc\\\\"def\\\\\\"', // Overly escaped
-          new_string: 'const y = \\"new\\nval\\\\"content\\\\\\"', // Overly escaped
+          old_string: 'const x = \\\\"a\\\\nbc\\\\\\\\"def\\\\\\\\"', // Overly escaped
+          new_string: 'const y = \\\\"new\\\\nval\\\\\\\\"content\\\\\\\\"', // Overly escaped
         };
         const unescapedOldAttempt = unescapeStringForGeminiBug(originalParams.old_string); // "a\nbc\"def\"
-        const expectedFinalNewString = 'const y = "new\nval\\"content\\"';
+        const expectedFinalNewString = 'const y = "new\\nval\\\\"content\\\\"';
 
         // Mock for correctOldStringMismatch (to make unescapedOldAttempt become currentContent)
         mockGenerateJson.mockResolvedValueOnce({ corrected_target_snippet: currentContent });
