@@ -339,18 +339,11 @@ describe('editCorrector', () => {
         const llmCorrectedOldString = 'corrected find me';
         const llmNewString = 'LLM says replace with "that"';
 
-        let callNum = 0;
-        mockGenerateJson.mockImplementation(() => {
-          callNum++;
-          console.log(`mockGenerateJson called for Test 3.1, call #${callNum}`);
-          if (callNum === 1) {
-            return Promise.resolve({ corrected_target_snippet: llmCorrectedOldString });
-          }
-          if (callNum === 2) {
-            return Promise.resolve({ corrected_new_string: llmNewString });
-          }
-          return Promise.resolve({}); // Default for unexpected calls
-        });
+        mockGenerateJson.mockReset(); // Clear any previous implementations or calls
+        mockGenerateJson
+          .mockResolvedValueOnce({ corrected_target_snippet: llmCorrectedOldString }) // For correctOldStringMismatch
+          .mockResolvedValueOnce({ corrected_new_string: llmNewString })             // For correctNewString
+          .mockRejectedValueOnce(new Error('Third call to generateJson, should not happen')); // Safety
 
         const result = await ensureCorrectEdit(
           currentContent,
@@ -373,8 +366,8 @@ describe('editCorrector', () => {
         const llmCorrectedOldString = 'corrected find\\me';
         const llmNewString = 'LLM says replace with "that"';
 
-        mockGenerateJson.mockResolvedValueOnce({ corrected_target_snippet: llmCorrectedOldString });
-        mockGenerateJson.mockResolvedValueOnce({ corrected_new_string: llmNewString });
+        mockResponses.push({ corrected_target_snippet: llmCorrectedOldString });
+        mockResponses.push({ corrected_new_string: llmNewString });
 
         const result = await ensureCorrectEdit(
           currentContent,
@@ -420,8 +413,8 @@ describe('editCorrector', () => {
         const llmCorrectedOldString = 'corrected find me';
         const newStringForLLMAndReturnedByLLM = 'replace with "this"';
 
-        mockGenerateJson.mockResolvedValueOnce({ corrected_target_snippet: llmCorrectedOldString });
-        mockGenerateJson.mockResolvedValueOnce({ corrected_new_string: newStringForLLMAndReturnedByLLM });
+        mockResponses.push({ corrected_target_snippet: llmCorrectedOldString });
+        mockResponses.push({ corrected_new_string: newStringForLLMAndReturnedByLLM });
 
         const result = await ensureCorrectEdit(
           currentContent,
@@ -483,12 +476,12 @@ describe('editCorrector', () => {
           new_string: 'const y = \\\\"new\\\\nval\\\\\\\\"content\\\\\\\\"', // Overly escaped
         };
         const unescapedOldAttempt = unescapeStringForGeminiBug(originalParams.old_string); // "a\nbc\"def\"
-        const expectedFinalNewString = 'const y = "new\\nval\\\\"content\\\\"';
+        const expectedFinalNewString = 'const y = "new\nval\\"content\\"';
 
         // Mock for correctOldStringMismatch (to make unescapedOldAttempt become currentContent)
-        mockGenerateJson.mockResolvedValueOnce({ corrected_target_snippet: currentContent });
+        mockResponses.push({ corrected_target_snippet: currentContent });
         // Mock for correctNewString
-        mockGenerateJson.mockResolvedValueOnce({ corrected_new_string: expectedFinalNewString });
+        mockResponses.push({ corrected_new_string: expectedFinalNewString });
 
         const result = await ensureCorrectEdit(
           currentContent,
