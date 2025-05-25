@@ -397,9 +397,9 @@ export function unescapeStringForGeminiBug(inputString: string): string {
 
   // First, handle the \\ -> \\ case specifically for sequences of EXACTLY two backslashes followed by our target chars.
   // This is because \\n should become \n, but \n (already correct) should not be touched by this specific rule.
-  let result = inputString.replace(/\\\\(n|t|r|'|"|`|\\)/g, (_match, capturedChar) => {
-    return capturedChar; // Just return the character itself, effectively removing one backslash
-  });
+  let result = inputString.replace(/\\\\(n|t|r|'|"|`|\\)/g, (_match, capturedChar) => 
+     capturedChar // Just return the character itself, effectively removing one backslash
+  );
 
   // Then, handle more complex over-escapes like \\\\n -> \n or \\\n (backslash + newline) -> \n
   // This regex looks for 1 or more backslashes \\+ followed by n, t, r, ', ", `, or a literal newline \n
