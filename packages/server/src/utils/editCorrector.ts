@@ -52,6 +52,10 @@ class SimpleLruCache<K, V> {
     }
     this.cache.set(key, value);
   }
+
+  clear(): void {
+    this.cache.clear();
+  }
 }
 
 // Cache for ensureCorrectEdit results
@@ -591,4 +595,9 @@ export function unescapeStringForGeminiBug(inputString: string): string {
         return match;
     }
   });
+}
+
+export function resetEditCorrectorCaches_TEST_ONLY() {
+  editCorrectionCache.clear();
+  fileContentCorrectionCache.clear();
 }
