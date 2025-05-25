@@ -77,6 +77,7 @@ export async function ensureCorrectEdit(
         file_path: originalParams.file_path,
         old_string: finalOldString,
         new_string: finalNewString,
+        corrected: true,
       },
       occurrences,
     };
@@ -155,6 +156,7 @@ export async function ensureCorrectEdit(
       file_path: originalParams.file_path,
       old_string: finalOldString,
       new_string: finalNewString,
+      corrected: true,
     },
     occurrences,
   };

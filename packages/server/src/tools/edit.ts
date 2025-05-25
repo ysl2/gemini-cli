@@ -192,15 +192,7 @@ Expectation for parameters:
     } else if (currentContent !== null) {
       // Editing an existing file
 
-      const {
-        params: correctedParamsFromEnsure,
-        occurrences: correctedOccurrences,
-      } = await ensureCorrectEdit(currentContent, params, this.client);
-
-      params.old_string = correctedParamsFromEnsure.old_string;
-      params.new_string = correctedParamsFromEnsure.new_string;
-      params.corrected = correctedParamsFromEnsure.corrected;
-      occurrences = correctedOccurrences;
+      const occurrences = await ensureEdit(params, currentContent, this.client);
 
       if (params.old_string === '') {
         // Error: Trying to create a file that already exists
@@ -280,17 +272,7 @@ Expectation for parameters:
     } else if (currentContent !== null) {
       // Use the correctEdit utility to potentially correct params and get occurrences
 
-      let occurrences = 0;
-      if (!params.corrected) {
-        const { params: correctedParams, occurrences: correctedOccurrences } =
-          await ensureCorrectEdit(currentContent, params, this.client);
-  
-        params.old_string = correctedParams.old_string;
-        params.new_string = correctedParams.new_string;
-        occurrences = correctedOccurrences;
-      } else {
-        occurrences = countOccurrences(currentContent, params.old_string);
-      }
+      const occurrences = await ensureEdit(params, currentContent, this.client);
 
       if (occurrences === 0 || occurrences !== 1) {
         return false;
@@ -423,3 +405,18 @@ Expectation for parameters:
     }
   }
 }
+async function ensureEdit(params: EditToolParams, currentContent: string, client: GeminiClient) {
+  let occurrences = 0;
+  if (!params.corrected) {
+    const { params: correctedParams, occurrences: correctedOccurrences } = await ensureCorrectEdit(currentContent, params, client);
+
+    params.old_string = correctedParams.old_string;
+    params.new_string = correctedParams.new_string;
+    params.corrected = correctedParams.corrected;
+    occurrences = correctedOccurrences;
+  }
+
+  occurrences = countOccurrences(currentContent, params.old_string);
+  return occurrences;
+}
+
