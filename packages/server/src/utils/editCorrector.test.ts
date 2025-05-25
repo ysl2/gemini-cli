@@ -252,7 +252,7 @@ vitest.describe('editCorrector', () => {
           new_string: 'replace with \\"this\\"',
         };
         // old_string has literal escapes, new_string is Gemini-escaped.
-        // correctNewStringEscaping should be called.
+        // old_string matches directly. correctNewStringEscaping should be called for new_string.
         mockGenerateJson.mockResolvedValueOnce({ corrected_new_string_escaping: 'replace with "this"' });
 
         const result = await ensureCorrectEdit(
@@ -260,8 +260,8 @@ vitest.describe('editCorrector', () => {
           originalParams,
           mockGeminiClientInstance,
         );
-
-        vitest.expect(result.params.new_string).toBe('replace with "this"'); // Should be unescaped if old_string is fine
+        vitest.expect(mockGenerateJson).toHaveBeenCalledTimes(1);
+        vitest.expect(result.params.new_string).toBe('replace with "this"');
         vitest.expect(result.params.old_string).toBe('find\\me');
         vitest.expect(result.occurrences).toBe(1);
       });
@@ -296,7 +296,7 @@ vitest.describe('editCorrector', () => {
           new_string: 'replace with \\"this\\"',
         };
         // old_string unescapes to 'find "me"'. new_string is Gemini-escaped.
-        // correctNewString should be called.
+        // correctNewString should be called because old_string was modified by unescaping.
         mockGenerateJson.mockResolvedValueOnce({ corrected_new_string: 'replace with "this"' });
 
         const result = await ensureCorrectEdit(
@@ -304,7 +304,7 @@ vitest.describe('editCorrector', () => {
           originalParams,
           mockGeminiClientInstance,
         );
-
+        vitest.expect(mockGenerateJson).toHaveBeenCalledTimes(1);
         vitest.expect(result.params.new_string).toBe('replace with "this"');
         vitest.expect(result.params.old_string).toBe('find "me"');
         vitest.expect(result.occurrences).toBe(1);
@@ -337,8 +337,8 @@ vitest.describe('editCorrector', () => {
           old_string: 'find \\\\me', 
           new_string: 'replace with \\"this\\"',
         };
-        // old_string unescapes. new_string is Gemini-escaped.
-        // correctNewString should be called.
+        // old_string unescapes to 'find \\me'. new_string is Gemini-escaped.
+        // correctNewString should be called because old_string was modified by unescaping.
         mockGenerateJson.mockResolvedValueOnce({ corrected_new_string: 'replace with "this"' });
 
         const result = await ensureCorrectEdit(
@@ -346,7 +346,7 @@ vitest.describe('editCorrector', () => {
           originalParams,
           mockGeminiClientInstance,
         );
-
+        vitest.expect(mockGenerateJson).toHaveBeenCalledTimes(1);
         vitest.expect(result.params.new_string).toBe('replace with "this"');
         vitest.expect(result.params.old_string).toBe('find \\me');
         vitest.expect(result.occurrences).toBe(1);
@@ -362,11 +362,11 @@ vitest.describe('editCorrector', () => {
           new_string: 'replace with \\\\"this\\\\"',
         };
         const llmCorrectedOldString = 'corrected find me';
-        const llmNewString = 'LLM says replace with \\\\"that\\\\"';
+        const llmNewString = 'LLM says replace with "that"'; // unescaped version
 
         // Simulate LLM call for correctOldStringMismatch
         mockGenerateJson.mockResolvedValueOnce({ corrected_target_snippet: llmCorrectedOldString });
-        // Simulate LLM call for correctNewString
+        // Simulate LLM call for correctNewString (since new_string was potentially escaped and old_string was LLM-corrected)
         mockGenerateJson.mockResolvedValueOnce({ corrected_new_string: llmNewString });
 
         const result = await ensureCorrectEdit(
@@ -375,13 +375,8 @@ vitest.describe('editCorrector', () => {
           mockGeminiClientInstance,
         );
 
-        // Verify that generateJson was called (e.g., for new_string correction)
-        // The specifics of this assertion might need adjustment based on actual call order and schemas
-        vitest.expect(mockGenerateJson).toHaveBeenCalledTimes(2); 
-        // Example: Check the second call to generateJson (for new_string correction)
-        // This is a simplified check; you might need to inspect call arguments more deeply
-        // vitest.expect(mockGenerateJson.mock.calls[1][1]).toEqual(NEW_STRING_CORRECTION_SCHEMA);
-        vitest.expect(result.params.new_string).toBe('LLM says replace with "that"');
+        vitest.expect(mockGenerateJson).toHaveBeenCalledTimes(2);
+        vitest.expect(result.params.new_string).toBe(llmNewString);
         vitest.expect(result.params.old_string).toBe(llmCorrectedOldString);
         vitest.expect(result.occurrences).toBe(1);
       });
@@ -394,11 +389,11 @@ vitest.describe('editCorrector', () => {
           new_string: 'replace with \\\\"this\\\\"',
         };
         const llmCorrectedOldString = 'corrected find\\me';
-        const llmNewString = 'LLM says replace with \\\\"that\\\\"';
+        const llmNewString = 'LLM says replace with "that"'; // Unescaped version
 
         // Simulate LLM call for correctOldStringMismatch
         mockGenerateJson.mockResolvedValueOnce({ corrected_target_snippet: llmCorrectedOldString });
-        // Simulate LLM call for correctNewString, assuming it might be called if new_string also needs correction
+        // Simulate LLM call for correctNewString
         mockGenerateJson.mockResolvedValueOnce({ corrected_new_string: llmNewString });
 
         const result = await ensureCorrectEdit(
@@ -406,13 +401,8 @@ vitest.describe('editCorrector', () => {
           originalParams,
           mockGeminiClientInstance,
         );
-        // vitest.expect(mockCorrectNewString).toHaveBeenCalledWith(
-        //   currentContent,
-        //   llmCorrectedOldString,
-        //   originalParams.new_string, 
-        // );
-        // Verify generateJson calls if necessary, or just the outcome
-        vitest.expect(result.params.new_string).toBe('LLM says replace with "that"');
+        vitest.expect(mockGenerateJson).toHaveBeenCalledTimes(2);
+        vitest.expect(result.params.new_string).toBe(llmNewString);
         vitest.expect(result.params.old_string).toBe(llmCorrectedOldString);
         vitest.expect(result.occurrences).toBe(1);
       });
@@ -425,12 +415,10 @@ vitest.describe('editCorrector', () => {
           new_string: 'replace with "this"',
         };
         const llmCorrectedOldString = 'corrected find me';
-        const llmNewString = 'LLM says replace with "that"'; 
+        // new_string is already correctly formatted, so no LLM call for it.
 
         // Simulate LLM call for correctOldStringMismatch
         mockGenerateJson.mockResolvedValueOnce({ corrected_target_snippet: llmCorrectedOldString });
-        // Simulate LLM call for correctNewString
-        mockGenerateJson.mockResolvedValueOnce({ corrected_new_string: llmNewString });
 
         const result = await ensureCorrectEdit(
           currentContent,
@@ -438,13 +426,8 @@ vitest.describe('editCorrector', () => {
           mockGeminiClientInstance,
         );
 
-        // vitest.expect(mockCorrectNewString).toHaveBeenCalledWith(
-        //   currentContent,
-        //   llmCorrectedOldString,
-        //   unescapeStringForGeminiBug(originalParams.new_string), 
-        // );
-        // Verify generateJson calls if necessary, or just the outcome
-        vitest.expect(result.params.new_string).toBe('LLM says replace with "that"');
+        vitest.expect(mockGenerateJson).toHaveBeenCalledTimes(1);
+        vitest.expect(result.params.new_string).toBe(originalParams.new_string); // Should be the original new_string
         vitest.expect(result.params.old_string).toBe(llmCorrectedOldString);
         vitest.expect(result.occurrences).toBe(1);
       });
@@ -457,7 +440,7 @@ vitest.describe('editCorrector', () => {
           new_string: 'replace with \\\\"this\\\\"',
         };
         const llmCorrectedOldString = 'corrected find me';
-        const newStringForLLMAndReturnedByLLM = 'replace with "this"';
+        const newStringForLLMAndReturnedByLLM = 'replace with "this"'; // This is what correctNewString will effectively return
 
         // Simulate LLM call for correctOldStringMismatch
         mockGenerateJson.mockResolvedValueOnce({ corrected_target_snippet: llmCorrectedOldString });
@@ -466,16 +449,11 @@ vitest.describe('editCorrector', () => {
 
         const result = await ensureCorrectEdit(
           currentContent,
-          originalParams,
+          originalParams, // new_string is 'replace with \"this\"'
           mockGeminiClientInstance,
         );
 
-        // vitest.expect(mockCorrectNewString).toHaveBeenCalledWith(
-        //   currentContent,
-        //   llmCorrectedOldString,
-        //   newStringForLLMAndReturnedByLLM, 
-        // );
-        // Verify generateJson calls if necessary, or just the outcome
+        vitest.expect(mockGenerateJson).toHaveBeenCalledTimes(2);
         vitest.expect(result.params.new_string).toBe(newStringForLLMAndReturnedByLLM);
         vitest.expect(result.params.old_string).toBe(llmCorrectedOldString);
         vitest.expect(result.occurrences).toBe(1);
@@ -493,7 +471,6 @@ vitest.describe('editCorrector', () => {
 
         // Simulate LLM call for correctOldStringMismatch returning 'still nonexistent'
         mockGenerateJson.mockResolvedValueOnce({ corrected_target_snippet: 'still nonexistent' });
-        // No second LLM call should happen for new_string if old_string is not found
 
         const result = await ensureCorrectEdit(
           currentContent,
@@ -503,8 +480,6 @@ vitest.describe('editCorrector', () => {
 
         vitest.expect(result.params).toEqual(originalParams);
         vitest.expect(result.occurrences).toBe(0);
-        // vitest.expect(mockCorrectNewString).not.toHaveBeenCalled(); // This mock is removed
-        // Check that generateJson was called once (for old_string) and not again (for new_string)
         vitest.expect(mockGenerateJson).toHaveBeenCalledTimes(1);
       });
 
