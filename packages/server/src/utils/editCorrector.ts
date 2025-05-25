@@ -117,24 +117,26 @@ export async function ensureCorrectEdit(
     );
 
     if (llmOldOccurrences === 1) {
-      // Now, correct new_string based on the changes to old_string.
-      // The new_string passed to correctNewString should be the one that corresponds to the successful old_string strategy.
-      // If unescapedOldStringAttempt led to llmCorrectedOldString, then new_string should also be unescaped.
-      const baseNewStringForLLMCorrection = unescapeStringForGeminiBug(
-        originalParams.new_string,
-      );
-
-      const llmCorrectedNewString = await correctNewString(
-        client,
-        originalParams.old_string,
-        llmCorrectedOldString,
-        baseNewStringForLLMCorrection, // Use the unescaped new_string as base for LLM
-      );
-
       finalOldString = llmCorrectedOldString;
-      finalNewString = llmCorrectedNewString;
+      occurrences = llmOldOccurrences; // We have a success case here
 
-      occurrences = 1; // We have a success case here
+      if (newStringPotentiallyEscaped) {
+        // Now, correct new_string based on the changes to old_string.
+        // The new_string passed to correctNewString should be the one that corresponds to the successful old_string strategy.
+        // If unescapedOldStringAttempt led to llmCorrectedOldString, then new_string should also be unescaped.
+        const baseNewStringForLLMCorrection = unescapeStringForGeminiBug(
+          originalParams.new_string,
+        );
+  
+        const llmCorrectedNewString = await correctNewString(
+          client,
+          originalParams.old_string,
+          llmCorrectedOldString,
+          baseNewStringForLLMCorrection, // Use the unescaped new_string as base for LLM
+        );
+        
+        finalNewString = llmCorrectedNewString;
+      }
     } else {
       // LLM correction also failed to find a unique match for old_string
       // Return original params (original old_string, and original new_string) and 0 occurrences
