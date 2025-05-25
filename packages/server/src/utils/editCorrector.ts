@@ -20,6 +20,27 @@ const EditConfig: GenerateContentConfig = {
   },
 };
 
+// Cache for ensureCorrectEdit results
+const editCorrectionCache = new Map<string, CorrectedEditResult>();
+
+/**
+ * Defines the structure of the parameters within CorrectedEditResult,
+ * excluding the \'corrected\' flag.
+ */
+interface CorrectedEditParams {
+  file_path: string;
+  old_string: string;
+  new_string: string;
+}
+
+/**
+ * Defines the result structure for ensureCorrectEdit.
+ */
+export interface CorrectedEditResult {
+  params: CorrectedEditParams;
+  occurrences: number;
+}
+
 /**
  * Counts occurrences of a substring in a string
  */
@@ -39,54 +60,58 @@ export function countOccurrences(str: string, substr: string): number {
 /**
  * Attempts to correct edit parameters if the original old_string is not found.
  * It tries unescaping, and then LLM-based correction.
+ * Results are cached to avoid redundant processing.
  *
  * @param currentContent The current content of the file.
- * @param params The original EditToolParams.
+ * @param originalParams The original EditToolParams (without \'corrected\').
  * @param client The GeminiClient for LLM calls.
- * @returns A promise resolving to an object containing the (potentially corrected) EditToolParams and the final occurrences count.
+ * @returns A promise resolving to an object containing the (potentially corrected)
+ *          EditToolParams (as CorrectedEditParams) and the final occurrences count.
  */
 export async function ensureCorrectEdit(
   currentContent: string,
-  originalParams: EditToolParams,
+  originalParams: EditToolParams, // This is the EditToolParams from edit.ts, without \'corrected\'
   client: GeminiClient,
 ): Promise<CorrectedEditResult> {
+  const cacheKey = `${currentContent}---${originalParams.old_string}---${originalParams.new_string}`;
+  const cachedResult = editCorrectionCache.get(cacheKey);
+  if (cachedResult) {
+    return cachedResult;
+  }
+
   let finalNewString = originalParams.new_string;
-  const newStringPotentiallyEscaped = unescapeStringForGeminiBug(originalParams.new_string) !== originalParams.new_string;
+  const newStringPotentiallyEscaped =
+    unescapeStringForGeminiBug(originalParams.new_string) !==
+    originalParams.new_string;
 
   let finalOldString = originalParams.old_string;
   let occurrences = countOccurrences(currentContent, finalOldString);
 
   if (occurrences === 1) {
-    // originalParams.old_string is good, use it with the (conditionally) unescaped new_string.
-
-    // If our new string is potentially escaped then we should double check it's not a tool calling Gemini escaping issue with an LLM call.
     if (newStringPotentiallyEscaped) {
       finalNewString = await correctNewStringEscaping(
         client,
-        finalOldString, // This is originalParams.old_string at this point
-        originalParams.new_string, // The original new_string that might be badly escaped
+        finalOldString,
+        originalParams.new_string,
       );
-
-      const { targetString, reactiveString } = trimPairIfPossible(finalOldString, finalNewString, currentContent);
+      const { targetString, reactiveString } = trimPairIfPossible(
+        finalOldString,
+        finalNewString,
+        currentContent,
+      );
       finalOldString = targetString;
       finalNewString = reactiveString;
     }
-
-    return {
-      params: {
-        file_path: originalParams.file_path,
-        old_string: finalOldString,
-        new_string: finalNewString,
-        corrected: true,
-      },
+    // No need to set \'corrected\' flag anymore
+  } else if (occurrences > 1) {
+    const result: CorrectedEditResult = {
+      params: { ...originalParams }, // Spread to fit CorrectedEditParams
       occurrences,
     };
-  } else if (occurrences > 1) {
-    // Already mathcing more than we can handle, bail early.
-    return { params: originalParams, occurrences };
-  }
-
-  // Try unescaping old_string
+    editCorrectionCache.set(cacheKey, result);
+    return result;
+  } else {
+    // occurrences is 0 or some other unexpected state initially
   const unescapedOldStringAttempt = unescapeStringForGeminiBug(
     originalParams.old_string,
   );
@@ -94,22 +119,19 @@ export async function ensureCorrectEdit(
 
   if (occurrences === 1) {
     finalOldString = unescapedOldStringAttempt;
-
-    // If our new string is potentially escaped then we should double check it's not a tool calling Gemini escaping issue with an LLM call.
     if (newStringPotentiallyEscaped) {
       finalNewString = await correctNewString(
         client,
-        originalParams.old_string,
-        unescapedOldStringAttempt,
-        originalParams.new_string,
+          originalParams.old_string, // original old
+          unescapedOldStringAttempt, // corrected old
+          originalParams.new_string, // original new (which is potentially escaped)
       );
     }
   } else if (occurrences === 0) {
-    // LLM correction for old_string
     const llmCorrectedOldString = await correctOldStringMismatch(
       client,
       currentContent,
-      unescapedOldStringAttempt, // Pass the already unescaped old_string attempt
+      unescapedOldStringAttempt,
     );
     const llmOldOccurrences = countOccurrences(
       currentContent,
@@ -118,71 +140,85 @@ export async function ensureCorrectEdit(
 
     if (llmOldOccurrences === 1) {
       finalOldString = llmCorrectedOldString;
-      occurrences = llmOldOccurrences; // We have a success case here
+      occurrences = llmOldOccurrences;
 
       if (newStringPotentiallyEscaped) {
-        // Now, correct new_string based on the changes to old_string.
-        // The new_string passed to correctNewString should be the one that corresponds to the successful old_string strategy.
-        // If unescapedOldStringAttempt led to llmCorrectedOldString, then new_string should also be unescaped.
         const baseNewStringForLLMCorrection = unescapeStringForGeminiBug(
           originalParams.new_string,
         );
-  
-        const llmCorrectedNewString = await correctNewString(
+          finalNewString = await correctNewString(
           client,
-          originalParams.old_string,
-          llmCorrectedOldString,
-          baseNewStringForLLMCorrection, // Use the unescaped new_string as base for LLM
-        );
-        
-        finalNewString = llmCorrectedNewString;
+            originalParams.old_string, // original old
+            llmCorrectedOldString, // corrected old
+            baseNewStringForLLMCorrection, // base new for correction
+          );
+        }
+      } else {
+        // LLM correction also failed for old_string
+        const result: CorrectedEditResult = {
+          params: { ...originalParams },
+          occurrences: 0, // Explicitly 0 as LLM failed
+        };
+        editCorrectionCache.set(cacheKey, result);
+        return result;
       }
     } else {
-      // LLM correction also failed to find a unique match for old_string
-      // Return original params (original old_string, and original new_string) and 0 occurrences
-      return { params: originalParams, occurrences: 0 };
+      // Unescaping old_string resulted in > 1 occurrences
+      const result: CorrectedEditResult = {
+        params: { ...originalParams },
+        occurrences, // This will be > 1
+      };
+      editCorrectionCache.set(cacheKey, result);
+      return result;
     }
-  } else {
-    // Unescaping old_string resulted in >1 occurrences
-    // Return original params (original old_string, and original new_string) and the >1 count.
-    return { params: originalParams, occurrences };
   }
 
-  const { targetString, reactiveString } = trimPairIfPossible(finalOldString, finalNewString, currentContent);
-
+  const { targetString, reactiveString } = trimPairIfPossible(
+    finalOldString,
+    finalNewString,
+    currentContent,
+  );
   finalOldString = targetString;
   finalNewString = reactiveString;
 
-  return {
+  // Final result construction
+  const result: CorrectedEditResult = {
     params: {
       file_path: originalParams.file_path,
       old_string: finalOldString,
       new_string: finalNewString,
-      corrected: true,
     },
-    occurrences,
+    occurrences: countOccurrences(currentContent, finalOldString), // Recalculate occurrences with the final old_string
   };
+  editCorrectionCache.set(cacheKey, result);
+  return result;
 }
 
-function trimPairIfPossible(targetStringToTrim: string, reactiveStringToTrim: string, currentContent: string) {
+function trimPairIfPossible(
+  targetStringToTrim: string,
+  reactiveStringToTrim: string,
+  currentContent: string,
+) {
   const trimmedTargetString = targetStringToTrim.trim();
   const trimmedTargetOccurrences = countOccurrences(
     currentContent,
-    trimmedTargetString
+    trimmedTargetString,
   );
 
   if (trimmedTargetOccurrences === 1) {
-    // Trimmed content still resulted in a match, lets trim both the new and old. The LLM will typically space things out unnecessarily
     const trimmedReactiveString = reactiveStringToTrim.trim();
-    return { targetString: trimmedTargetString, reactiveString: trimmedReactiveString };
+    return {
+      targetString: trimmedTargetString,
+      reactiveString: trimmedReactiveString,
+    };
   }
 
-  return { targetString: targetStringToTrim, reactiveString: reactiveStringToTrim };
+  return {
+    targetString: targetStringToTrim,
+    reactiveString: reactiveStringToTrim,
+  };
 }
 
-/**
- * Attempts to correct potential formatting/escaping issues in a snippet using an LLM call.
- */
 export async function correctOldStringMismatch(
   geminiClient: GeminiClient,
   fileContent: string,
@@ -346,12 +382,9 @@ const CORRECT_NEW_STRING_ESCAPING_SCHEMA: SchemaUnion = {
   required: ['corrected_new_string_escaping'],
 };
 
-/**
- * Corrects the escaping of a new_string if it was potentially over-escaped by an LLM.
- */
 export async function correctNewStringEscaping(
   geminiClient: GeminiClient,
-  oldString: string, // The correctly matched old_string
+  oldString: string, 
   potentiallyProblematicNewString: string,
 ): Promise<string> {
   const prompt = `
@@ -428,9 +461,6 @@ export async function ensureCorrectFileContent(
     return correctedContent;
 }
 
-/**
- * Corrects the escaping of a string if it was potentially over-escaped by an LLM.
- */
 export async function correctStringEscaping(
   potentiallyProblematicString: string,
   client: GeminiClient,

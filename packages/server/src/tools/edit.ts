@@ -21,7 +21,7 @@ import { isNodeError } from '../utils/errors.js';
 import { ReadFileTool } from './read-file.js';
 import { GeminiClient } from '../core/client.js';
 import { Config } from '../config/config.js';
-import { countOccurrences, ensureCorrectEdit } from '../utils/editCorrector.js';
+import { ensureCorrectEdit } from '../utils/editCorrector.js';
 
 /**
  * Parameters for the Edit tool
@@ -41,11 +41,6 @@ export interface EditToolParams {
    * The text to replace it with
    */
   new_string: string;
-
-  /**
-   * Internal hack for indicating if edits have been corrected
-   */
-  corrected?: true;
 }
 
 interface CalculatedEdit {
@@ -163,7 +158,8 @@ Expectation for parameters:
     let currentContent: string | null = null;
     let fileExists = false;
     let isNewFile = false;
-    let newContent = '';
+    let finalNewString = params.new_string;
+    let finalOldString = params.old_string;
     let occurrences = 0;
     let error: { display: string; raw: string } | undefined = undefined;
 
@@ -181,8 +177,6 @@ Expectation for parameters:
     if (params.old_string === '' && !fileExists) {
       // Creating a new file
       isNewFile = true;
-      newContent = params.new_string;
-      occurrences = 0;
     } else if (!fileExists) {
       // Trying to edit a non-existent file (and old_string is not empty)
       error = {
@@ -191,8 +185,14 @@ Expectation for parameters:
       };
     } else if (currentContent !== null) {
       // Editing an existing file
-
-      const occurrences = await ensureEdit(params, currentContent, this.client);
+      const correctedEdit = await ensureCorrectEdit(
+        currentContent,
+        params,
+        this.client,
+      );
+      finalOldString = correctedEdit.params.old_string;
+      finalNewString = correctedEdit.params.new_string;
+      occurrences = correctedEdit.occurrences;
 
       if (params.old_string === '') {
         // Error: Trying to create a file that already exists
@@ -210,12 +210,6 @@ Expectation for parameters:
           display: `Failed to edit, expected ${expectedReplacements} occurrence(s) but found ${occurrences}.`,
           raw: `Failed to edit, Expected ${expectedReplacements} occurrences but found ${occurrences} for old_string in file: ${params.file_path}`,
         };
-      } else {
-        // Successful edit calculation
-        newContent = currentContent.replaceAll(
-          params.old_string,
-          params.new_string,
-        );
       }
     } else {
       // Should not happen if fileExists and no exception was thrown, but defensively:
@@ -224,6 +218,10 @@ Expectation for parameters:
         raw: `Failed to read content of existing file: ${params.file_path}`,
       };
     }
+
+    const newContent =
+      currentContent?.replaceAll(finalOldString, finalNewString) ??
+      (isNewFile ? finalNewString : '');
 
     return {
       currentContent,
@@ -253,7 +251,10 @@ Expectation for parameters:
     }
     let currentContent: string | null = null;
     let fileExists = false;
-    let newContent = '';
+    let finalNewString = params.new_string;
+    let finalOldString = params.old_string;
+    let occurrences = 0;
+
     try {
       currentContent = fs.readFileSync(params.file_path, 'utf8');
       fileExists = true;
@@ -265,25 +266,32 @@ Expectation for parameters:
         return false;
       }
     }
-    if (params.old_string === '' && !fileExists) {
-      newContent = params.new_string;
-    } else if (!fileExists) {
-      return false;
-    } else if (currentContent !== null) {
-      // Use the correctEdit utility to potentially correct params and get occurrences
 
-      const occurrences = await ensureEdit(params, currentContent, this.client);
+    if (params.old_string === '' && !fileExists) {
+      // Creating new file, newContent is just params.new_string
+    } else if (!fileExists) {
+      return false; // Cannot edit non-existent file if old_string is not empty
+    } else if (currentContent !== null) {
+      const correctedEdit = await ensureCorrectEdit(
+        currentContent,
+        params,
+        this.client,
+      );
+      finalOldString = correctedEdit.params.old_string;
+      finalNewString = correctedEdit.params.new_string;
+      occurrences = correctedEdit.occurrences;
 
       if (occurrences === 0 || occurrences !== 1) {
         return false;
       }
-      newContent = currentContent.replaceAll(
-        params.old_string,
-        params.new_string,
-      );
     } else {
-      return false;
+      return false; // Should not happen
     }
+
+    const newContent =
+      currentContent?.replaceAll(finalOldString, finalNewString) ??
+      (params.old_string === '' && !fileExists ? finalNewString : '');
+
     const fileName = path.basename(params.file_path);
     const fileDiff = Diff.createPatch(
       fileName,
@@ -405,18 +413,3 @@ Expectation for parameters:
     }
   }
 }
-async function ensureEdit(params: EditToolParams, currentContent: string, client: GeminiClient) {
-  let occurrences = 0;
-  if (!params.corrected) {
-    const { params: correctedParams, occurrences: correctedOccurrences } = await ensureCorrectEdit(currentContent, params, client);
-
-    params.old_string = correctedParams.old_string;
-    params.new_string = correctedParams.new_string;
-    params.corrected = correctedParams.corrected;
-    occurrences = correctedOccurrences;
-  }
-
-  occurrences = countOccurrences(currentContent, params.old_string);
-  return occurrences;
-}
-
