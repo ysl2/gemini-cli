@@ -50,26 +50,29 @@ export async function ensureCorrectEdit(
   originalParams: EditToolParams,
   client: GeminiClient,
 ): Promise<CorrectedEditResult> {
-  let potentiallyUnescapedNewString = originalParams.new_string;
-  // Only preemptively unescape new_string if old_string does not contain literal backslashes.
-  // Standard escape sequences like \n, \t are single characters in memory and won't be matched by .includes('\\').
-  if (!originalParams.old_string.includes('\\')) {
-    potentiallyUnescapedNewString = unescapeStringForGeminiBug(
-      originalParams.new_string,
-    );
-  }
+  let finalNewString = originalParams.new_string;
+  const newStringPotentiallyEscaped = unescapeStringForGeminiBug(originalParams.new_string) !== originalParams.new_string;
 
   let finalOldString = originalParams.old_string;
-  let finalNewString = potentiallyUnescapedNewString;
   let occurrences = countOccurrences(currentContent, finalOldString);
 
   if (occurrences === 1) {
     // originalParams.old_string is good, use it with the (conditionally) unescaped new_string.
+
+    // If our new string is potentially escaped then we should double check it's not a tool calling Gemini escaping issue with an LLM call.
+    if (newStringPotentiallyEscaped) {
+      finalNewString = await correctNewStringEscaping(
+        client,
+        finalOldString, // This is originalParams.old_string at this point
+        originalParams.new_string, // The original new_string that might be badly escaped
+      );
+    }
+
     return {
       params: {
         file_path: originalParams.file_path,
         old_string: finalOldString,
-        new_string: finalNewString, // Already set based on the condition above
+        new_string: finalNewString,
       },
       occurrences,
     };
@@ -86,9 +89,16 @@ export async function ensureCorrectEdit(
 
   if (occurrences === 1) {
     finalOldString = unescapedOldStringAttempt;
-    // If old_string was unescaped to find a match, new_string should also be unescaped,
-    // overriding the conditional unescape if it wasn't already done.
-    finalNewString = unescapeStringForGeminiBug(originalParams.new_string);
+
+    // If our new string is potentially escaped then we should double check it's not a tool calling Gemini escaping issue with an LLM call.
+    if (newStringPotentiallyEscaped) {
+      finalNewString = await correctNewString(
+        client,
+        originalParams.old_string,
+        unescapedOldStringAttempt,
+        originalParams.new_string,
+      );
+    }
   } else if (occurrences === 0) {
     // LLM correction for old_string
     const llmCorrectedOldString = await correctOldStringMismatch(
@@ -156,7 +166,7 @@ export async function ensureCorrectEdit(
 /**
  * Attempts to correct potential formatting/escaping issues in a snippet using an LLM call.
  */
-async function correctOldStringMismatch(
+export async function correctOldStringMismatch(
   geminiClient: GeminiClient,
   fileContent: string,
   problematicSnippet: string,
@@ -213,7 +223,7 @@ Return ONLY the corrected target snippet in the specified JSON format with the k
 /**
  * Adjusts the new_string to align with a corrected old_string, maintaining the original intent.
  */
-async function correctNewString(
+export async function correctNewString(
   geminiClient: GeminiClient,
   originalOldString: string,
   correctedOldString: string,
@@ -222,7 +232,7 @@ async function correctNewString(
   if (originalOldString === correctedOldString) {
     return originalNewString;
   }
-
+  
   const prompt = `
 Context: A text replacement operation was planned. The original text to be replaced (original_old_string) was slightly different from the actual text in the file (corrected_old_string). The original_old_string has now been corrected to match the file content.
 We now need to adjust the replacement text (original_new_string) so that it makes sense as a replacement for the corrected_old_string, while preserving the original intent of the change.
@@ -306,9 +316,75 @@ const NEW_STRING_CORRECTION_SCHEMA: SchemaUnion = {
   required: ['corrected_new_string'],
 };
 
+// Define the expected JSON schema for the new_string escaping correction LLM response
+const CORRECT_NEW_STRING_ESCAPING_SCHEMA: SchemaUnion = {
+  type: Type.OBJECT,
+  properties: {
+    corrected_new_string_escaping: {
+      type: Type.STRING,
+      description:
+        'The new_string with corrected escaping, ensuring it is a proper replacement for the old_string, especially considering potential over-escaping issues from previous LLM generations.',
+    },
+  },
+  required: ['corrected_new_string_escaping'],
+};
+
 /**
- * Unescapes a string that might have been overly escaped by an LLM.
+ * Corrects the escaping of a new_string if it was potentially over-escaped by an LLM.
  */
+export async function correctNewStringEscaping(
+  geminiClient: GeminiClient,
+  oldString: string, // The correctly matched old_string
+  potentiallyProblematicNewString: string,
+): Promise<string> {
+  const prompt = `
+Context: A text replacement operation is planned. The text to be replaced (old_string) has been correctly identified in the file. However, the replacement text (new_string) might have been improperly escaped by a previous LLM generation (e.g. too many backslashes for newlines like \\n instead of \n, or unnecessarily quotes like \\"Hello\\" instead of "Hello").
+
+old_string (this is the exact text that will be replaced):
+\`\`\`
+${oldString}
+\`\`\`
+
+potentially_problematic_new_string (this is the text that should replace old_string, but MIGHT have bad escaping, or might be entirely correct):
+\`\`\`
+${potentiallyProblematicNewString}
+\`\`\`
+
+Task: Analyze the potentially_problematic_new_string. If it's syntactically invalid due to incorrect escaping (e.g., "\n", "\t", "\\", "\\'", "\\""), correct the invalid syntax. The goal is to ensure the new_string, when inserted into the code, will be a valid and correctly interpreted.
+
+For example, if old_string is "foo" and potentially_problematic_new_string is "bar\\nbaz", the corrected_new_string_escaping should be "bar\nbaz".
+If potentially_problematic_new_string is console.log(\\"Hello World\\"), it should be console.log("Hello World").
+
+Return ONLY the corrected string in the specified JSON format with the key 'corrected_new_string_escaping'. If no escaping correction is needed, return the original potentially_problematic_new_string.
+  `.trim();
+
+  const contents: Content[] = [{role: 'user', parts: [{text: prompt}]}];
+
+  try {
+    const result = await geminiClient.generateJson(
+      contents,
+      CORRECT_NEW_STRING_ESCAPING_SCHEMA,
+      EditModel,
+      EditConfig,
+    );
+
+    if (
+      result &&
+      typeof result.corrected_new_string_escaping === 'string' &&
+      result.corrected_new_string_escaping.length > 0
+    ) {
+      return result.corrected_new_string_escaping;
+    } else {
+      return potentiallyProblematicNewString;
+    }
+  } catch (error) {
+    console.error(
+      'Error during LLM call for new_string escaping correction:',
+      error,
+    );
+    return potentiallyProblematicNewString;
+  }
+}
 export function unescapeStringForGeminiBug(inputString: string): string {
   // Regex explanation:
   // \\+ : Matches one or more literal backslash characters.
