@@ -116,7 +116,6 @@ export async function ensureCorrectEdit(
     );
 
     if (llmOldOccurrences === 1) {
-      finalOldString = llmCorrectedOldString;
       // Now, correct new_string based on the changes to old_string.
       // The new_string passed to correctNewString should be the one that corresponds to the successful old_string strategy.
       // If unescapedOldStringAttempt led to llmCorrectedOldString, then new_string should also be unescaped.
@@ -131,10 +130,8 @@ export async function ensureCorrectEdit(
         baseNewStringForLLMCorrection, // Use the unescaped new_string as base for LLM
       );
 
-      const { targetString, reactiveString } = trimPairIfPossible(llmCorrectedOldString, llmCorrectedNewString, currentContent);
-
-      finalOldString = targetString;
-      finalNewString = reactiveString;
+      finalOldString = llmCorrectedOldString;
+      finalNewString = llmCorrectedNewString;
 
       occurrences = 1; // We have a success case here
     } else {
@@ -147,6 +144,11 @@ export async function ensureCorrectEdit(
     // Return original params (original old_string, and original new_string) and the >1 count.
     return { params: originalParams, occurrences };
   }
+
+  const { targetString, reactiveString } = trimPairIfPossible(finalOldString, finalNewString, currentContent);
+
+  finalOldString = targetString;
+  finalNewString = reactiveString;
 
   return {
     params: {
@@ -243,7 +245,7 @@ export async function correctNewString(
   if (originalOldString === correctedOldString) {
     return originalNewString;
   }
-  
+
   const prompt = `
 Context: A text replacement operation was planned. The original text to be replaced (original_old_string) was slightly different from the actual text in the file (corrected_old_string). The original_old_string has now been corrected to match the file content.
 We now need to adjust the replacement text (original_new_string) so that it makes sense as a replacement for the corrected_old_string, while preserving the original intent of the change.
@@ -369,7 +371,7 @@ If potentially_problematic_new_string is console.log(\\"Hello World\\"), it shou
 Return ONLY the corrected string in the specified JSON format with the key 'corrected_new_string_escaping'. If no escaping correction is needed, return the original potentially_problematic_new_string.
   `.trim();
 
-  const contents: Content[] = [{role: 'user', parts: [{text: prompt}]}];
+  const contents: Content[] = [{ role: 'user', parts: [{ text: prompt }] }];
 
   try {
     const result = await geminiClient.generateJson(
@@ -396,45 +398,43 @@ Return ONLY the corrected string in the specified JSON format with the key 'corr
     return potentiallyProblematicNewString;
   }
 }
+
+/**
+ * Unescapes a string that might have been overly escaped by an LLM.
+ */
 export function unescapeStringForGeminiBug(inputString: string): string {
   // Regex explanation:
-  // \\{2,} : Matches two or more literal backslash characters. This is to target sequences like \\n, \\\\n, etc.
-  //          We use {2,} because a single backslash followed by n (e.g., in C:\name) is usually NOT an escape needing correction here.
-  // (n|t|r|'|"|`|\\|\n) : This is a capturing group. It matches one of the following:
-  //   n, t, r, ', ", ` : Literal characters for common escapes.
-  //   \\                : A literal backslash. This handles cases like \\\\ -> \\
-  //   \n                : An actual newline character. This handles cases like \\\\n (two backslashes then a newline char).
+  // \\+ : Matches one or more literal backslash characters.
+  // (n|t|r|'|"|`|\n) : This is a capturing group. It matches one of the following:
+  //   n, t, r, ', ", ` : These match the literal characters 'n', 't', 'r', single quote, double quote, or backtick.
+  //                       This handles cases like "\\n", "\\\\`", etc.
+  //   \n                 : This matches an actual newline character. This handles cases where the input
+  //                       string might have something like "\\\n" (a literal backslash followed by a newline).
   // g : Global flag, to replace all occurrences.
 
-  // First, handle the \\ -> \\ case specifically for sequences of EXACTLY two backslashes followed by our target chars.
-  // This is because \\n should become \n, but \n (already correct) should not be touched by this specific rule.
-  let result = inputString.replace(/\\\\(n|t|r|'|"|`|\\)/g, (_match, capturedChar) => 
-     capturedChar // Just return the character itself, effectively removing one backslash
-  );
-
-  // Then, handle more complex over-escapes like \\\\n -> \n or \\\n (backslash + newline) -> \n
-  // This regex looks for 1 or more backslashes \\+ followed by n, t, r, ', ", `, or a literal newline \n
-  result = result.replace(/\\+(n|t|r|'|"|`|\n)/g, (match, capturedChar) => {
+  return inputString.replace(/\\+(n|t|r|'|"|`|\n)/g, (match, capturedChar) => {
     // 'match' is the entire erroneous sequence, e.g., if the input (in memory) was "\\\\`", match is "\\\\`".
     // 'capturedChar' is the character that determines the true meaning, e.g., '`'.
+
     switch (capturedChar) {
       case 'n':
-        return '\n';
+        return '\n'; // Correctly escaped: \n (newline character)
       case 't':
-        return '\t';
+        return '\t'; // Correctly escaped: \t (tab character)
       case 'r':
-        return '\r';
+        return '\r'; // Correctly escaped: \r (carriage return character)
       case "'":
-        return "'";
+        return "'"; // Correctly escaped: ' (apostrophe character)
       case '"':
-        return '"';
+        return '"'; // Correctly escaped: " (quotation mark character)
       case '`':
-        return '`';
+        return '`'; // Correctly escaped: ` (backtick character)
       case '\n': // This handles when 'capturedChar' is an actual newline
-        return '\n';
+        return '\n'; // Replace the whole erroneous sequence (e.g., "\\\n" in memory) with a clean newline
       default:
+        // This fallback should ideally not be reached if the regex captures correctly.
+        // It would return the original matched sequence if an unexpected character was captured.
         return match;
     }
   });
-  return result;
 }
