@@ -21,7 +21,7 @@ import { isNodeError } from '../utils/errors.js';
 import { ReadFileTool } from './read-file.js';
 import { GeminiClient } from '../core/client.js';
 import { Config } from '../config/config.js';
-import { ensureCorrectEdit } from '../utils/editCorrector.js';
+import { countOccurrences, ensureCorrectEdit } from '../utils/editCorrector.js';
 
 /**
  * Parameters for the Edit tool
@@ -41,6 +41,11 @@ export interface EditToolParams {
    * The text to replace it with
    */
   new_string: string;
+
+  /**
+   * Internal hack for indicating if edits have been corrected
+   */
+  corrected?: true;
 }
 
 interface CalculatedEdit {
@@ -186,6 +191,7 @@ Expectation for parameters:
       };
     } else if (currentContent !== null) {
       // Editing an existing file
+
       const {
         params: correctedParamsFromEnsure,
         occurrences: correctedOccurrences,
@@ -193,6 +199,7 @@ Expectation for parameters:
 
       params.old_string = correctedParamsFromEnsure.old_string;
       params.new_string = correctedParamsFromEnsure.new_string;
+      params.corrected = correctedParamsFromEnsure.corrected;
       occurrences = correctedOccurrences;
 
       if (params.old_string === '') {
@@ -272,13 +279,20 @@ Expectation for parameters:
       return false;
     } else if (currentContent !== null) {
       // Use the correctEdit utility to potentially correct params and get occurrences
-      const { params: correctedParams, occurrences: correctedOccurrences } =
-        await ensureCorrectEdit(currentContent, params, this.client);
 
-      params.old_string = correctedParams.old_string;
-      params.new_string = correctedParams.new_string;
+      let occurrences = 0;
+      if (!params.corrected) {
+        const { params: correctedParams, occurrences: correctedOccurrences } =
+          await ensureCorrectEdit(currentContent, params, this.client);
+  
+        params.old_string = correctedParams.old_string;
+        params.new_string = correctedParams.new_string;
+        occurrences = correctedOccurrences;
+      } else {
+        occurrences = countOccurrences(currentContent, params.old_string);
+      }
 
-      if (correctedOccurrences === 0 || correctedOccurrences !== 1) {
+      if (occurrences === 0 || occurrences !== 1) {
         return false;
       }
       newContent = currentContent.replaceAll(
