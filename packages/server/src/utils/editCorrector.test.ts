@@ -323,7 +323,7 @@ describe('editCorrector', () => {
           new_string: 'replace with foobar',
         };
         mockResponses.push({
-          corrected_new_string_escaping: 'replace with foobar',
+          corrected_target_snippet: 'find \\me',
         });
         const result = await ensureCorrectEdit(
           currentContent,
@@ -345,28 +345,26 @@ describe('editCorrector', () => {
           old_string: 'find me',
           new_string: 'replace with \\\\"this\\\\"',
         };
-        const llmCorrectedOldString = 'corrected find me';
         const llmNewString = 'LLM says replace with "that"';
-        mockResponses.push({ corrected_target_snippet: llmCorrectedOldString });
-        mockResponses.push({ corrected_new_string: llmNewString });
+        mockResponses.push({ corrected_new_string_escaping: llmNewString });
         const result = await ensureCorrectEdit(
           currentContent,
           originalParams,
           mockGeminiClientInstance,
         );
-        expect(mockGenerateJson).toHaveBeenCalledTimes(2);
+        expect(mockGenerateJson).toHaveBeenCalledTimes(1);
         expect(result.params.new_string).toBe(llmNewString);
-        expect(result.params.old_string).toBe(llmCorrectedOldString);
+        expect(result.params.old_string).toBe('find me');
         expect(result.occurrences).toBe(1);
       });
       it('Test 3.2: old_string (with literal \\), new_string (escaped by Gemini), LLM re-escapes new_string -> final new_string is unescaped once', async () => {
-        const currentContent = 'This is a test string to corrected find\\me.';
+        const currentContent = 'This is a test string to corrected find me.';
         const originalParams = {
           file_path: '/test/file.txt',
           old_string: 'find\\me',
           new_string: 'replace with \\\\"this\\\\"',
         };
-        const llmCorrectedOldString = 'corrected find\\me';
+        const llmCorrectedOldString = 'corrected find me';
         const llmNewString = 'LLM says replace with "that"';
         mockResponses.push({ corrected_target_snippet: llmCorrectedOldString });
         mockResponses.push({ corrected_new_string: llmNewString });
@@ -406,20 +404,17 @@ describe('editCorrector', () => {
           old_string: 'find me',
           new_string: 'replace with \\\\"this\\\\"',
         };
-        const llmCorrectedOldString = 'corrected find me';
         const newStringForLLMAndReturnedByLLM = 'replace with "this"';
-        mockResponses.push({ corrected_target_snippet: llmCorrectedOldString });
         mockResponses.push({
-          corrected_new_string: newStringForLLMAndReturnedByLLM,
+          corrected_new_string_escaping: newStringForLLMAndReturnedByLLM,
         });
         const result = await ensureCorrectEdit(
           currentContent,
           originalParams,
           mockGeminiClientInstance,
         );
-        expect(mockGenerateJson).toHaveBeenCalledTimes(2);
+        expect(mockGenerateJson).toHaveBeenCalledTimes(1);
         expect(result.params.new_string).toBe(newStringForLLMAndReturnedByLLM);
-        expect(result.params.old_string).toBe(llmCorrectedOldString);
         expect(result.occurrences).toBe(1);
       });
     });
