@@ -23,6 +23,9 @@ const EditConfig: GenerateContentConfig = {
 // Cache for ensureCorrectEdit results
 const editCorrectionCache = new Map<string, CorrectedEditResult>();
 
+// Cache for ensureCorrectFileContent results
+const fileContentCorrectionCache = new Map<string, string>();
+
 /**
  * Defines the structure of the parameters within CorrectedEditResult,
  * excluding the \'corrected\' flag.
@@ -452,12 +455,19 @@ const CORRECT_STRING_ESCAPING_SCHEMA: SchemaUnion = {
 export async function ensureCorrectFileContent(
   content: string,
   client: GeminiClient): Promise<string> {
+    const cachedResult = fileContentCorrectionCache.get(content);
+    if (cachedResult) {
+      return cachedResult;
+    }
+
     const contentPotentiallyEscaped = unescapeStringForGeminiBug(content) !== content;
     if (!contentPotentiallyEscaped) {
+      fileContentCorrectionCache.set(content, content);
       return content;
     }
 
     const correctedContent = await correctStringEscaping(content, client);
+    fileContentCorrectionCache.set(content, correctedContent);
     return correctedContent;
 }
 

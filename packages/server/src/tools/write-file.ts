@@ -147,16 +147,40 @@ export class WriteFileTool extends BaseTool<WriteFileToolParams, ToolResult> {
     const fileName = path.basename(params.file_path);
 
     let currentContent = '';
+    let proposedContent = params.content;
+    let fileExists = false;
     try {
       currentContent = fs.readFileSync(params.file_path, 'utf8');
-    } catch {
-      // File might not exist, that's okay for write/create
+      fileExists = true;
+    } catch (err) {
+      if (isNodeError(err) && err.code === 'ENOENT') {
+        fileExists = false;
+      } else {
+        // For other errors (permissions, etc.), we probably can't confirm.
+        return false;
+      }
+    }
+
+    if (fileExists) {
+      const { params: correctedParams } = await ensureCorrectEdit(
+        currentContent,
+        {
+          old_string: currentContent, // Treat entire current content as old_string
+          new_string: params.content,
+          file_path: params.file_path,
+        },
+        this.client,
+      );
+      proposedContent = correctedParams.new_string;
+    } else {
+      // New file
+      proposedContent = await ensureCorrectFileContent(params.content, this.client);
     }
 
     const fileDiff = Diff.createPatch(
       fileName,
-      currentContent,
-      params.content,
+      currentContent, // Original content (empty if new file)
+      proposedContent, // Content after potential correction
       'Current',
       'Proposed',
       { context: 3 },
