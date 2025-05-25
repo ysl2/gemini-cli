@@ -20,12 +20,45 @@ const EditConfig: GenerateContentConfig = {
   },
 };
 
+const MAX_CACHE_SIZE = 4;
+
+class SimpleLruCache<K, V> {
+  private cache: Map<K, V>;
+  private maxSize: number;
+
+  constructor(maxSize: number) {
+    this.cache = new Map<K, V>();
+    this.maxSize = maxSize;
+  }
+
+  get(key: K): V | undefined {
+    const value = this.cache.get(key);
+    if (value) {
+      // Move to end to mark as recently used
+      this.cache.delete(key);
+      this.cache.set(key, value);
+    }
+    return value;
+  }
+
+  set(key: K, value: V): void {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.maxSize) {
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey !== undefined) {
+        this.cache.delete(firstKey);
+      }
+    }
+    this.cache.set(key, value);
+  }
+}
+
 // Cache for ensureCorrectEdit results
-const MAX_CACHE_SIZE = 10;
-const editCorrectionCache = new Map<string, CorrectedEditResult>();
+const editCorrectionCache = new SimpleLruCache<string, CorrectedEditResult>(MAX_CACHE_SIZE);
 
 // Cache for ensureCorrectFileContent results
-const fileContentCorrectionCache = new Map<string, string>();
+const fileContentCorrectionCache = new SimpleLruCache<string, string>(MAX_CACHE_SIZE);
 
 /**
  * Defines the structure of the parameters within CorrectedEditResult,
@@ -113,12 +146,6 @@ export async function ensureCorrectEdit(
       occurrences,
     };
     editCorrectionCache.set(cacheKey, result);
-    if (editCorrectionCache.size > MAX_CACHE_SIZE) {
-      const firstKey = editCorrectionCache.keys().next().value;
-      if (firstKey !== undefined) {
-        editCorrectionCache.delete(firstKey);
-      }
-    }
     return result;
   } else {
     // occurrences is 0 or some other unexpected state initially
@@ -170,12 +197,6 @@ export async function ensureCorrectEdit(
           occurrences: 0, // Explicitly 0 as LLM failed
         };
         editCorrectionCache.set(cacheKey, result);
-        if (editCorrectionCache.size > MAX_CACHE_SIZE) {
-          const firstKey = editCorrectionCache.keys().next().value;
-          if (firstKey !== undefined) {
-            editCorrectionCache.delete(firstKey);
-          }
-        }
         return result;
       }
     } else {
@@ -185,12 +206,6 @@ export async function ensureCorrectEdit(
         occurrences, // This will be > 1
       };
       editCorrectionCache.set(cacheKey, result);
-      if (editCorrectionCache.size > MAX_CACHE_SIZE) {
-        const firstKey = editCorrectionCache.keys().next().value;
-        if (firstKey !== undefined) {
-          editCorrectionCache.delete(firstKey);
-        }
-      }
       return result;
     }
   }
@@ -213,12 +228,6 @@ export async function ensureCorrectEdit(
     occurrences: countOccurrences(currentContent, finalOldString), // Recalculate occurrences with the final old_string
   };
   editCorrectionCache.set(cacheKey, result);
-  if (editCorrectionCache.size > MAX_CACHE_SIZE) {
-    const firstKey = editCorrectionCache.keys().next().value;
-    if (firstKey !== undefined) {
-      editCorrectionCache.delete(firstKey);
-    }
-  }
   return result;
 }
 
@@ -488,23 +497,11 @@ export async function ensureCorrectFileContent(
     const contentPotentiallyEscaped = unescapeStringForGeminiBug(content) !== content;
     if (!contentPotentiallyEscaped) {
       fileContentCorrectionCache.set(content, content);
-      if (fileContentCorrectionCache.size > MAX_CACHE_SIZE) {
-        const firstKey = fileContentCorrectionCache.keys().next().value;
-        if (firstKey !== undefined) {
-          fileContentCorrectionCache.delete(firstKey);
-        }
-      }
       return content;
     }
 
     const correctedContent = await correctStringEscaping(content, client);
     fileContentCorrectionCache.set(content, correctedContent);
-    if (fileContentCorrectionCache.size > MAX_CACHE_SIZE) {
-      const firstKey = fileContentCorrectionCache.keys().next().value;
-      if (firstKey !== undefined) {
-        fileContentCorrectionCache.delete(firstKey);
-      }
-    }
     return correctedContent;
 }
 
