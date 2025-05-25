@@ -19,6 +19,8 @@ import {
 import { SchemaValidator } from '../utils/schemaValidator.js';
 import { makeRelative, shortenPath } from '../utils/paths.js';
 import { isNodeError } from '../utils/errors.js';
+import { ensureCorrectEdit, ensureCorrectFileContent } from '../utils/editCorrector.js';
+import { GeminiClient } from '../core/client.js';
 
 /**
  * Parameters for the WriteFile tool
@@ -40,6 +42,7 @@ export interface WriteFileToolParams {
  */
 export class WriteFileTool extends BaseTool<WriteFileToolParams, ToolResult> {
   static readonly Name: string = 'write_file';
+  private readonly client: GeminiClient;
 
   constructor(private readonly config: Config) {
     super(
@@ -62,6 +65,8 @@ export class WriteFileTool extends BaseTool<WriteFileToolParams, ToolResult> {
         type: 'object',
       },
     );
+
+    this.client = new GeminiClient(this.config);
   }
 
   private isWithinRoot(pathToCheck: string): boolean {
@@ -206,14 +211,23 @@ export class WriteFileTool extends BaseTool<WriteFileToolParams, ToolResult> {
         fs.mkdirSync(dirName, { recursive: true });
       }
 
-      fs.writeFileSync(params.file_path, params.content, 'utf8');
+      let fileContent = params.content;
+      if (currentContent) {
+        const { params: correctedParams } = await ensureCorrectEdit(currentContent, { old_string: currentContent, new_string: params.content, file_path: params.file_path }, this.client);
+        currentContent = correctedParams.new_string;
+      } else {
+        const correctedContent = await ensureCorrectFileContent(params.content, this.client);
+        fileContent = correctedContent;
+      }
+
+      fs.writeFileSync(params.file_path, fileContent, 'utf8');
 
       // Generate diff for display result
       const fileName = path.basename(params.file_path);
       const fileDiff = Diff.createPatch(
         fileName,
         currentContent, // Empty if it was a new file
-        params.content,
+        fileContent,
         'Original',
         'Written',
         { context: 3 },
