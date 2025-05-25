@@ -19,7 +19,10 @@ import {
 import { SchemaValidator } from '../utils/schemaValidator.js';
 import { makeRelative, shortenPath } from '../utils/paths.js';
 import { isNodeError } from '../utils/errors.js';
-import { ensureCorrectEdit, ensureCorrectFileContent } from '../utils/editCorrector.js';
+import {
+  ensureCorrectEdit,
+  ensureCorrectFileContent,
+} from '../utils/editCorrector.js';
 import { GeminiClient } from '../core/client.js';
 
 /**
@@ -174,7 +177,10 @@ export class WriteFileTool extends BaseTool<WriteFileToolParams, ToolResult> {
       proposedContent = correctedParams.new_string;
     } else {
       // New file
-      proposedContent = await ensureCorrectFileContent(params.content, this.client);
+      proposedContent = await ensureCorrectFileContent(
+        params.content,
+        this.client,
+      );
     }
 
     const fileDiff = Diff.createPatch(
@@ -237,10 +243,21 @@ export class WriteFileTool extends BaseTool<WriteFileToolParams, ToolResult> {
 
       let fileContent = params.content;
       if (currentContent) {
-        const { params: correctedParams } = await ensureCorrectEdit(currentContent, { old_string: currentContent, new_string: params.content, file_path: params.file_path }, this.client);
+        const { params: correctedParams } = await ensureCorrectEdit(
+          currentContent,
+          {
+            old_string: currentContent,
+            new_string: params.content,
+            file_path: params.file_path,
+          },
+          this.client,
+        );
         currentContent = correctedParams.new_string;
       } else {
-        const correctedContent = await ensureCorrectFileContent(params.content, this.client);
+        const correctedContent = await ensureCorrectFileContent(
+          params.content,
+          this.client,
+        );
         fileContent = correctedContent;
       }
 

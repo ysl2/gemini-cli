@@ -59,10 +59,14 @@ class SimpleLruCache<K, V> {
 }
 
 // Cache for ensureCorrectEdit results
-const editCorrectionCache = new SimpleLruCache<string, CorrectedEditResult>(MAX_CACHE_SIZE);
+const editCorrectionCache = new SimpleLruCache<string, CorrectedEditResult>(
+  MAX_CACHE_SIZE,
+);
 
 // Cache for ensureCorrectFileContent results
-const fileContentCorrectionCache = new SimpleLruCache<string, string>(MAX_CACHE_SIZE);
+const fileContentCorrectionCache = new SimpleLruCache<string, string>(
+  MAX_CACHE_SIZE,
+);
 
 /**
  * Defines the structure of the parameters within CorrectedEditResult,
@@ -153,42 +157,42 @@ export async function ensureCorrectEdit(
     return result;
   } else {
     // occurrences is 0 or some other unexpected state initially
-  const unescapedOldStringAttempt = unescapeStringForGeminiBug(
-    originalParams.old_string,
-  );
-  occurrences = countOccurrences(currentContent, unescapedOldStringAttempt);
+    const unescapedOldStringAttempt = unescapeStringForGeminiBug(
+      originalParams.old_string,
+    );
+    occurrences = countOccurrences(currentContent, unescapedOldStringAttempt);
 
-  if (occurrences === 1) {
-    finalOldString = unescapedOldStringAttempt;
-    if (newStringPotentiallyEscaped) {
-      finalNewString = await correctNewString(
-        client,
+    if (occurrences === 1) {
+      finalOldString = unescapedOldStringAttempt;
+      if (newStringPotentiallyEscaped) {
+        finalNewString = await correctNewString(
+          client,
           originalParams.old_string, // original old
           unescapedOldStringAttempt, // corrected old
           originalParams.new_string, // original new (which is potentially escaped)
-      );
-    }
-  } else if (occurrences === 0) {
-    const llmCorrectedOldString = await correctOldStringMismatch(
-      client,
-      currentContent,
-      unescapedOldStringAttempt,
-    );
-    const llmOldOccurrences = countOccurrences(
-      currentContent,
-      llmCorrectedOldString,
-    );
-
-    if (llmOldOccurrences === 1) {
-      finalOldString = llmCorrectedOldString;
-      occurrences = llmOldOccurrences;
-
-      if (newStringPotentiallyEscaped) {
-        const baseNewStringForLLMCorrection = unescapeStringForGeminiBug(
-          originalParams.new_string,
         );
+      }
+    } else if (occurrences === 0) {
+      const llmCorrectedOldString = await correctOldStringMismatch(
+        client,
+        currentContent,
+        unescapedOldStringAttempt,
+      );
+      const llmOldOccurrences = countOccurrences(
+        currentContent,
+        llmCorrectedOldString,
+      );
+
+      if (llmOldOccurrences === 1) {
+        finalOldString = llmCorrectedOldString;
+        occurrences = llmOldOccurrences;
+
+        if (newStringPotentiallyEscaped) {
+          const baseNewStringForLLMCorrection = unescapeStringForGeminiBug(
+            originalParams.new_string,
+          );
           finalNewString = await correctNewString(
-          client,
+            client,
             originalParams.old_string, // original old
             llmCorrectedOldString, // corrected old
             baseNewStringForLLMCorrection, // base new for correction
@@ -425,7 +429,7 @@ const CORRECT_NEW_STRING_ESCAPING_SCHEMA: SchemaUnion = {
 
 export async function correctNewStringEscaping(
   geminiClient: GeminiClient,
-  oldString: string, 
+  oldString: string,
   potentiallyProblematicNewString: string,
 ): Promise<string> {
   const prompt = `
@@ -492,21 +496,23 @@ const CORRECT_STRING_ESCAPING_SCHEMA: SchemaUnion = {
 
 export async function ensureCorrectFileContent(
   content: string,
-  client: GeminiClient): Promise<string> {
-    const cachedResult = fileContentCorrectionCache.get(content);
-    if (cachedResult) {
-      return cachedResult;
-    }
+  client: GeminiClient,
+): Promise<string> {
+  const cachedResult = fileContentCorrectionCache.get(content);
+  if (cachedResult) {
+    return cachedResult;
+  }
 
-    const contentPotentiallyEscaped = unescapeStringForGeminiBug(content) !== content;
-    if (!contentPotentiallyEscaped) {
-      fileContentCorrectionCache.set(content, content);
-      return content;
-    }
+  const contentPotentiallyEscaped =
+    unescapeStringForGeminiBug(content) !== content;
+  if (!contentPotentiallyEscaped) {
+    fileContentCorrectionCache.set(content, content);
+    return content;
+  }
 
-    const correctedContent = await correctStringEscaping(content, client);
-    fileContentCorrectionCache.set(content, correctedContent);
-    return correctedContent;
+  const correctedContent = await correctStringEscaping(content, client);
+  fileContentCorrectionCache.set(content, correctedContent);
+  return correctedContent;
 }
 
 export async function correctStringEscaping(
