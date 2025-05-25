@@ -21,6 +21,7 @@ const EditConfig: GenerateContentConfig = {
 };
 
 // Cache for ensureCorrectEdit results
+const MAX_CACHE_SIZE = 10;
 const editCorrectionCache = new Map<string, CorrectedEditResult>();
 
 // Cache for ensureCorrectFileContent results
@@ -112,6 +113,12 @@ export async function ensureCorrectEdit(
       occurrences,
     };
     editCorrectionCache.set(cacheKey, result);
+    if (editCorrectionCache.size > MAX_CACHE_SIZE) {
+      const firstKey = editCorrectionCache.keys().next().value;
+      if (firstKey !== undefined) {
+        editCorrectionCache.delete(firstKey);
+      }
+    }
     return result;
   } else {
     // occurrences is 0 or some other unexpected state initially
@@ -163,6 +170,12 @@ export async function ensureCorrectEdit(
           occurrences: 0, // Explicitly 0 as LLM failed
         };
         editCorrectionCache.set(cacheKey, result);
+        if (editCorrectionCache.size > MAX_CACHE_SIZE) {
+          const firstKey = editCorrectionCache.keys().next().value;
+          if (firstKey !== undefined) {
+            editCorrectionCache.delete(firstKey);
+          }
+        }
         return result;
       }
     } else {
@@ -172,6 +185,12 @@ export async function ensureCorrectEdit(
         occurrences, // This will be > 1
       };
       editCorrectionCache.set(cacheKey, result);
+      if (editCorrectionCache.size > MAX_CACHE_SIZE) {
+        const firstKey = editCorrectionCache.keys().next().value;
+        if (firstKey !== undefined) {
+          editCorrectionCache.delete(firstKey);
+        }
+      }
       return result;
     }
   }
@@ -194,6 +213,12 @@ export async function ensureCorrectEdit(
     occurrences: countOccurrences(currentContent, finalOldString), // Recalculate occurrences with the final old_string
   };
   editCorrectionCache.set(cacheKey, result);
+  if (editCorrectionCache.size > MAX_CACHE_SIZE) {
+    const firstKey = editCorrectionCache.keys().next().value;
+    if (firstKey !== undefined) {
+      editCorrectionCache.delete(firstKey);
+    }
+  }
   return result;
 }
 
@@ -463,11 +488,23 @@ export async function ensureCorrectFileContent(
     const contentPotentiallyEscaped = unescapeStringForGeminiBug(content) !== content;
     if (!contentPotentiallyEscaped) {
       fileContentCorrectionCache.set(content, content);
+      if (fileContentCorrectionCache.size > MAX_CACHE_SIZE) {
+        const firstKey = fileContentCorrectionCache.keys().next().value;
+        if (firstKey !== undefined) {
+          fileContentCorrectionCache.delete(firstKey);
+        }
+      }
       return content;
     }
 
     const correctedContent = await correctStringEscaping(content, client);
     fileContentCorrectionCache.set(content, correctedContent);
+    if (fileContentCorrectionCache.size > MAX_CACHE_SIZE) {
+      const firstKey = fileContentCorrectionCache.keys().next().value;
+      if (firstKey !== undefined) {
+        fileContentCorrectionCache.delete(firstKey);
+      }
+    }
     return correctedContent;
 }
 
