@@ -21,12 +21,16 @@ const waitForOutput = (
   pty: IPty,
   expected: string,
   timeout = 5000,
-): Promise<string> => {
-  return new Promise((resolve, reject) => {
+): Promise<string> =>
+  new Promise((resolve, reject) => {
     let output = '';
-    const timer = setTimeout(() => {
-      reject(new Error(`Timeout waiting for "${expected}". Output: ${output}`));
-    }, timeout);
+    const timer = setTimeout(
+      () =>
+        reject(
+          new Error(`Timeout waiting for "${expected}". Output: ${output}`),
+        ),
+      timeout,
+    );
 
     const disposable = pty.onData((data) => {
       output += data;
@@ -37,7 +41,6 @@ const waitForOutput = (
       }
     });
   });
-};
 
 // Mock the GeminiClient to prevent actual API calls
 vi.mock('@gemini-cli/core', async (importOriginal) => {
