@@ -438,6 +438,7 @@ export async function loadCliConfig(
     listExtensions: argv.listExtensions || false,
     extensions: allExtensions,
     blockedMcpServers,
+    vimMode: settings.vimMode,
     noBrowser: !!process.env.NO_BROWSER,
     summarizeToolOutput: settings.summarizeToolOutput,
     ideMode,

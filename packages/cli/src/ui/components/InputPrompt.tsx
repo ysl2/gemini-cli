@@ -284,6 +284,10 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
       if (!focus) {
         return;
       }
+      // When vim mode is enabled, let vim hook handle ALL input (both INSERT and NORMAL modes)
+      if (config.getVimMode()) {
+        return;
+      }
 
       if (
         key.sequence === '!' &&

@@ -165,6 +165,7 @@ export interface ConfigParameters {
   listExtensions?: boolean;
   extensions?: GeminiCLIExtension[];
   blockedMcpServers?: Array<{ name: string; extensionName: string }>;
+  vimMode?: boolean;
   noBrowser?: boolean;
   summarizeToolOutput?: Record<string, SummarizeToolOutputSettings>;
   ideMode?: boolean;
@@ -223,6 +224,7 @@ export class Config {
     | Record<string, SummarizeToolOutputSettings>
     | undefined;
   private readonly experimentalAcp: boolean = false;
+  private readonly vimMode: boolean;
 
   constructor(params: ConfigParameters) {
     this.sessionId = params.sessionId;
@@ -270,6 +272,7 @@ export class Config {
     this.listExtensions = params.listExtensions ?? false;
     this._extensions = params.extensions ?? [];
     this._blockedMcpServers = params.blockedMcpServers ?? [];
+    this.vimMode = params.vimMode ?? false;
     this.noBrowser = params.noBrowser ?? false;
     this.summarizeToolOutput = params.summarizeToolOutput;
     this.ideMode = params.ideMode ?? false;
@@ -514,6 +517,10 @@ export class Config {
 
   getBugCommand(): BugCommandSettings | undefined {
     return this.bugCommand;
+  }
+
+  getVimMode(): boolean {
+    return this.vimMode;
   }
 
   getFileService(): FileDiscoveryService {

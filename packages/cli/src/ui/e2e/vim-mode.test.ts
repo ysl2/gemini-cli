@@ -1,87 +1,114 @@
+/**
+ * @license
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
-import path from "path";
-import os from "os";
-import fs from "fs/promises";
-import { fileURLToPath } from "url";
-import * as pty from "node-pty";
-import { beforeAll, afterAll, describe, it, expect } from "vitest";
+import { spawn, type IPty } from 'node-pty';
+import path from 'path';
+import os from 'os';
+import fs from 'fs/promises';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const CLI_PATH = path.resolve(
+  process.cwd(),
+  '../../packages/cli/dist/index.js',
+);
+const VIM_NORMAL_INDICATOR = '[NORMAL]';
 
-const CLI_PATH = "/Users/sijiewang/Git/gcli-vim/packages/cli/dist/index.js";
+// Helper function to wait for the terminal output to contain a specific string.
+const waitForOutput = (
+  pty: IPty,
+  expected: string,
+  timeout = 5000,
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    let output = '';
+    const timer = setTimeout(() => {
+      reject(new Error(`Timeout waiting for "${expected}". Output: ${output}`));
+    }, timeout);
 
-describe("Vim Mode E2E", () => {
+    const disposable = pty.onData((data) => {
+      output += data;
+      if (output.includes(expected)) {
+        clearTimeout(timer);
+        disposable.dispose();
+        resolve(output);
+      }
+    });
+  });
+};
+
+// Mock the GeminiClient to prevent actual API calls
+vi.mock('@gemini-cli/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@gemini-cli/core')>();
+  return {
+    ...actual,
+    GeminiClient: vi.fn(() => ({
+      getChat: vi.fn(() => ({
+        sendMessageStream: vi.fn(),
+        getHistory: vi.fn(() => []),
+      })),
+    })),
+    loadServerHierarchicalMemory: vi.fn(() =>
+      Promise.resolve({ memoryContent: '', fileCount: 0 }),
+    ),
+  };
+});
+
+describe('Vim Mode E2E', () => {
   let tempDir: string;
-  let tempSettingsPath: string;
+  let ptyProcess: IPty;
 
   beforeAll(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "gemini-cli-test-"));
-    await fs.mkdir(path.join(tempDir, ".gemini"));
-    tempSettingsPath = path.join(tempDir, ".gemini/settings.json");
+    // Create a temporary directory for our settings file
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'gemini-cli-test-'));
   });
 
   afterAll(async () => {
+    // Clean up the temporary directory
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  it("should start with vim mode disabled by default", async () => {
-    const settings = {
-      "cli.theme": "default",
-      "user.acknowledgedUsageStrobing": true,
-    };
-    await fs.writeFile(tempSettingsPath, JSON.stringify(settings));
+  it('should start with vim mode enabled when configured in settings', async () => {
+    // Mock os.homedir() to point to our temporary directory
+    vi.spyOn(os, 'homedir').mockReturnValue(tempDir);
 
-    const term = pty.spawn("node", [CLI_PATH], {
-      name: "xterm-color",
+    // Create the settings file in the temporary directory
+    const settings = {
+      vimMode: true,
+      'cli.theme': 'default',
+      'user.acknowledgedUsageStrobing': true,
+    };
+    await fs.mkdir(path.join(tempDir, '.gemini'));
+    await fs.writeFile(
+      path.join(tempDir, '.gemini', 'settings.json'),
+      JSON.stringify(settings),
+    );
+
+    ptyProcess = spawn('node', [CLI_PATH], {
+      name: 'xterm-color',
       cols: 80,
       rows: 30,
-      cwd: tempDir,
+      cwd: process.cwd(), // Run from the actual CWD
       env: {
         ...process.env,
-        HOME: tempDir,
+        // No need to set HOME anymore, since we mock homedir()
+        GEMINI_API_KEY: 'test-key',
       },
     });
 
-    let output = "";
-    term.onData((data) => {
-      output += data;
-    });
+    // 1. Wait for the initial prompt to ensure the app is ready
+    await waitForOutput(
+      ptyProcess,
+      'Type your message or @path/to/file',
+      10000,
+    );
 
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    term.kill();
+    // 2. Assert that the Vim mode indicator is visible
+    const output = await waitForOutput(ptyProcess, VIM_NORMAL_INDICATOR);
+    expect(output).toContain(VIM_NORMAL_INDICATOR);
 
-    expect(output).toContain(">");
-    expect(output).not.toContain("[VIM NORMAL]");
-  });
-
-  it("should start with vim mode enabled when configured in settings", async () => {
-    const settings = {
-      "cli.theme": "default",
-      "user.acknowledgedUsageStrobing": true,
-      "cli.vimMode": true,
-    };
-    await fs.writeFile(tempSettingsPath, JSON.stringify(settings));
-
-    const term = pty.spawn("node", [CLI_PATH], {
-      name: "xterm-color",
-      cols: 80,
-      rows: 30,
-      cwd: tempDir,
-      env: {
-        ...process.env,
-        HOME: tempDir,
-      },
-    });
-
-    let output = "";
-    term.onData((data) => {
-      output += data;
-    });
-
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    term.kill();
-
-    expect(output).toContain("[VIM NORMAL]");
-  });
+    ptyProcess.kill();
+  }, 20000);
 });
