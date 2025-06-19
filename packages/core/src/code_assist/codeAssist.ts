@@ -12,10 +12,7 @@ import { CodeAssistServer, HttpOptions } from './server.js';
 export async function createCodeAssistContentGenerator(
   httpOptions: HttpOptions,
 ): Promise<ContentGenerator> {
-  const oauth2Client = await getOauthClient();
-  const projectId = await setupUser(
-    oauth2Client,
-    process.env.GOOGLE_CLOUD_PROJECT,
-  );
-  return new CodeAssistServer(oauth2Client, projectId, httpOptions);
+  const authClient = await getOauthClient();
+  const projectId = await setupUser(authClient);
+  return new CodeAssistServer(authClient, projectId, httpOptions);
 }

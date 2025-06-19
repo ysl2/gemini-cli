@@ -11,7 +11,7 @@ import { loadCliConfig } from './config/config.js';
 import { resolvePromptFromFile } from './utils/prompt.js';
 import { readStdin } from './utils/readStdin.js';
 import { basename } from 'node:path';
-import { sandbox_command, start_sandbox } from './utils/sandbox.js';
+import { start_sandbox } from './utils/sandbox.js';
 import { LoadedSettings, loadSettings } from './config/settings.js';
 import { themeManager } from './ui/themes/theme-manager.js';
 import { getStartupWarnings } from './utils/startupWarnings.js';
@@ -31,7 +31,6 @@ import {
 export async function main() {
   const workspaceRoot = process.cwd();
   const settings = loadSettings(workspaceRoot);
-  setWindowTitle(basename(workspaceRoot), settings);
 
   await cleanupCheckpoints();
   if (settings.errors.length > 0) {
@@ -48,6 +47,10 @@ export async function main() {
 
   const extensions = loadExtensions(workspaceRoot);
   const config = await loadCliConfig(settings.merged, extensions, sessionId);
+
+  // When using Code Assist this triggers the Oauth login.
+  // Do this now, before sandboxing, so web redirect works.
+  await config.getGeminiClient().initialize();
 
   // Initialize centralized FileDiscoveryService
   config.getFileService();
@@ -67,15 +70,11 @@ export async function main() {
     }
   }
 
-  // When using Code Assist this triggers the Oauth login.
-  // Do this now, before sandboxing, so web redirect works.
-  await config.getGeminiClient().getChat();
-
   // hop into sandbox if we are outside and sandboxing is enabled
   if (!process.env.SANDBOX) {
-    const sandbox = sandbox_command(config.getSandbox());
-    if (sandbox) {
-      await start_sandbox(sandbox);
+    const sandboxConfig = config.getSandbox();
+    if (sandboxConfig) {
+      await start_sandbox(sandboxConfig);
       process.exit(0);
     }
   }
@@ -85,6 +84,7 @@ export async function main() {
 
   // Render UI, passing necessary config values. Check that there is no command line question.
   if (process.stdin.isTTY && input?.length === 0) {
+    setWindowTitle(basename(workspaceRoot), settings);
     render(
       <React.StrictMode>
         <AppWrapper

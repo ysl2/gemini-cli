@@ -309,7 +309,7 @@ Here's a conceptual example of what a context file at the root of a TypeScript p
 
 This example demonstrates how you can provide general project context, specific coding conventions, and even notes about particular files or components. The more relevant and precise your context files are, the better the AI can assist you. Project-specific context files are highly encouraged to establish conventions and context.
 
-- **Hierarchical Loading and Precedence:** The CLI implements a sophisticated hierarchical memory system by loading context files (e.g., `GEMINI.md`) from several locations. Content from files lower in this list (more specific) typically overrides or supplements content from files higher up (more general). The exact concatenation order and final context can be inspected using the `/showmemory` command. The typical loading order is:
+- **Hierarchical Loading and Precedence:** The CLI implements a sophisticated hierarchical memory system by loading context files (e.g., `GEMINI.md`) from several locations. Content from files lower in this list (more specific) typically overrides or supplements content from files higher up (more general). The exact concatenation order and final context can be inspected using the `/memory show` command. The typical loading order is:
   1.  **Global Context File:**
       - Location: `~/.gemini/<contextFileName>` (e.g., `~/.gemini/GEMINI.md` in your user home directory).
       - Scope: Provides default instructions for all your projects.
@@ -355,36 +355,3 @@ When `.gemini/sandbox.Dockerfile` exists, you can use `BUILD_SANDBOX` environmen
 ```bash
 BUILD_SANDBOX=1 gemini -s
 ```
-
-## Theming
-
-The Gemini CLI supports theming to customize its color scheme and appearance. Themes define colors for text, backgrounds, syntax highlighting, and other UI elements.
-
-### Available Themes
-
-The CLI comes with a selection of pre-defined themes. As seen in `theme-manager.ts`, these typically include:
-
-- **Dark Themes:**
-  - `AtomOneDark`
-  - `Dracula`
-  - `VS2015` (Default)
-  - `GitHub` (Dark variant usually)
-- **Light Themes:**
-  - `VS` (Visual Studio Light)
-  - `GoogleCode`
-  - `XCode` (Light variant usually)
-- **ANSI:**
-  - `ANSI`: A theme that primarily uses the terminal's native ANSI color capabilities.
-
-_(The exact list and their appearance can be confirmed by running the `/theme` command within the CLI.)_
-
-### Changing Themes
-
-1.  Type the `/theme` command in the CLI.
-2.  A dialog or selection prompt (`ThemeDialog.tsx`) will appear, listing the available themes.
-3.  You can typically navigate (e.g., with arrow keys) and select a theme. Some interfaces might offer a live preview or highlight as you select.
-4.  Confirm your selection (often with Enter) to apply the theme. You can usually cancel out of the selection (e.g., with Escape).
-
-### Theme Persistence
-
-Selected themes are usually saved in the CLI's configuration (see [CLI Configuration](./docs/cli/configuration.md)) so your preference is remembered across sessions.
