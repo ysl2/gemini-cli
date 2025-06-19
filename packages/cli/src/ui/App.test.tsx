@@ -147,7 +147,7 @@ vi.mock('./hooks/useGeminiStream', () => ({
 
 vi.mock('./hooks/useLogger', () => ({
   useLogger: vi.fn(() => ({
-    getPreviousUserMessages: vi.fn().mockResolvedValue([]),
+    getPreviousUserMessages: vi.fn().mockReturnValue([]),
   })),
 }));
 
