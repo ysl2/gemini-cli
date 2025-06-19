@@ -73,7 +73,6 @@ describe('oauth2', () => {
       (resolve) => (serverListeningCallback = resolve),
     );
 
-
     let capturedPort = 0;
     const mockHttpServer = {
       listen: vi.fn((port: number, callback?: () => void) => {
