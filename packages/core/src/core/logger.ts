@@ -205,7 +205,7 @@ export class Logger {
     }
   }
 
-  async getPreviousUserMessages(): Promise<string[]> {
+  getPreviousUserMessages(): string[] {
     if (!this.initialized) return [];
     return this.logs
       .filter((entry) => entry.type === MessageSenderType.USER)
@@ -266,7 +266,7 @@ export class Logger {
     }
     const path = this._checkpointPath(tag);
     try {
-      await fs.writeFile(path, JSON.stringify(conversation, null), 'utf-8');
+      await fs.writeFile(path, JSON.stringify(conversation, null, 2), 'utf-8');
     } catch (error) {
       console.error('Error writing to checkpoint file:', error);
     }
