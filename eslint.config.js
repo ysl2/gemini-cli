@@ -13,6 +13,7 @@ import importPlugin from 'eslint-plugin-import';
 import globals from 'globals';
 import licenseHeader from 'eslint-plugin-license-header';
 import noRelativeCrossPackageImports from './eslint-rules/no-relative-cross-package-imports.js';
+import noSelfPackageImport from './eslint-rules/no-self-package-import.js';
 import path from 'node:path'; // Use node: prefix for built-ins
 import url from 'node:url';
 
@@ -205,12 +206,19 @@ export default tseslint.config(
       custom: {
         rules: {
           'no-relative-cross-package-imports': noRelativeCrossPackageImports,
+          'no-self-package-import': noSelfPackageImport,
         },
       },
     },
     rules: {
       // Enable and configure your custom rule
       'custom/no-relative-cross-package-imports': [
+        'error',
+        {
+          root: path.join(projectRoot, 'packages'),
+        },
+      ],
+      'custom/no-self-package-import': [
         'error',
         {
           root: path.join(projectRoot, 'packages'),
