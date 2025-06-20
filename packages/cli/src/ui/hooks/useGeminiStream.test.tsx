@@ -370,7 +370,7 @@ describe('useGeminiStream', () => {
           props.shellModeActive,
           () => 'vscode' as EditorType,
           () => {},
-        ),
+        );
       },
       {
         initialProps: {
