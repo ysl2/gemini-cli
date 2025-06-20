@@ -17,9 +17,9 @@ export async function createCodeAssistContentGenerator(
     authType === AuthType.LOGIN_WITH_GOOGLE_ENTERPRISE ||
     authType === AuthType.LOGIN_WITH_GOOGLE_PERSONAL
   ) {
-    const authClient = await getOauthClient();
-    const projectId = await setupUser(authClient);
-    return new CodeAssistServer(authClient, projectId, httpOptions);
+    const client = await getOauthClient();
+    const projectId = await setupUser(client);
+    return new CodeAssistServer(client, projectId, httpOptions);
   }
 
   throw new Error(`Unsupported authType: ${authType}`);
