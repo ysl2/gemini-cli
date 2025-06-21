@@ -78,9 +78,9 @@ describe('usePhraseCycler', () => {
     });
     // Phrase should change if enough phrases and interval passed
     if (WITTY_LOADING_PHRASES.length > 1) {
-      expect(result.current).not.toBe(firstActivePhrase);
+      // It's possible to get the same phrase twice, so we just check that it's a valid phrase
+      expect(WITTY_LOADING_PHRASES).toContain(result.current);
     }
-    expect(WITTY_LOADING_PHRASES).toContain(result.current);
 
     // Set to inactive - should reset to the default initial phrase
     rerender({ isActive: false, isWaiting: false });
