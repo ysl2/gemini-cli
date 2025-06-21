@@ -39,7 +39,6 @@ export interface HttpOptions {
 
 // TODO: Use production endpoint once it supports our methods.
 export const CODE_ASSIST_ENDPOINT =
-  process.env.CODE_ASSIST_ENDPOINT ??
   'https://staging-cloudcode-pa.sandbox.googleapis.com';
 export const CODE_ASSIST_API_VERSION = 'v1internal';
 
@@ -114,7 +113,7 @@ export class CodeAssistServer implements ContentGenerator {
     signal?: AbortSignal,
   ): Promise<T> {
     const res = await this.client.request({
-      url: `${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:${method}`,
+      url: this.getMethodUrl(method),
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -133,7 +132,7 @@ export class CodeAssistServer implements ContentGenerator {
     signal?: AbortSignal,
   ): Promise<AsyncGenerator<T>> {
     const res = await this.client.request({
-      url: `${CODE_ASSIST_ENDPOINT}/${CODE_ASSIST_API_VERSION}:${method}`,
+      url: this.getMethodUrl(method),
       method: 'POST',
       params: {
         alt: 'sse',
@@ -169,5 +168,10 @@ export class CodeAssistServer implements ContentGenerator {
         }
       }
     })();
+  }
+
+  getMethodUrl(method: string): string {
+    const endpoint = process.env.CODE_ASSIST_ENDPOINT ?? CODE_ASSIST_ENDPOINT;
+    return `${endpoint}/${CODE_ASSIST_API_VERSION}:${method}`;
   }
 }
