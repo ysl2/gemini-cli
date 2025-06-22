@@ -12,6 +12,7 @@ import {
   Static,
   Text,
   useStdin,
+  useStdout,
   useInput,
   type Key as InkKeyType,
 } from 'ink';
@@ -33,6 +34,7 @@ import { InputPrompt } from './components/InputPrompt.js';
 import { Footer } from './components/Footer.js';
 import { ThemeDialog } from './components/ThemeDialog.js';
 import { AuthDialog } from './components/AuthDialog.js';
+import { AuthInProgress } from './components/AuthInProgress.js';
 import { EditorSettingsDialog } from './components/EditorSettingsDialog.js';
 import { Colors } from './colors.js';
 import { Help } from './components/Help.js';
@@ -66,6 +68,9 @@ import { useTextBuffer } from './components/shared/text-buffer.js';
 import * as fs from 'fs';
 import { UpdateNotification } from './components/UpdateNotification.js';
 import { checkForUpdates } from './utils/updateCheck.js';
+import ansiEscapes from 'ansi-escapes';
+import { OverflowProvider } from './contexts/OverflowContext.js';
+import { ShowMoreLines } from './components/ShowMoreLines.js';
 
 const CTRL_EXIT_PROMPT_DURATION_MS = 1000;
 
@@ -84,6 +89,7 @@ export const AppWrapper = (props: AppProps) => (
 const App = ({ config, settings, startupWarnings = [] }: AppProps) => {
   useBracketedPaste();
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  const { stdout } = useStdout();
 
   useEffect(() => {
     checkForUpdates().then(setUpdateMessage);
@@ -99,8 +105,9 @@ const App = ({ config, settings, startupWarnings = [] }: AppProps) => {
   const [staticNeedsRefresh, setStaticNeedsRefresh] = useState(false);
   const [staticKey, setStaticKey] = useState(0);
   const refreshStatic = useCallback(() => {
+    stdout.write(ansiEscapes.clearTerminal);
     setStaticKey((prev) => prev + 1);
-  }, [setStaticKey]);
+  }, [setStaticKey, stdout]);
 
   const [geminiMdFileCount, setGeminiMdFileCount] = useState<number>(0);
   const [debugMessage, setDebugMessage] = useState<string>('');
@@ -140,6 +147,8 @@ const App = ({ config, settings, startupWarnings = [] }: AppProps) => {
     openAuthDialog,
     handleAuthSelect,
     handleAuthHighlight,
+    isAuthenticating,
+    cancelAuthentication,
   } = useAuthCommand(settings, setAuthError, config);
 
   useEffect(() => {
@@ -167,7 +176,7 @@ const App = ({ config, settings, startupWarnings = [] }: AppProps) => {
     addItem(
       {
         type: MessageType.INFO,
-        text: 'Refreshing hierarchical memory (GEMINI.md files)...',
+        text: 'Refreshing hierarchical memory (GEMINI.md or other context files)...',
       },
       Date.now(),
     );
@@ -212,6 +221,7 @@ const App = ({ config, settings, startupWarnings = [] }: AppProps) => {
     pendingHistoryItems: pendingSlashCommandHistoryItems,
   } = useSlashCommandProcessor(
     config,
+    settings,
     history,
     addItem,
     clearItems,
@@ -230,6 +240,8 @@ const App = ({ config, settings, startupWarnings = [] }: AppProps) => {
   const pendingHistoryItems = [...pendingSlashCommandHistoryItems];
 
   const { rows: terminalHeight, columns: terminalWidth } = useTerminalSize();
+  const lastTerminalWidth = useRef(terminalWidth);
+  const isInitialMount = useRef(true);
   const { stdin, setRawMode } = useStdin();
   const isValidPath = useCallback((filePath: string): boolean => {
     try {
@@ -433,6 +445,26 @@ const App = ({ config, settings, startupWarnings = [] }: AppProps) => {
   );
 
   useEffect(() => {
+    // skip refreshing Static during first mount
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    // debounce so it doesn't fire up too often during resize
+    const handler = setTimeout(() => {
+      if (terminalWidth < lastTerminalWidth.current) {
+        setStaticNeedsRefresh(true);
+      }
+      lastTerminalWidth.current = terminalWidth;
+    }, 300);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [terminalWidth]);
+
+  useEffect(() => {
     if (!pendingHistoryItems.length) {
       return;
     }
@@ -532,23 +564,27 @@ const App = ({ config, settings, startupWarnings = [] }: AppProps) => {
         >
           {(item) => item}
         </Static>
-        <Box ref={pendingHistoryItemRef}>
-          {pendingHistoryItems.map((item, i) => (
-            <HistoryItemDisplay
-              key={i}
-              availableTerminalHeight={
-                constrainHeight ? availableTerminalHeight : undefined
-              }
-              terminalWidth={mainAreaWidth}
-              // TODO(taehykim): It seems like references to ids aren't necessary in
-              // HistoryItemDisplay. Refactor later. Use a fake id for now.
-              item={{ ...item, id: 0 }}
-              isPending={true}
-              config={config}
-              isFocused={!isEditorDialogOpen}
-            />
-          ))}
-        </Box>
+        <OverflowProvider>
+          <Box ref={pendingHistoryItemRef} flexDirection="column">
+            {pendingHistoryItems.map((item, i) => (
+              <HistoryItemDisplay
+                key={i}
+                availableTerminalHeight={
+                  constrainHeight ? availableTerminalHeight : undefined
+                }
+                terminalWidth={mainAreaWidth}
+                // TODO(taehykim): It seems like references to ids aren't necessary in
+                // HistoryItemDisplay. Refactor later. Use a fake id for now.
+                item={{ ...item, id: 0 }}
+                isPending={true}
+                config={config}
+                isFocused={!isEditorDialogOpen}
+              />
+            ))}
+            <ShowMoreLines constrainHeight={constrainHeight} />
+          </Box>
+        </OverflowProvider>
+
         {showHelp && <Help commands={slashCommands} />}
 
         <Box flexDirection="column" ref={mainControlsRef}>
@@ -587,13 +623,16 @@ const App = ({ config, settings, startupWarnings = [] }: AppProps) => {
                 terminalWidth={mainAreaWidth}
               />
             </Box>
+          ) : isAuthenticating ? (
+            <AuthInProgress
+              onTimeout={() => {
+                setAuthError('Authentication timed out. Please try again.');
+                cancelAuthentication();
+                openAuthDialog();
+              }}
+            />
           ) : isAuthDialogOpen ? (
             <Box flexDirection="column">
-              {authError && (
-                <Box marginBottom={1}>
-                  <Text color={Colors.AccentRed}>{authError}</Text>
-                </Box>
-              )}
               <AuthDialog
                 onSelect={handleAuthSelect}
                 onHighlight={handleAuthHighlight}
@@ -669,13 +708,16 @@ const App = ({ config, settings, startupWarnings = [] }: AppProps) => {
               </Box>
 
               {showErrorDetails && (
-                <DetailedMessagesDisplay
-                  messages={filteredConsoleMessages}
-                  maxHeight={
-                    constrainHeight ? debugConsoleMaxHeight : undefined
-                  }
-                  width={inputWidth}
-                />
+                <OverflowProvider>
+                  <DetailedMessagesDisplay
+                    messages={filteredConsoleMessages}
+                    maxHeight={
+                      constrainHeight ? debugConsoleMaxHeight : undefined
+                    }
+                    width={inputWidth}
+                  />
+                  <ShowMoreLines constrainHeight={constrainHeight} />
+                </OverflowProvider>
               )}
 
               {isInputActive && (

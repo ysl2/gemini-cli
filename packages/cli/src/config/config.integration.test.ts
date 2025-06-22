@@ -75,7 +75,9 @@ describe('Configuration Integration Tests', () => {
         sandbox: false,
         targetDir: tempDir,
         debugMode: false,
-        fileFilteringRespectGitIgnore: false,
+        fileFiltering: {
+          respectGitIgnore: false,
+        },
       };
 
       const config = new Config(configParams);
@@ -109,7 +111,9 @@ describe('Configuration Integration Tests', () => {
         sandbox: false,
         targetDir: tempDir,
         debugMode: false,
-        fileFilteringRespectGitIgnore: false,
+        fileFiltering: {
+          respectGitIgnore: false,
+        },
       };
 
       const config = new Config(configParams);
@@ -178,12 +182,32 @@ describe('Configuration Integration Tests', () => {
         sandbox: false,
         targetDir: tempDir,
         debugMode: false,
-        fileFilteringRespectGitIgnore: false, // CI might need to see all files
+        fileFiltering: {
+          respectGitIgnore: false,
+        }, // CI might need to see all files
       };
 
       const config = new Config(configParams);
 
       expect(config.getFileFilteringRespectGitIgnore()).toBe(false);
+    });
+  });
+
+  describe('Checkpointing Configuration', () => {
+    it('should enable checkpointing when the setting is true', async () => {
+      const configParams: ConfigParameters = {
+        cwd: '/tmp',
+        contentGeneratorConfig: TEST_CONTENT_GENERATOR_CONFIG,
+        embeddingModel: 'test-embedding-model',
+        sandbox: false,
+        targetDir: tempDir,
+        debugMode: false,
+        checkpointing: true,
+      };
+
+      const config = new Config(configParams);
+
+      expect(config.getCheckpointingEnabled()).toBe(true);
     });
   });
 });

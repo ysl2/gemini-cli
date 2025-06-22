@@ -32,6 +32,7 @@ import { createShowMemoryAction } from './useShowMemoryCommand.js';
 import { GIT_COMMIT_INFO } from '../../generated/git-commit.js';
 import { formatDuration, formatMemoryUsage } from '../utils/formatters.js';
 import { getCliVersion } from '../../utils/version.js';
+import { LoadedSettings } from '../../config/settings.js';
 
 export interface SlashCommandActionReturn {
   shouldScheduleTool?: boolean;
@@ -60,6 +61,7 @@ export interface SlashCommand {
  */
 export const useSlashCommandProcessor = (
   config: Config | null,
+  settings: LoadedSettings,
   history: HistoryItem[],
   addItem: UseHistoryManagerReturn['addItem'],
   clearItems: UseHistoryManagerReturn['clearItems'],
@@ -135,9 +137,9 @@ export const useSlashCommandProcessor = (
   );
 
   const showMemoryAction = useCallback(async () => {
-    const actionFn = createShowMemoryAction(config, addMessage);
+    const actionFn = createShowMemoryAction(config, settings, addMessage);
     await actionFn();
-  }, [config, addMessage]);
+  }, [config, settings, addMessage]);
 
   const addMemoryAction = useCallback(
     (
@@ -647,7 +649,7 @@ Add any other context about the problem here.
         description:
           'resume from conversation checkpoint. Usage: /resume [tag]',
         completion: async () => {
-          const geminiDir = config?.getGeminiDir();
+          const geminiDir = config?.getProjectTempDir();
           if (!geminiDir) {
             return [];
           }
@@ -805,14 +807,30 @@ Add any other context about the problem here.
       },
     ];
 
-    if (config?.getCheckpointEnabled()) {
+    if (config?.getCheckpointingEnabled()) {
       commands.push({
         name: 'restore',
         description:
           'restore a tool call. This will reset the conversation and file history to the state it was in when the tool call was suggested',
+        completion: async () => {
+          const checkpointDir = config?.getProjectTempDir()
+            ? path.join(config.getProjectTempDir(), 'checkpoints')
+            : undefined;
+          if (!checkpointDir) {
+            return [];
+          }
+          try {
+            const files = await fs.readdir(checkpointDir);
+            return files
+              .filter((file) => file.endsWith('.json'))
+              .map((file) => file.replace('.json', ''));
+          } catch (_err) {
+            return [];
+          }
+        },
         action: async (_mainCommand, subCommand, _args) => {
-          const checkpointDir = config?.getGeminiDir()
-            ? path.join(config.getGeminiDir(), 'checkpoints')
+          const checkpointDir = config?.getProjectTempDir()
+            ? path.join(config.getProjectTempDir(), 'checkpoints')
             : undefined;
 
           if (!checkpointDir) {

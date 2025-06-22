@@ -27,6 +27,7 @@ import { GeminiClient } from '../core/client.js';
 import { GEMINI_CONFIG_DIR as GEMINI_DIR } from '../tools/memoryTool.js';
 import { FileDiscoveryService } from '../services/fileDiscoveryService.js';
 import { GitService } from '../services/gitService.js';
+import { getProjectTempDir } from '../utils/paths.js';
 import {
   initializeTelemetry,
   DEFAULT_TELEMETRY_TARGET,
@@ -112,8 +113,11 @@ export interface ConfigParameters {
   contextFileName?: string | string[];
   accessibility?: AccessibilitySettings;
   telemetry?: TelemetrySettings;
-  fileFilteringRespectGitIgnore?: boolean;
-  checkpoint?: boolean;
+  fileFiltering?: {
+    respectGitIgnore?: boolean;
+    enableRecursiveFileSearch?: boolean;
+  };
+  checkpointing?: boolean;
   proxy?: string;
   cwd: string;
   fileDiscoveryService?: FileDiscoveryService;
@@ -122,7 +126,7 @@ export interface ConfigParameters {
 }
 
 export class Config {
-  private toolRegistry: Promise<ToolRegistry>;
+  private toolRegistry!: ToolRegistry;
   private readonly sessionId: string;
   private contentGeneratorConfig!: ContentGeneratorConfig;
   private readonly embeddingModel: string;
@@ -144,10 +148,13 @@ export class Config {
   private readonly accessibility: AccessibilitySettings;
   private readonly telemetrySettings: TelemetrySettings;
   private geminiClient!: GeminiClient;
-  private readonly fileFilteringRespectGitIgnore: boolean;
+  private readonly fileFiltering: {
+    respectGitIgnore: boolean;
+    enableRecursiveFileSearch: boolean;
+  };
   private fileDiscoveryService: FileDiscoveryService | null = null;
   private gitService: GitService | undefined = undefined;
-  private readonly checkpoint: boolean;
+  private readonly checkpointing: boolean;
   private readonly proxy: string | undefined;
   private readonly cwd: string;
   private readonly bugCommand: BugCommandSettings | undefined;
@@ -180,9 +187,12 @@ export class Config {
       logPrompts: params.telemetry?.logPrompts ?? true,
     };
 
-    this.fileFilteringRespectGitIgnore =
-      params.fileFilteringRespectGitIgnore ?? true;
-    this.checkpoint = params.checkpoint ?? false;
+    this.fileFiltering = {
+      respectGitIgnore: params.fileFiltering?.respectGitIgnore ?? true,
+      enableRecursiveFileSearch:
+        params.fileFiltering?.enableRecursiveFileSearch ?? true,
+    };
+    this.checkpointing = params.checkpointing ?? false;
     this.proxy = params.proxy;
     this.cwd = params.cwd ?? process.cwd();
     this.fileDiscoveryService = params.fileDiscoveryService ?? null;
@@ -192,8 +202,6 @@ export class Config {
     if (params.contextFileName) {
       setGeminiMdFilename(params.contextFileName);
     }
-
-    this.toolRegistry = createToolRegistry(this);
 
     if (this.telemetrySettings.enabled) {
       initializeTelemetry(this);
@@ -207,10 +215,10 @@ export class Config {
     );
 
     const gc = new GeminiClient(this);
-    await gc.initialize(contentConfig);
-
-    this.contentGeneratorConfig = contentConfig;
     this.geminiClient = gc;
+    this.toolRegistry = await createToolRegistry(this);
+    await gc.initialize(contentConfig);
+    this.contentGeneratorConfig = contentConfig;
   }
 
   getSessionId(): string {
@@ -241,8 +249,8 @@ export class Config {
     return this.targetDir;
   }
 
-  async getToolRegistry(): Promise<ToolRegistry> {
-    return this.toolRegistry;
+  getToolRegistry(): Promise<ToolRegistry> {
+    return Promise.resolve(this.toolRegistry);
   }
 
   getDebugMode(): boolean {
@@ -336,12 +344,20 @@ export class Config {
     return path.join(this.targetDir, GEMINI_DIR);
   }
 
-  getFileFilteringRespectGitIgnore(): boolean {
-    return this.fileFilteringRespectGitIgnore;
+  getProjectTempDir(): string {
+    return getProjectTempDir(this.getProjectRoot());
   }
 
-  getCheckpointEnabled(): boolean {
-    return this.checkpoint;
+  getEnableRecursiveFileSearch(): boolean {
+    return this.fileFiltering.enableRecursiveFileSearch;
+  }
+
+  getFileFilteringRespectGitIgnore(): boolean {
+    return this.fileFiltering.respectGitIgnore;
+  }
+
+  getCheckpointingEnabled(): boolean {
+    return this.checkpointing;
   }
 
   getProxy(): string | undefined {

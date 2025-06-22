@@ -12,7 +12,11 @@ import { resolvePromptFromFile } from './utils/prompt.js';
 import { readStdin } from './utils/readStdin.js';
 import { basename } from 'node:path';
 import { start_sandbox } from './utils/sandbox.js';
-import { LoadedSettings, loadSettings } from './config/settings.js';
+import {
+  LoadedSettings,
+  loadSettings,
+  SettingScope,
+} from './config/settings.js';
 import { themeManager } from './ui/themes/theme-manager.js';
 import { getStartupWarnings } from './utils/startupWarnings.js';
 import { runNonInteractive } from './nonInteractiveCli.js';
@@ -29,6 +33,7 @@ import {
   AuthType,
 } from '@gemini-cli/core';
 import { validateAuthMethod } from './config/auth.js';
+import { setMaxSizedBoxDebugging } from './ui/components/shared/MaxSizedBox.js';
 
 export async function main() {
   const workspaceRoot = process.cwd();
@@ -50,9 +55,21 @@ export async function main() {
   const extensions = loadExtensions(workspaceRoot);
   const config = await loadCliConfig(settings.merged, extensions, sessionId);
 
+  // set default fallback to gemini api key
+  // this has to go after load cli becuase thats where the env is set
+  if (!settings.merged.selectedAuthType && process.env.GEMINI_API_KEY) {
+    settings.setValue(
+      SettingScope.User,
+      'selectedAuthType',
+      AuthType.USE_GEMINI,
+    );
+  }
+
+  setMaxSizedBoxDebugging(config.getDebugMode());
+
   // Initialize centralized FileDiscoveryService
   config.getFileService();
-  if (config.getCheckpointEnabled()) {
+  if (config.getCheckpointingEnabled()) {
     try {
       await config.getGitService();
     } catch {
