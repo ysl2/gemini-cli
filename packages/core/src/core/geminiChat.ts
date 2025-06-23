@@ -5,7 +5,7 @@
  */
 
 // DISCLAIMER: This is a copied version of https://github.com/googleapis/js-genai/blob/main/src/chats.ts with the intention of working around a key bug
-// where function responses are not treated as "valid" responses: https://b.corp.google.com/issues/420354090
+// where function responses are not treated as "valid" responses: b/420354090
 
 import {
   GenerateContentResponse,
@@ -472,7 +472,7 @@ export class GeminiChat {
     } else {
       // When not a function response appends an empty content when model returns empty response, so that the
       // history is always alternating between user and model.
-      // Workaround for: https://b.corp.google.com/issues/420354090
+      // Workaround for: b/420354090
       if (!isFunctionResponse(userInput)) {
         outputContents.push({
           role: 'model',

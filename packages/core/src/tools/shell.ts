@@ -31,7 +31,7 @@ const OUTPUT_UPDATE_INTERVAL_MS = 1000;
 
 export class ShellTool extends BaseTool<ShellToolParams, ToolResult> {
   static Name: string = 'run_shell_command';
-  private whitelist: Set<string> = new Set();
+  private allowlist: Set<string> = new Set();
 
   constructor(private readonly config: Config) {
     const toolDisplayName = 'Shell';
@@ -129,8 +129,8 @@ export class ShellTool extends BaseTool<ShellToolParams, ToolResult> {
       return false; // skip confirmation, execute call will fail immediately
     }
     const rootCommand = this.getCommandRoot(params.command)!; // must be non-empty string post-validation
-    if (this.whitelist.has(rootCommand)) {
-      return false; // already approved and whitelisted
+    if (this.allowlist.has(rootCommand)) {
+      return false; // already approved and allowlisted
     }
     const confirmationDetails: ToolExecuteConfirmationDetails = {
       type: 'exec',
@@ -139,7 +139,7 @@ export class ShellTool extends BaseTool<ShellToolParams, ToolResult> {
       rootCommand,
       onConfirm: async (outcome: ToolConfirmationOutcome) => {
         if (outcome === ToolConfirmationOutcome.ProceedAlways) {
-          this.whitelist.add(rootCommand);
+          this.allowlist.add(rootCommand);
         }
       },
     };

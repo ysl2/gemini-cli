@@ -43,7 +43,7 @@ export interface LoadCodeAssistRequest {
 
 /**
  * Represents LoadCodeAssistResponse proto json field
- * http://google3/google/internal/cloud/code/v1internal/cloudcode.proto;l=224
+ * cloud/code/v1internal/cloudcode.proto;l=224
  */
 export interface LoadCodeAssistResponse {
   currentTier?: GeminiUserTier | null;
@@ -83,7 +83,7 @@ export interface IneligibleTier {
 
 /**
  * List of predefined reason codes when a tier is blocked from a specific tier.
- * https://source.corp.google.com/piper///depot/google3/google/internal/cloud/code/v1internal/cloudcode.proto;l=378
+ * cloud/code/v1internal/cloudcode.proto;l=378
  */
 export enum IneligibleTierReasonCode {
   // go/keep-sorted start
@@ -100,7 +100,7 @@ export enum IneligibleTierReasonCode {
 /**
  * UserTierId represents IDs returned from the Cloud Code Private API representing a user's tier
  *
- * //depot/google3/cloud/developer_experience/cloudcode/pa/service/usertier.go;l=16
+ * cloudcode/pa/service/usertier.go;l=16
  */
 export enum UserTierId {
   FREE = 'free-tier',
@@ -138,7 +138,7 @@ export interface LongrunningOperationResponse {
 
 /**
  * Represents OnboardUserResponse proto
- * http://google3/google/internal/cloud/code/v1internal/cloudcode.proto;l=215
+ * cloud/code/v1internal/cloudcode.proto;l=215
  */
 export interface OnboardUserResponse {
   // tslint:disable-next-line:enforce-name-casing This is the name of the field in the proto.
