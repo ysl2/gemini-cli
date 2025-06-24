@@ -551,6 +551,22 @@ describe('EditTool', () => {
         /Attempted to create a file that already exists/,
       );
     });
+
+    it('should return error if old_string and new_string are identical', async () => {
+      fs.writeFileSync(filePath, 'Some content.', 'utf8');
+      const params: EditToolParams = {
+        file_path: filePath,
+        old_string: 'Some content.',
+        new_string: 'Some content.',
+      };
+      const result = await tool.execute(params, new AbortController().signal);
+      expect(result.llmContent).toMatch(
+        /The old_string and new_string parameters were effectively identical/,
+      );
+      expect(result.returnDisplay).toMatch(
+        /The proposed change resulted in no changes to the file./,
+      );
+    });
   });
 
   describe('getDescription', () => {

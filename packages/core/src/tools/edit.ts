@@ -270,6 +270,14 @@ Expectation for required parameters:
       isNewFile,
     );
 
+    // Only check for no-op if no other error has been found.
+    if (!error && !isNewFile && currentContent === newContent) {
+      error = {
+        display: `The proposed change resulted in no changes to the file.`,
+        raw: `The old_string and new_string parameters were effectively identical, resulting in no change to the file.`,
+      };
+    }
+
     return {
       currentContent,
       newContent,
