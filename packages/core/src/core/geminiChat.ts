@@ -244,7 +244,7 @@ export class GeminiChat {
     return null;
   }
 
-  setSystemInstruction(sysInstr:string) {
+  setSystemInstruction(sysInstr: string) {
     this.generationConfig.systemInstruction = sysInstr;
   }
   /**
