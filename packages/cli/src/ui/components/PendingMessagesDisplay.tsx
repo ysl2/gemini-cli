@@ -23,8 +23,12 @@ export const PendingMessagesDisplay = ({
       {/* <Text color={Colors.Gray}>Queued Messages:</Text> */}
       {messages.map((msg, index) => (
         <Box key={index} paddingLeft={2}>
-          <Text color={Colors.AccentYellow}>(sending) </Text>
-          <Text color={Colors.Gray}>{msg}</Text>
+          <Text color={Colors.AccentYellow} italic>
+            (sending){' '}
+          </Text>
+          <Text color={Colors.Gray} italic>
+            {msg}
+          </Text>
         </Box>
       ))}
     </Box>
