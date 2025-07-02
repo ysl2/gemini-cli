@@ -1,48 +1,18 @@
-# NPM Workspaces
-
-This project uses [NPM Workspaces](https://docs.npmjs.com/cli/v10/using-npm/workspaces) to manage the packages within this monorepo. This simplifies development by allowing us to manage dependencies and run scripts across multiple packages from the root of the project.
-
-## How it Works
-
-The root `package.json` file defines the workspaces for this project:
-
-```json
-{
-  "workspaces": ["packages/*"]
-}
-```
-
-This tells NPM that any folder inside the `packages` directory is a separate package that should be managed as part of the workspace.
-
-## Benefits of Workspaces
-
-- **Simplified Dependency Management**: Running `npm install` from the root of the project will install all dependencies for all packages in the workspace and link them together. This means you don't need to run `npm install` in each package's directory.
-- **Automatic Linking**: Packages within the workspace can depend on each other. When you run `npm install`, NPM will automatically create symlinks between the packages. This means that when you make changes to one package, the changes are immediately available to other packages that depend on it.
-- **Simplified Script Execution**: You can run scripts in any package from the root of the project using the `--workspace` flag. For example, to run the `build` script in the `cli` package, you can run `npm run build --workspace @google/gemini-cli`.
-
-## Package Overview
+# Package Overview
 
 This monorepo contains two main packages: `@google/gemini-cli` and `@google/gemini-cli-core`.
 
-### `@google/gemini-cli`
+## `@google/gemini-cli`
 
 This is the main package for the Gemini CLI. It is responsible for the user interface, command parsing, and all other user-facing functionality.
 
 When this package is published, it is bundled into a single executable file. This bundle includes all of the package's dependencies, including `@google/gemini-cli-core`. This means that whether a user installs the package with `npm install -g @google/gemini-cli` or runs it directly with `npx @google/gemini-cli`, they are using this single, self-contained executable.
 
-### `@google/gemini-cli-core`
+## `@google/gemini-cli-core`
 
 This package contains the core logic for interacting with the Gemini API. It is responsible for making API requests, handling authentication, and managing the local cache.
 
 This package is not bundled. When it is published, it is published as a standard Node.js package with its own dependencies. This allows it to be used as a standalone package in other projects, if needed. All transpiled js code in the `dist` folder is included in the package.
-
-## Versioning and Publishing
-
-All packages in this monorepo are versioned together from the root `package.json` file. When a new version is released, the version number in the root `package.json` is updated, and all packages are published with that version.
-
-### NPX Installation
-
-When a user runs `npx @google/gemini-cli`, npm downloads the `@google/gemini-cli` package and its dependencies from the npm registry. Because the `workspace:*` dependencies were replaced with the actual version numbers during publishing, npm is able to resolve and download the correct versions of all the required packages.
 
 # Release Process
 
@@ -56,58 +26,111 @@ In the comming weeks (Early July '25) we will formalize a more structured releas
 
 ## How To Release
 
-The high level process is
-
-- check out a branch from the trunk you want to release from i.e. `main`
-- run [integration tests](./integration-tests.md) against the branch to ensure the code you are about to ship works
-- run the required commands (see below) to tag, update and push
-- the release will automatically run and publish both npm and docker for your versions
-- create pr for your branch with the package version changes
-- when the release is successful merge the pr
-
-### Specific Commands
-
-Releases are done via a [Github Action named Release](../.github/workflows/release.yml). This process is automated and is started via the following:
+Releasing a new version is as simple as creating and pushing a new Git tag. The tag must follow semantic versioning and be prefixed with `v`, for example `v0.2.0` or `v1.0.0-alpha.1`. From the branch you want to release from, run the following commands:
 
 ```bash
-git checkout main
-git pull
-git checkout -b release-<identifier of your choice>
-npm run release:version <release tag>
-npm run check:versions
-npm run push-release
+# Create the new tag (e.g., v0.2.0)
+# Optional use git log to find an older commit sha to tag
+git tag v0.2.0 <optional sha>
+# Push the tag to the remote repository to trigger the release
+git push origin v0.2.0
 ```
 
-#### `npm run relase:version <release tag>`
+The high-level process is:
 
-This command will use the npm [version command](https://docs.npmjs.com/cli/v8/commands/npm-version) to update the package versions. `<release tag>` can be either 'patch' or simlar which will auto increment the version or a strongly typed package name `0.1.10-dev.0`, `0.2.0` or simlar. This command will update all the package files, create a gitcommit and a git tag locally.
+1.  Ensure your local branch `main` or `release-xxx` if hotfixing a previous release is up-to-date with the remote repository.
+1.  Decide on the new version number based on the changes since the last release.
+1. _Optionally_ `git log` to find the sha of the commit you want to push if not latest
+1. _Optionally_ run [integration tests](integration-tests.md) locally to increase confidence in the release.
+1.  Create a new Git tag with the desired version number.
+1.  Push the tag to the `google-gemini/gemini-cli` repository.
+1.  The push will trigger the release workflow, which automates the rest of the process.
+1.  Once the workflow is complete, it will have created a `release/vX.Y.Z` branch with the version bumps. Create a pull request from this branch to merge the version changes back into `main`.
 
-#### `npm run check:versions`
-
-This command is optional but will verify that all the versions are correct.
-
-#### `npm run push-release`
-
-This command will push both the git commit for the package changes as well as safely push the git tags
-
-Pushing a new tag will trigger the [release workflow](https://github.com/google-gemini/gemini-cli/actions/workflows/release.yml), which will automatically build and publish the packages to the npm registry and create a new GitHub release.
+Pushing a new tag will trigger the [release workflow](https://github.com/google-gemini/gemini-cli/actions/workflows/release.yml), which will automatically:
+- Build and publish the packages to the npm registry.
+- Create a new GitHub release with generated release notes.
+- Create a new branch `release/vX.Y.Z` containing the version bump in the `package.json` files.
 
 We also run a Gooogle cloud build called [release-docker.yml](../.gcp/release-docker.yaml). Which publishes the sandbox docker to match your release. This will also be moved to GH and combined with the main relase file once service account permissions are sorted out.
 
 ### 2. Monitor the Release Workflow
-
 You can monitor the progress of the release workflow in the [GitHub Actions tab](https://github.com/google-gemini/gemini-cli/actions/workflows/release.yml). If the workflow fails, you will need to investigate the cause of the failure, fix the issue, and then create a new tag to trigger a new release.
+
+### After the Release
+
+After the workflow has successfully completed, you should:
+
+1.  Go to the [pull requests page](https://github.com/google-gemini/gemini-cli/pulls) of the repository.
+2.  Create a new pull request from the `release/vX.Y.Z` branch to `main`.
+3.  Review the pull request (it should only contain version updates in `package.json` files) and merge it. This keeps the version in `main` up-to-date.
 
 ## Release Validation
 
 After pushing a new release smoke testing should be performed to ensure that the packages are working as expected. This can be done by installing the packages locally and running a set of tests to ensure that they are functioning correctly.
-
 - `npx -y @google/gemini-cli@latest --version` to validate the push worked as expected if you were not doing a rc or dev tag
 - `npx -y @google/gemini-cli@<release tag> --version` to validate the tag pushed appropriately
 - _This is destructive locally_ `npm uninstall @google/gemini-cli && npm uninstall -g @google/gemini-cli && npm cache clean --force &&  npm install @google/gemini-cli@<version>`
 - Smoke testing a basic run through of exercising a few llm commands and tools is recommended to ensure that the packages are working as expected. We'll codify this more in the future.
 
+## When to merge the version change, or not?
+
+The above pattern for creating patch or hotfix releases from current or older commits leaves the repository in the following state:
+
+   1. The Tag (`vX.Y.Z-patch.1`): This tag correctly points to the original commit on main
+      that contains the stable code you intended to release. This is crucial. Anyone checking
+      out this tag gets the exact code that was published.
+   2. The Branch (`release-vX.Y.Z-patch.1`): This branch contains one new commit on top of the
+      tagged commit. That new commit only contains the version number change in package.json
+      (and other related files like package-lock.json).
+
+This separation is good. It keeps your main branch history clean of release-specific
+version bumps until you decide to merge them.
+
+This is the critical decision, and it depends entirely on the nature of the release.
+
+### Merge Back for Stable Patches and Hotfixes
+
+
+  You almost always want to merge the `release-<tag>` branch back into `main` for any
+  stable patch or hotfix release.
+
+
+   * Why? The primary reason is to update the version in main's package.json. If you release
+     v1.2.1 from an older commit but never merge the version bump back, your main branch's
+     package.json will still say "version": "1.2.0". The next developer who starts work for
+     the next feature release (v1.3.0) will be branching from a codebase that has an
+     incorrect, older version number. This leads to confusion and requires manual version
+     bumping later.
+   * The Process: After the release-v1.2.1 branch is created and the package is successfully
+     published, you should open a pull request to merge release-v1.2.1 into main. This PR
+     will contain just one commit: "chore: bump version to v1.2.1". It's a clean, simple
+     integration that keeps your main branch in sync with the latest released version.
+
+### Do NOT Merge Back for Pre-Releases (RC, Beta, Dev)
+
+You typically do not merge release branches for pre-releases back into `main`.
+
+
+   * Why? Pre-release versions (e.g., v1.3.0-rc.1, v1.3.0-rc.2) are, by definition, not
+     stable and are temporary. You don't want to pollute your main branch's history with a
+     series of version bumps for release candidates. The package.json in main should reflect
+     the latest stable release version, not an RC.
+   * The Process: The release-v1.3.0-rc.1 branch is created, the npm publish --tag rc happens,
+      and then... the branch has served its purpose. You can simply delete it. The code for
+     the RC is already on main (or a feature branch), so no functional code is lost. The
+     release branch was just a temporary vehicle for the version number.
+
 ## Local Testing and Validation: Changes to the Packaging and Publishing Process
+
+If you need to test the release process without actually publishing to NPM or creating a public GitHub release, you can trigger the workflow manually from the GitHub UI.
+
+1.  Go to the [Actions tab](https://github.com/google-gemini/gemini-cli/actions/workflows/release.yml) of the repository.
+2.  Click on the "Run workflow" dropdown.
+3.  Leave the `dry_run` option checked (`true`).
+4.  Click the "Run workflow" button.
+
+This will run the entire release process but will skip the `npm publish` and `gh release create` steps. You can inspect the workflow logs to ensure everything is working as expected.
 
 It is crucial to test any changes to the packaging and publishing process locally before committing them. This ensures that the packages will be published correctly and that they will work as expected when installed by a user.
 
@@ -212,3 +235,25 @@ Summary of File Flow
 
 This process ensures that the final published artifact is a purpose-built, clean, and efficient representation of the
 project, rather than a direct copy of the development workspace.
+
+## NPM Workspaces
+
+This project uses [NPM Workspaces](https://docs.npmjs.com/cli/v10/using-npm/workspaces) to manage the packages within this monorepo. This simplifies development by allowing us to manage dependencies and run scripts across multiple packages from the root of the project.
+
+### How it Works
+
+The root `package.json` file defines the workspaces for this project:
+
+```json
+{
+  "workspaces": ["packages/*"]
+}
+```
+
+This tells NPM that any folder inside the `packages` directory is a separate package that should be managed as part of the workspace.
+
+### Benefits of Workspaces
+
+- **Simplified Dependency Management**: Running `npm install` from the root of the project will install all dependencies for all packages in the workspace and link them together. This means you don't need to run `npm install` in each package's directory.
+- **Automatic Linking**: Packages within the workspace can depend on each other. When you run `npm install`, NPM will automatically create symlinks between the packages. This means that when you make changes to one package, the changes are immediately available to other packages that depend on it.
+- **Simplified Script Execution**: You can run scripts in any package from the root of the project using the `--workspace` flag. For example, to run the `build` script in the `cli` package, you can run `npm run build --workspace @google/gemini-cli`.

@@ -23,10 +23,11 @@ jobs:
       id-token: write # Required for Workload Identity Federation to Google Cloud
 
     steps:
-      - name: Checkout code
+      - name: Checkout code at the specific tag
         uses: actions/checkout@v4
-        # Fetch all history for versioning
         with:
+          # This checks out the code at the specific tag that triggered the workflow
+          ref: ${{ github.ref }}
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -38,13 +39,12 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Check Version Consistency
-        run: npm run check:versions
-
-      - name: Set Release Version and Tag
+      - name: Get the tag name
         id: version
         run: |
-          RELEASE_VERSION="${GITHUB_REF_NAME#v}"
+          RELEASE_TAG=${GITHUB_REF_NAME}
+          echo "RELEASE_TAG=${RELEASE_TAG}" >> $GITHUB_OUTPUT
+          RELEASE_VERSION="${RELEASE_TAG#v}"
           if [[ $RELEASE_VERSION == *-* ]]; then
             NPM_TAG=$(echo $RELEASE_VERSION | cut -d'-' -f2 | cut -d'.' -f1)
           else
@@ -52,6 +52,23 @@ jobs:
           fi
           echo "RELEASE_VERSION=${RELEASE_VERSION}" >> $GITHUB_OUTPUT
           echo "NPM_TAG=${NPM_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Create and switch to a release branch
+        id: release_branch
+        run: |
+          BRANCH_NAME="release/${{ steps.version.outputs.RELEASE_TAG }}"
+          git switch -c $BRANCH_NAME
+          echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Update package versions and create andn push commit
+        run: |
+          # Configure git user for the commit
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # This script should modify package.json, etc.
+          npm run release:versions ${{ steps.version.outputs.RELEASE_VERSION }}
+          npm run push-release
 
       - name: Create GitHub Release
         if: '!inputs.dry_run'
