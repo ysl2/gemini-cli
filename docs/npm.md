@@ -44,17 +44,27 @@ All packages in this monorepo are versioned together from the root `package.json
 
 When a user runs `npx @google/gemini-cli`, npm downloads the `@google/gemini-cli` package and its dependencies from the npm registry. Because the `workspace:*` dependencies were replaced with the actual version numbers during publishing, npm is able to resolve and download the correct versions of all the required packages.
 
-## Release Process
+# Release Process
 
 This project follows a structured release process to ensure that all packages are versioned and published correctly. The process is designed to be as automated as possible.
 
+## Current Theory
+
+For most all changes, simply patching the minor version is acceptable. We can and should release frequently; the more often we release the easier it is to tell what change broke something. Developeres are encouraged to push a release as described below after their branch merges. I also think I'm open to doing the release publishing steps as a part of an existing PR, though this could have more churn if others are also releasing and version numbers change frequently.
+
+In the comming weeks (Early July '25) we will formalize a more structured release process and this advice will be amended.
+
+## How To Release
+
 The high level process is
 
-- check out a branch from the trunk you want to release from (for now this will be main, as we build out a larger release process, this will likely be release specific branches)
+- check out a branch from the trunk you want to release from i.e. `main`
 - run the required commands to tag, update and push
-- create pr for your branch with the package version changes
 - the release will automatically run and publish both npm and docker for your versions
+- create pr for your branch with the package version changes
 - when the release is successful merge the pr
+
+### Specific Commands
 
 Releases are done via a [Github Action named Release](../.github/workflows/release.yml). This process is automated and is started via the following:
 
