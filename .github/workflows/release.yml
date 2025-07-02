@@ -61,7 +61,7 @@ jobs:
           gh release create v${{ steps.version.outputs.RELEASE_VERSION }} \
             bundle/gemini.js \
             --title "Release v${{ steps.version.outputs.RELEASE_VERSION }}" \
-            --notes "See the [CHANGELOG.md](CHANGELOG.md) for details."
+            --generate-notes
 
       # Set up Node *again* to update the `.npmrc` config
       - name: Node Repository Logon
