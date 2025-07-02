@@ -41,21 +41,6 @@ jobs:
       - name: Check Version Consistency
         run: npm run check:versions
 
-      # - name: Setup Google Cloud SDK
-      #   uses: 'google-github-actions/setup-gcloud@v2'
-
-      # - name: Authenticate to Google Cloud
-      #   uses: 'google-github-actions/auth@v2'
-      #   with:
-      #     workload_identity_provider: 'projects/48735766119/locations/global/workloadIdentityPools/github/providers/github-actions-provider'
-      #     service_account: 'gh-actions-service-account@gemini-code-dev.iam.gserviceaccount.com'
-
-      # - name: Configure Docker
-      #   run: gcloud auth configure-docker us-west1-docker.pkg.dev
-
-      # - name: Login to Artifact Registry
-      #   run: docker login -u oauth2accesstoken -p "$(gcloud auth print-access-token)" https://us-west1-docker.pkg.dev
-
       - name: Set Release Version and Tag
         id: version
         run: |
@@ -68,7 +53,16 @@ jobs:
           echo "RELEASE_VERSION=${RELEASE_VERSION}" >> $GITHUB_OUTPUT
           echo "NPM_TAG=${NPM_TAG}" >> $GITHUB_OUTPUT
 
-             # Set up Node *again* to update the `.npmrc` config
+      - name: Create GitHub Release
+        if: '!inputs.dry_run'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create v${{ steps.version.outputs.RELEASE_VERSION }} \
+            --title "Release v${{ steps.version.outputs.RELEASE_VERSION }}" \
+            --notes "See the [CHANGELOG.md](CHANGELOG.md) for details."
+
+      # Set up Node *again* to update the `.npmrc` config
       - name: Node Repository Logon
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -82,12 +76,3 @@ jobs:
           NPM_PUBLISH_TAG: ${{ steps.version.outputs.NPM_TAG }}
           NPM_DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
           NODE_AUTH_TOKEN: ${{ secrets.WOMBAT_TOKEN }}
-
-      - name: Create GitHub Release
-        if: steps.run_type.outputs.NPM_DRY_RUN == ''
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create v${{ steps.version.outputs.RELEASE_VERSION }} \
-            --title "Release v${{ steps.version.outputs.RELEASE_VERSION }}" \
-            --notes "See the [CHANGELOG.md](CHANGELOG.md) for details."
