@@ -63,17 +63,24 @@ jobs:
             --title "Release v${{ steps.version.outputs.RELEASE_VERSION }}" \
             --generate-notes
 
-      # Set up Node *again* to update the `.npmrc` config
-      - name: Node Repository Logon
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - name: Build and Prepare Packages
+        run: |
+          npm run build:packages
+          npm run prepare:package
+
+      - name: Configure npm for publishing
+        uses: actions/setup-node@v4
         with:
-          cache: npm
+          node-version: '20'
           registry-url: 'https://wombat-dressing-room.appspot.com'
           scope: '@google'
 
-      - name: Build, Prepare, and Publish
-        run: npm run publish:actions-release
+      - name: Publish @google/gemini-cli-core
+        run: npm publish --workspace=@google/gemini-cli-core --tag=${{ steps.version.outputs.NPM_TAG }} ${{ inputs.dry_run && '--dry-run' || '' }}
         env:
-          NPM_PUBLISH_TAG: ${{ steps.version.outputs.NPM_TAG }}
-          NPM_DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
-          NODE_AUTH_TOKEN: ${{ secrets.WOMBAT_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.WOMBAT_TOKEN_CORE }}
+
+      - name: Publish @google/gemini-cli
+        run: npm publish --workspace=@google/gemini-cli --tag=${{ steps.version.outputs.NPM_TAG }} ${{ inputs.dry_run && '--dry-run' || '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.WOMBAT_TOKEN_CLI }}
