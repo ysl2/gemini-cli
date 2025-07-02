@@ -2,7 +2,10 @@
   "name": "@google/gemini-cli",
   "version": "0.1.10-dev.1",
   "description": "Gemini CLI",
-  "repository": "google-gemini/gemini-cli",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/google-gemini/gemini-cli.git"
+  },
   "type": "module",
   "main": "dist/index.js",
   "bin": {
