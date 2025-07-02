@@ -6,6 +6,15 @@ on:
       - 'v*.*.*'
   workflow_dispatch:
     inputs:
+      version:
+        description: 'The version to release (e.g., v0.1.11). Required for manual patch releases.'
+        required: true
+        type: string
+      ref:
+        description: 'The branch or ref to release from.'
+        required: true
+        type: string
+        default: 'main'
       dry_run:
         description: 'Whether to run the publish step in dry-run mode.'
         required: true
@@ -15,19 +24,18 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-    # Use the current repository name dynamically
     if: github.repository == 'google-gemini/gemini-cli'
     permissions:
-      contents: write # Required to create a GitHub release
-      packages: write # Required to publish to GitHub Packages (if you use it)
-      id-token: write # Required for Workload Identity Federation to Google Cloud
+      contents: write
+      packages: write
+      id-token: write
 
     steps:
-      - name: Checkout code at the specific tag
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # This checks out the code at the specific tag that triggered the workflow
-          ref: ${{ github.ref }}
+          # For manual runs, checkout the specified ref (e.g., main). For tag pushes, checkout the tag itself.
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -39,10 +47,21 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Get the tag name
+      - name: Get the version
         id: version
         run: |
-          RELEASE_TAG=${GITHUB_REF_NAME}
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            RELEASE_TAG=${{ inputs.version }}
+          else
+            RELEASE_TAG=${GITHUB_REF_NAME}
+          fi
+
+          # Validate that the tag starts with 'v' and follows semver
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
+            echo "Error: Version must be in the format vX.Y.Z or vX.Y.Z-prerelease"
+            exit 1
+          fi
+
           echo "RELEASE_TAG=${RELEASE_TAG}" >> $GITHUB_OUTPUT
           RELEASE_VERSION="${RELEASE_TAG#v}"
           if [[ $RELEASE_VERSION == *-* ]]; then
@@ -60,24 +79,23 @@ jobs:
           git switch -c $BRANCH_NAME
           echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_OUTPUT
 
-      - name: Update package versions and create andn push commit
+      - name: Update package versions and create and push commit
         run: |
-          # Configure git user for the commit
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # This script should modify package.json, etc.
           npm run release:versions ${{ steps.version.outputs.RELEASE_VERSION }}
           npm run push-release
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release and Tag
         if: '!inputs.dry_run'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_BRANCH: ${{ steps.release_branch.outputs.BRANCH_NAME }}
         run: |
-          gh release create v${{ steps.version.outputs.RELEASE_VERSION }} \
+          gh release create ${{ steps.version.outputs.RELEASE_TAG }} \
             bundle/gemini.js \
-            --title "Release v${{ steps.version.outputs.RELEASE_VERSION }}" \
+            --target "$RELEASE_BRANCH" \
+            --title "Release ${{ steps.version.outputs.RELEASE_TAG }}" \
             --generate-notes
 
       - name: Build and Prepare Packages
