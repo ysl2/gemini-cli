@@ -40,14 +40,15 @@ The high-level process is:
 
 1.  Ensure your local branch `main` or `release-xxx` if hotfixing a previous release is up-to-date with the remote repository.
 1.  Decide on the new version number based on the changes since the last release.
-1. _Optionally_ `git log` to find the sha of the commit you want to push if not latest
-1. _Optionally_ run [integration tests](integration-tests.md) locally to increase confidence in the release.
+1.  _Optionally_ `git log` to find the sha of the commit you want to push if not latest
+1.  _Optionally_ run [integration tests](integration-tests.md) locally to increase confidence in the release.
 1.  Create a new Git tag with the desired version number.
 1.  Push the tag to the `google-gemini/gemini-cli` repository.
 1.  The push will trigger the release workflow, which automates the rest of the process.
 1.  Once the workflow is complete, it will have created a `release/vX.Y.Z` branch with the version bumps. Create a pull request from this branch to merge the version changes back into `main`.
 
 Pushing a new tag will trigger the [release workflow](https://github.com/google-gemini/gemini-cli/actions/workflows/release.yml), which will automatically:
+
 - Build and publish the packages to the npm registry.
 - Create a new GitHub release with generated release notes.
 - Create a new branch `release/vX.Y.Z` containing the version bump in the `package.json` files.
@@ -55,6 +56,7 @@ Pushing a new tag will trigger the [release workflow](https://github.com/google-
 We also run a Gooogle cloud build called [release-docker.yml](../.gcp/release-docker.yaml). Which publishes the sandbox docker to match your release. This will also be moved to GH and combined with the main relase file once service account permissions are sorted out.
 
 ### 2. Monitor the Release Workflow
+
 You can monitor the progress of the release workflow in the [GitHub Actions tab](https://github.com/google-gemini/gemini-cli/actions/workflows/release.yml). If the workflow fails, you will need to investigate the cause of the failure, fix the issue, and then create a new tag to trigger a new release.
 
 ### After the Release
@@ -68,6 +70,7 @@ After the workflow has successfully completed, you should:
 ## Release Validation
 
 After pushing a new release smoke testing should be performed to ensure that the packages are working as expected. This can be done by installing the packages locally and running a set of tests to ensure that they are functioning correctly.
+
 - `npx -y @google/gemini-cli@latest --version` to validate the push worked as expected if you were not doing a rc or dev tag
 - `npx -y @google/gemini-cli@<release tag> --version` to validate the tag pushed appropriately
 - _This is destructive locally_ `npm uninstall @google/gemini-cli && npm uninstall -g @google/gemini-cli && npm cache clean --force &&  npm install @google/gemini-cli@<version>`
@@ -77,12 +80,12 @@ After pushing a new release smoke testing should be performed to ensure that the
 
 The above pattern for creating patch or hotfix releases from current or older commits leaves the repository in the following state:
 
-   1. The Tag (`vX.Y.Z-patch.1`): This tag correctly points to the original commit on main
-      that contains the stable code you intended to release. This is crucial. Anyone checking
-      out this tag gets the exact code that was published.
-   2. The Branch (`release-vX.Y.Z-patch.1`): This branch contains one new commit on top of the
-      tagged commit. That new commit only contains the version number change in package.json
-      (and other related files like package-lock.json).
+1.  The Tag (`vX.Y.Z-patch.1`): This tag correctly points to the original commit on main
+    that contains the stable code you intended to release. This is crucial. Anyone checking
+    out this tag gets the exact code that was published.
+2.  The Branch (`release-vX.Y.Z-patch.1`): This branch contains one new commit on top of the
+    tagged commit. That new commit only contains the version number change in package.json
+    (and other related files like package-lock.json).
 
 This separation is good. It keeps your main branch history clean of release-specific
 version bumps until you decide to merge them.
@@ -91,35 +94,32 @@ This is the critical decision, and it depends entirely on the nature of the rele
 
 ### Merge Back for Stable Patches and Hotfixes
 
+You almost always want to merge the `release-<tag>` branch back into `main` for any
+stable patch or hotfix release.
 
-  You almost always want to merge the `release-<tag>` branch back into `main` for any
-  stable patch or hotfix release.
-
-
-   * Why? The primary reason is to update the version in main's package.json. If you release
-     v1.2.1 from an older commit but never merge the version bump back, your main branch's
-     package.json will still say "version": "1.2.0". The next developer who starts work for
-     the next feature release (v1.3.0) will be branching from a codebase that has an
-     incorrect, older version number. This leads to confusion and requires manual version
-     bumping later.
-   * The Process: After the release-v1.2.1 branch is created and the package is successfully
-     published, you should open a pull request to merge release-v1.2.1 into main. This PR
-     will contain just one commit: "chore: bump version to v1.2.1". It's a clean, simple
-     integration that keeps your main branch in sync with the latest released version.
+- Why? The primary reason is to update the version in main's package.json. If you release
+  v1.2.1 from an older commit but never merge the version bump back, your main branch's
+  package.json will still say "version": "1.2.0". The next developer who starts work for
+  the next feature release (v1.3.0) will be branching from a codebase that has an
+  incorrect, older version number. This leads to confusion and requires manual version
+  bumping later.
+- The Process: After the release-v1.2.1 branch is created and the package is successfully
+  published, you should open a pull request to merge release-v1.2.1 into main. This PR
+  will contain just one commit: "chore: bump version to v1.2.1". It's a clean, simple
+  integration that keeps your main branch in sync with the latest released version.
 
 ### Do NOT Merge Back for Pre-Releases (RC, Beta, Dev)
 
 You typically do not merge release branches for pre-releases back into `main`.
 
-
-   * Why? Pre-release versions (e.g., v1.3.0-rc.1, v1.3.0-rc.2) are, by definition, not
-     stable and are temporary. You don't want to pollute your main branch's history with a
-     series of version bumps for release candidates. The package.json in main should reflect
-     the latest stable release version, not an RC.
-   * The Process: The release-v1.3.0-rc.1 branch is created, the npm publish --tag rc happens,
-      and then... the branch has served its purpose. You can simply delete it. The code for
-     the RC is already on main (or a feature branch), so no functional code is lost. The
-     release branch was just a temporary vehicle for the version number.
+- Why? Pre-release versions (e.g., v1.3.0-rc.1, v1.3.0-rc.2) are, by definition, not
+  stable and are temporary. You don't want to pollute your main branch's history with a
+  series of version bumps for release candidates. The package.json in main should reflect
+  the latest stable release version, not an RC.
+- The Process: The release-v1.3.0-rc.1 branch is created, the npm publish --tag rc happens,
+  and then... the branch has served its purpose. You can simply delete it. The code for
+  the RC is already on main (or a feature branch), so no functional code is lost. The
+  release branch was just a temporary vehicle for the version number.
 
 ## Local Testing and Validation: Changes to the Packaging and Publishing Process
 
