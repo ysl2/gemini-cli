@@ -59,7 +59,8 @@ In the comming weeks (Early July '25) we will formalize a more structured releas
 The high level process is
 
 - check out a branch from the trunk you want to release from i.e. `main`
-- run the required commands to tag, update and push
+- run [integration tests](./integration-tests.md) against the branch to ensure the code you are about to ship works
+- run the required commands (see below) to tag, update and push
 - the release will automatically run and publish both npm and docker for your versions
 - create pr for your branch with the package version changes
 - when the release is successful merge the pr
@@ -97,7 +98,16 @@ We also run a Gooogle cloud build called [release-docker.yml](../.gcp/release-do
 
 You can monitor the progress of the release workflow in the [GitHub Actions tab](https://github.com/google-gemini/gemini-cli/actions/workflows/release.yml). If the workflow fails, you will need to investigate the cause of the failure, fix the issue, and then create a new tag to trigger a new release.
 
-## Local Testing and Validation
+## Release Validation
+
+After pushing a new release smoke testing should be performed to ensure that the packages are working as expected. This can be done by installing the packages locally and running a set of tests to ensure that they are functioning correctly.
+
+- `npx -y @google/gemini-cli@latest --version` to validate the push worked as expected if you were not doing a rc or dev tag
+- `npx -y @google/gemini-cli@<release tag> --version` to validate the tag pushed appropriately
+- _This is destructive locally_ `npm uninstall @google/gemini-cli && npm uninstall -g @google/gemini-cli && npm cache clean --force &&  npm install @google/gemini-cli@<version>`
+- Smoke testing a basic run through of exercising a few llm commands and tools is recommended to ensure that the packages are working as expected. We'll codify this more in the future.
+
+## Local Testing and Validation: Changes to the Packaging and Publishing Process
 
 It is crucial to test any changes to the packaging and publishing process locally before committing them. This ensures that the packages will be published correctly and that they will work as expected when installed by a user.
 
