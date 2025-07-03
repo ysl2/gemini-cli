@@ -96,6 +96,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           npm run release:version ${{ steps.version.outputs.RELEASE_VERSION }}
+          git add package.json package-lock.json packages/*/package.json
+          git commit -m "chore(release): ${{ steps.version.outputs.RELEASE_TAG }}"
           git push --set-upstream origin $BRANCH_NAME && git push --follow-tags
 
       - name: Create GitHub Release and Tag

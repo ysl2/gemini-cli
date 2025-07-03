@@ -65,13 +65,4 @@ if (cliPackageJson.config?.sandboxImageUri) {
 // 6. Run `npm install` to update package-lock.json.
 run('npm install');
 
-const commitMessage = `chore(release): v${newVersion}`;
-// 7. Add all the changed files to the git staging area.
-run(
-  'git add package.json package-lock.json packages/*/package.json packages/*/package-lock.json',
-);
-
-// 8. Create the atomic commit with all changes.
-run(`git commit --no-edit -m "${commitMessage}"`);
-
-console.log(`Successfully committed version bump v${newVersion}.`);
+console.log(`Successfully bumped versions to v${newVersion}.`);
