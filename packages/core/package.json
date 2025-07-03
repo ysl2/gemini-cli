@@ -1,6 +1,6 @@
 {
   "name": "@google/gemini-cli-core",
-  "version": "0.1.10-dev.4",
+  "version": "0.1.10-dev.13",
   "description": "Gemini CLI Server",
   "repository": {
     "type": "git",
