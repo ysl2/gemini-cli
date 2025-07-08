@@ -19,6 +19,7 @@ function getShortSha() {
 }
 
 export function getNightlyTagName() {
+  execSync('npm version patch --no-git-tag-version');
   const version = getPackageVersion();
   const now = new Date();
   const year = now.getUTCFullYear().toString().slice(-2);
