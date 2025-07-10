@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { OAuth2Client, Credentials, Compute } from 'google-auth-library';
+import type { Credentials } from 'google-auth-library';
+import { OAuth2Client, Compute } from 'google-auth-library';
 import * as http from 'http';
 import url from 'url';
 import crypto from 'crypto';

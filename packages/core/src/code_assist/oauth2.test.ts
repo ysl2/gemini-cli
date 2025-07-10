@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
+import type { Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { getOauthClient, getCachedGoogleAccountId } from './oauth2.js';
 import { OAuth2Client, Compute } from 'google-auth-library';
 import * as fs from 'fs';
