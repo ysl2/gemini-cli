@@ -16,10 +16,14 @@ export type VimMode = 'NORMAL' | 'INSERT';
 /**
  * Vim hook that handles all vim mode functionality including:
  * - Mode switching between INSERT and NORMAL modes
- * - Navigation commands (h, j, k, l, w, b, e) with count support
- * - Editing commands (x, a, i, o, O) with count support
- * - Escape behavior (move cursor left when exiting INSERT mode)
+ * - Navigation commands (h, j, k, l, w, b, e, 0, $, ^, g, G, I, A) with count support
+ * - Editing commands (x, a, i, o, O, d, c, D, C) with count support  
+ * - Complex commands (dd, cc, dw, cw, db, cb, de, ce, gg, etc.)
+ * - Repeat last command (.)
+ * - Settings persistence (vim mode state survives app restart)
+ * - Escape behavior (move cursor left when exiting INSERT mode, clear pending operations)
  * - Consolidated input handling to eliminate race conditions
+ * - Direct handleInput exposure for integration with InputPrompt
  */
 export function useVim(
   buffer: TextBuffer, 
