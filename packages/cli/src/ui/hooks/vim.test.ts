@@ -206,6 +206,23 @@ describe('useVim hook', () => {
       expect(mockBuffer.del).toHaveBeenCalled();
     });
 
+    it('should handle x when deleting last character on line', () => {
+      // Test x behavior when cursor is on the last character
+      mockBuffer.text = 'hello';
+      mockBuffer.lines = ['hello'];
+      mockBuffer.cursor = [0, 4]; // Position at 'o' (last character)
+      
+      renderHook(() => useVim(mockBuffer as TextBuffer, mockConfig));
+      
+      act(() => {
+        capturedInputHandler?.('x', {});
+      });
+      
+      // Should delete the character and cursor should move left to previous position
+      expect(mockBuffer.del).toHaveBeenCalled();
+      expect(mockBuffer.move).toHaveBeenCalledWith('left');
+    });
+
     it('should handle first d key (sets pending state)', () => {
       // Note: Full dd command testing has limitations due to React hook state management
       // in test environments. The implementation works correctly in actual usage.

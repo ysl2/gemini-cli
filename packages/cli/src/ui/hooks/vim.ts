@@ -424,11 +424,26 @@ export function useVim(buffer: TextBuffer, config: { getVimMode(): boolean }) {
             // Delete from cursor through N words
             let offset = currentOffset;
             for (let i = 0; i < repeatCount; i++) {
-              const nextWordOffset = findNextWordStart(text, offset);
-              if (nextWordOffset > offset) {
-                offset = nextWordOffset;
-              } else {
+              // For dw, we want to delete to the start of the next word,
+              // or to the end of text if there's no next word
+              let nextPos = offset;
+              
+              // Skip current word
+              while (nextPos < text.length && /\w/.test(text[nextPos])) {
+                nextPos++;
+              }
+              
+              // Skip whitespace to get to next word start
+              while (nextPos < text.length && /\s/.test(text[nextPos])) {
+                nextPos++;
+              }
+              
+              // If we reached end of text, that's our target
+              if (nextPos >= text.length) {
+                offset = text.length;
                 break;
+              } else {
+                offset = nextPos;
               }
             }
             endOffset = offset;
@@ -649,7 +664,14 @@ export function useVim(buffer: TextBuffer, config: { getVimMode(): boolean }) {
             const currentLine = buffer.lines[currentRow] || '';
             
             if (currentCol < currentLine.length) {
+              const isLastChar = currentCol === currentLine.length - 1;
               buffer.del();
+              
+              // In vim, when deleting the last character on a line,
+              // the cursor moves to the previous position
+              if (isLastChar && currentCol > 0) {
+                buffer.move('left');
+              }
             }
           }
           setLastCommand('x');
