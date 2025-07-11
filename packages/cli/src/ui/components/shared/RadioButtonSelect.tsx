@@ -88,6 +88,7 @@ export function RadioButtonSelect<T>({
     if (/\d/.test(input)) {
       inputBuffer.current += input;
 
+      // Allows for multi-digit input i.e. '10' or greater
       timerRef.current = setTimeout(() => {
         const num = parseInt(inputBuffer.current, 10);
         if (!isNaN(num) && num > 0 && num <= items.length) {
