@@ -196,6 +196,7 @@ export function ThemeDialog({
             onSelect={handleThemeSelect}
             onHighlight={onHighlight}
             isFocused={currenFocusedSection === 'theme'}
+            showNumbers={currenFocusedSection === 'theme'}
           />
 
           {/* Scope Selection */}
@@ -210,6 +211,7 @@ export function ThemeDialog({
                 onSelect={handleScopeSelect}
                 onHighlight={handleScopeHighlight}
                 isFocused={currenFocusedSection === 'scope'}
+                showNumbers={currenFocusedSection === 'scope'}
               />
             </Box>
           )}

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Text, Box, useInput } from 'ink';
 import SelectInput, {
   type ItemProps as InkSelectItemProps,
@@ -45,6 +45,9 @@ export interface RadioButtonSelectProps<T> {
 
   /** Whether this select input is currently focused and should respond to input. */
   isFocused?: boolean;
+
+  /** Whether to show numbers next to the options. */
+  showNumbers?: boolean;
 }
 
 /**
@@ -59,21 +62,42 @@ export function RadioButtonSelect<T>({
   onSelect,
   onHighlight,
   isFocused, // This prop indicates if the current RadioButtonSelect group is focused
+  showNumbers = items.length < 10,
 }: RadioButtonSelectProps<T>): React.JSX.Element {
-  useInput((input) => {
-    if (!isFocused) {
+  const inputBuffer = useRef('');
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    },
+    [],
+  );
+
+  useInput((input, key) => {
+    if (!isFocused || !showNumbers || key.meta || key.ctrl) {
       return;
     }
 
-    // Support number keys to select options, for up to 9 options.
-    if (items.length < 10) {
-      const num = parseInt(input, 10);
-      if (!isNaN(num) && num > 0 && num <= items.length) {
-        const selectedItem = items[num - 1];
-        if (selectedItem && !selectedItem.disabled) {
-          onSelect(selectedItem.value);
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+
+    if (/\d/.test(input)) {
+      inputBuffer.current += input;
+
+      timerRef.current = setTimeout(() => {
+        const num = parseInt(inputBuffer.current, 10);
+        if (!isNaN(num) && num > 0 && num <= items.length) {
+          const selectedItem = items[num - 1];
+          if (selectedItem && !selectedItem.disabled) {
+            onSelect(selectedItem.value);
+          }
         }
-      }
+        inputBuffer.current = '';
+      }, 350);
     }
   });
 
@@ -123,7 +147,7 @@ export function RadioButtonSelect<T>({
       textColor = Colors.Gray;
     }
 
-    const numberPrefix = items.length < 10 ? `[${itemIndex + 1}] ` : '';
+    const numberPrefix = showNumbers ? `[${itemIndex + 1}] ` : '';
     const indicator = isSelected ? '●' : '○';
 
     const content = itemWithThemeProps.themeNameDisplay ? (
@@ -137,7 +161,7 @@ export function RadioButtonSelect<T>({
 
     return (
       <Box>
-        <Box minWidth={items.length < 10 ? 3 : 0}>
+        <Box minWidth={showNumbers ? 4 : 0}>
           <Text color={Colors.Gray}>{numberPrefix}</Text>
         </Box>
         <Box minWidth={2}>
