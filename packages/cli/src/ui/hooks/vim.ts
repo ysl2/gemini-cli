@@ -5,7 +5,6 @@
  */
 
 import { useCallback, useState, useRef, useEffect } from 'react';
-import { appendFileSync } from 'fs';
 import { useKeypress, Key } from './useKeypress.js';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
 import type { LoadedSettings } from '../../config/settings.js';
@@ -26,7 +25,8 @@ export function useVim(
   buffer: TextBuffer, 
   config: { getVimMode(): boolean },
   settings: LoadedSettings,
-  onSubmit?: (value: string) => void
+  onSubmit?: (value: string) => void,
+  getCompletionHandler?: () => ((key: Key) => boolean) | null
 ) {
   const [mode, setMode] = useState<VimMode>('NORMAL');
   const modeRef = useRef<VimMode>('NORMAL');
@@ -194,14 +194,17 @@ export function useVim(
 
     // Handle INSERT mode
     if (modeRef.current === 'INSERT') {
-      // Debug escape detection
-      if (key.sequence && key.sequence.startsWith('\u001b')) {
-        appendFileSync('/tmp/vim-debug.log', `DETECTED ESCAPE SEQUENCE: ${JSON.stringify(key.sequence)}\n`);
-      }
-      
       // Handle escape key OR escape sequence (ESC+key pressed quickly)
-      if (key.name === 'escape' || (key.sequence && key.sequence.startsWith('\u001b'))) {
-        appendFileSync('/tmp/vim-debug.log', `ENTERING ESCAPE HANDLER\n`);
+      // Only treat as escape if:
+      // 1. Actual escape key (key.name === 'escape'), OR
+      // 2. Escape sequence that's NOT an arrow key or function key (doesn't start with \u001b[)
+      const isEscapeToNormal = key.name === 'escape' || 
+        (key.sequence && 
+         key.sequence.startsWith('\u001b') && 
+         !key.sequence.startsWith('\u001b[') && 
+         key.sequence.length > 1);
+      
+      if (isEscapeToNormal) {
         
         // In vim, exiting INSERT mode moves cursor one position left
         // but only if cursor is at the end of the line (past the last character)
@@ -216,16 +219,14 @@ export function useVim(
         
         // Update both state and ref immediately
         setModeImmediate('NORMAL');
-        appendFileSync('/tmp/vim-debug.log', `MODE SET TO NORMAL\n`);
         clearCount();
         setPendingD(false);
         setPendingC(false);
         setPendingG(false);
         
         // If this was an escape sequence (ESC+key), process the key part in NORMAL mode
-        if (key.sequence && key.sequence.startsWith('\u001b') && key.sequence.length > 1) {
+        if (key.sequence && key.sequence.startsWith('\u001b') && !key.sequence.startsWith('\u001b[') && key.sequence.length > 1) {
           const remainingSequence = key.sequence.substring(1); // Remove the \u001b part
-          appendFileSync('/tmp/vim-debug.log', `REMAINING SEQUENCE: ${JSON.stringify(remainingSequence)}\n`);
           if (remainingSequence) {
             // Create a new key object for the remaining part
             const normalModeKey: Key = {
@@ -236,21 +237,26 @@ export function useVim(
               shift: false,
               paste: false
             };
-            appendFileSync('/tmp/vim-debug.log', `CREATED NORMAL MODE KEY: ${JSON.stringify(normalModeKey)}\n`);
             // Process this key immediately in NORMAL mode by calling ourselves recursively
-            appendFileSync('/tmp/vim-debug.log', `RECURSIVELY PROCESSING IN NORMAL MODE\n`);
             return handleInputRef.current?.(normalModeKey) ?? false;
           } else {
-            appendFileSync('/tmp/vim-debug.log', `NO REMAINING SEQUENCE, RETURNING\n`);
             return true; // Just escape, nothing more to process
           }
         } else {
-          appendFileSync('/tmp/vim-debug.log', `NOT AN ESCAPE SEQUENCE, RETURNING\n`);
           return true; // Just escape, nothing more to process
         }
       }
       
-      // Special handling for Enter key to allow command submission
+      // Delegate completion navigation and selection keys to completion handler if available
+      const completionHandler = getCompletionHandler?.();
+      if (completionHandler && (key.name === 'tab' || (key.name === 'return' && !key.ctrl) || key.name === 'up' || key.name === 'down')) {
+        const handled = completionHandler(key);
+        if (handled) {
+          return true; // Completion handler processed it
+        }
+      }
+      
+      // Special handling for Enter key to allow command submission (lower priority than completion)
       if (key.name === 'return' && !key.ctrl && !key.meta) {
         if (buffer.text.trim() && onSubmit) {
           // Handle command submission directly
@@ -269,7 +275,6 @@ export function useVim(
 
     // Handle NORMAL mode
     if (modeRef.current === 'NORMAL') {
-      appendFileSync('/tmp/vim-debug.log', `NORMAL MODE: processing key=${JSON.stringify(key)}\n`);
       // Handle Escape key in NORMAL mode - clear all pending states
       if (key.name === 'escape') {
         clearCount();
