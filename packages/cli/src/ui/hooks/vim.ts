@@ -5,29 +5,12 @@
  */
 
 import { useCallback, useState, useRef } from 'react';
-import { useInput } from 'ink';
+import { appendFileSync } from 'fs';
+import { useKeypress, Key } from './useKeypress.js';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
 
 export type VimMode = 'NORMAL' | 'INSERT';
 
-interface Key {
-  upArrow?: boolean;
-  downArrow?: boolean;
-  leftArrow?: boolean;
-  rightArrow?: boolean;
-  pageUp?: boolean;
-  pageDown?: boolean;
-  home?: boolean;
-  end?: boolean;
-  backspace?: boolean;
-  delete?: boolean;
-  tab?: boolean;
-  shift?: boolean;
-  escape?: boolean;
-  ctrl?: boolean;
-  meta?: boolean;
-  return?: boolean;
-}
 
 /**
  * Vim hook that handles all vim mode functionality including:
@@ -37,7 +20,11 @@ interface Key {
  * - Escape behavior (move cursor left when exiting INSERT mode)
  * - Consolidated input handling to eliminate race conditions
  */
-export function useVim(buffer: TextBuffer, config: { getVimMode(): boolean }) {
+export function useVim(
+  buffer: TextBuffer, 
+  config: { getVimMode(): boolean },
+  onSubmit?: (value: string) => void
+) {
   const [mode, setMode] = useState<VimMode>('NORMAL');
   const [count, setCount] = useState<number>(0);
   const [pendingG, setPendingG] = useState(false);
@@ -45,6 +32,7 @@ export function useVim(buffer: TextBuffer, config: { getVimMode(): boolean }) {
   const [pendingC, setPendingC] = useState(false);
   const [lastCommand, setLastCommand] = useState<string | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [runtimeVimModeOverride, setRuntimeVimModeOverride] = useState<boolean | null>(null);
 
   const getCurrentCount = useCallback(() => {
     return count || 1;
@@ -155,20 +143,33 @@ export function useVim(buffer: TextBuffer, config: { getVimMode(): boolean }) {
     buffer.moveToOffset(offset);
   }, [buffer]);
 
-  const handleInput = useCallback((input: string, key: Key) => {
-    if (!config.getVimMode()) {
+  const getEffectiveVimMode = useCallback(() => {
+    return runtimeVimModeOverride !== null ? runtimeVimModeOverride : config.getVimMode();
+  }, [runtimeVimModeOverride, config]);
+
+  const toggleVimMode = useCallback(() => {
+    const currentMode = getEffectiveVimMode();
+    setRuntimeVimModeOverride(!currentMode);
+    // If disabling vim mode while in INSERT, switch to NORMAL first
+    if (currentMode && mode === 'INSERT') {
+      setMode('NORMAL');
+    }
+  }, [getEffectiveVimMode, mode]);
+
+  const handleInput = useCallback((key: Key) => {
+    if (!getEffectiveVimMode()) {
       return false; // Let other handlers process
     }
 
     // Clear any existing debounce timer
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
+    if (debounceTimerRef.current !== null) {
+      clearTimeout(debounceTimerRef.current as NodeJS.Timeout);
       debounceTimerRef.current = null;
     }
 
     // Handle INSERT mode
     if (mode === 'INSERT') {
-      if (key.escape) {
+      if (key.name === 'escape') {
         // In vim, exiting INSERT mode moves cursor one position left
         // unless already at the beginning of the line
         const currentRow = buffer.cursor[0];
@@ -181,39 +182,33 @@ export function useVim(buffer: TextBuffer, config: { getVimMode(): boolean }) {
         
         setMode('NORMAL');
         clearCount();
+        setPendingD(false);
+        setPendingC(false);
+        setPendingG(false);
         return true; // Handled by vim
       }
       
-      // In INSERT mode, let the buffer handle all other input normally
-      // Convert Ink Key to TextBuffer Key format
-      let keyName = '';
-      if (key.return) keyName = 'return';
-      else if (key.backspace) keyName = 'backspace';
-      else if (key.delete) keyName = 'delete';
-      else if (key.leftArrow) keyName = 'left';
-      else if (key.rightArrow) keyName = 'right';
-      else if (key.upArrow) keyName = 'up';
-      else if (key.downArrow) keyName = 'down';
-      else if (key.home) keyName = 'home';
-      else if (key.end) keyName = 'end';
-      else if (key.tab) keyName = 'tab';
+      // Special handling for Enter key to allow command submission
+      if (key.name === 'return' && !key.ctrl && !key.meta) {
+        if (buffer.text.trim() && onSubmit) {
+          // Handle command submission directly
+          const submittedValue = buffer.text;
+          buffer.setText('');
+          onSubmit(submittedValue);
+          return true;
+        }
+        return true; // Handled by vim (even if no onSubmit callback)
+      }
       
-      const textBufferKey = {
-        name: keyName,
-        ctrl: key.ctrl || false,
-        meta: key.meta || false,
-        shift: key.shift || false,
-        paste: false,
-        sequence: input,
-      };
-      buffer.handleInput(textBufferKey);
+      // useKeypress already provides the correct format for TextBuffer
+      buffer.handleInput(key);
       return true; // Handled by vim
     }
 
     // Handle NORMAL mode
     if (mode === 'NORMAL') {
       // Handle Escape key in NORMAL mode - clear all pending states
-      if (key.escape) {
+      if (key.name === 'escape') {
         clearCount();
         setPendingD(false);
         setPendingC(false);
@@ -222,8 +217,8 @@ export function useVim(buffer: TextBuffer, config: { getVimMode(): boolean }) {
       }
       
       // Handle count input (numbers 1-9)
-      if (/^[1-9]$/.test(input)) {
-        setCount(prev => prev * 10 + parseInt(input));
+      if (/^[1-9]$/.test(key.sequence)) {
+        setCount(prev => prev * 10 + parseInt(key.sequence));
         return true; // Handled by vim
       }
 
@@ -231,7 +226,7 @@ export function useVim(buffer: TextBuffer, config: { getVimMode(): boolean }) {
       const text = buffer.text;
       const currentOffset = getCurrentOffset();
 
-      switch (input) {
+      switch (key.sequence) {
         case 'h': {
           // Check if this is part of a change command (ch)
           if (pendingC) {
@@ -1073,15 +1068,15 @@ export function useVim(buffer: TextBuffer, config: { getVimMode(): boolean }) {
     }
 
     return false; // Not handled by vim
-  }, [mode, count, config, buffer, getCurrentCount, clearCount, findNextWordStart, findPrevWordStart, findWordEnd, getCurrentOffset, setOffsetPosition]);
+  }, [mode, count, config, buffer, getCurrentCount, clearCount, findNextWordStart, findPrevWordStart, findWordEnd, getCurrentOffset, setOffsetPosition, getEffectiveVimMode, onSubmit]);
 
-  // Use Ink's useInput to handle all input
-  useInput((input, key) => {
-    handleInput(input, key);
-  });
+  // Use useKeypress to handle all input with proper platform-specific key mapping
+  useKeypress(handleInput, { isActive: getEffectiveVimMode() });
 
   return {
     mode,
     setMode,
+    vimModeEnabled: getEffectiveVimMode(),
+    toggleVimMode,
   };
 }

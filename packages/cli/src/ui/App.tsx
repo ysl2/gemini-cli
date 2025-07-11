@@ -404,6 +404,8 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     openAuthDialog,
     openEditorDialog,
     toggleCorgiMode,
+    () => toggleVimModeRef.current?.(), // Wrapper function that calls the ref
+    showToolDescriptions,
     setQuittingMessages,
     openPrivacyNotice,
   );
@@ -436,8 +438,6 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     shellModeActive,
   });
 
-  // Initialize vim mode
-  const { mode: vimMode } = useVim(buffer, config);
 
   const handleExit = useCallback(
     (
@@ -552,6 +552,15 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     },
     [submitQuery],
   );
+
+  // Create a ref for vim toggle function to avoid circular dependency
+  const toggleVimModeRef = useRef<(() => void) | null>(null);
+  
+  // Initialize vim mode
+  const { mode: vimMode, vimModeEnabled, toggleVimMode } = useVim(buffer, config, handleFinalSubmit);
+  
+  // Store the toggle function in the ref
+  toggleVimModeRef.current = toggleVimMode;
 
   const logger = useLogger();
   const [userMessages, setUserMessages] = useState<string[]>([]);
@@ -948,10 +957,11 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
                   shellModeActive={shellModeActive}
                   setShellModeActive={setShellModeActive}
                   focus={isFocused}
+                  vimModeEnabled={vimModeEnabled}
                 />
               )}
 
-              {config.getVimMode() && isInputActive && (
+              {vimModeEnabled && isInputActive && (
                 <Box>
                   <Text color={Colors.AccentCyan}>[{vimMode}]</Text>
                 </Box>

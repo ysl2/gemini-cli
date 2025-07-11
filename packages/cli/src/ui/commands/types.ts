@@ -49,6 +49,8 @@ export interface CommandContext {
     loadHistory: UseHistoryManagerReturn['loadHistory'];
     /** Toggles a special display mode. */
     toggleCorgiMode: () => void;
+    /** Toggles vim mode on/off. */
+    toggleVimMode: () => void;
   };
   // Session-specific data
   session: {
