@@ -194,12 +194,13 @@ export function useVim(
         appendFileSync('/tmp/vim-debug.log', `ENTERING ESCAPE HANDLER\n`);
         
         // In vim, exiting INSERT mode moves cursor one position left
-        // unless already at the beginning of the line
+        // but only if cursor is at the end of the line (past the last character)
         const currentRow = buffer.cursor[0];
         const currentCol = buffer.cursor[1];
         const currentLine = buffer.lines[currentRow] || '';
         
-        if (currentCol > 0 && currentCol <= currentLine.length) {
+        // Only move left if cursor is at the end of the line (past the last character)
+        if (currentCol > 0 && currentCol >= currentLine.length) {
           buffer.move('left');
         }
         
