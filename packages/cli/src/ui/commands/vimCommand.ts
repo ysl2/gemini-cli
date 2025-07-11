@@ -5,12 +5,11 @@
  */
 
 import { SlashCommand } from './types.js';
-import { SettingScope } from '../../config/settings.js';
 
 export const vimCommand: SlashCommand = {
   name: 'vim',
   description: 'toggle vim mode on/off',
-  action: async (context, args) => {
+  action: async (context, _args) => {
     const { toggleVimMode } = context.ui;
     
     toggleVimMode();

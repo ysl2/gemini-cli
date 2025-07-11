@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useState, useRef, useEffect } from 'react';
-import { useKeypress, Key } from './useKeypress.js';
+import type { Key } from './useKeypress.js';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
 import type { LoadedSettings } from '../../config/settings.js';
 import { SettingScope } from '../../config/settings.js';
@@ -52,9 +52,7 @@ export function useVim(
     setMode(newMode);
   }, []);
 
-  const getCurrentCount = useCallback(() => {
-    return count || 1;
-  }, [count]);
+  const getCurrentCount = useCallback(() => count || 1, [count]);
 
   const clearCount = useCallback(() => {
     setCount(0);
@@ -161,16 +159,15 @@ export function useVim(
     buffer.moveToOffset(offset);
   }, [buffer]);
 
-  const getEffectiveVimMode = useCallback(() => {
-    return runtimeVimModeOverride !== null ? runtimeVimModeOverride : config.getVimMode();
-  }, [runtimeVimModeOverride, config]);
+  const getEffectiveVimMode = useCallback(() => 
+    runtimeVimModeOverride !== null ? runtimeVimModeOverride : config.getVimMode(), [runtimeVimModeOverride, config]);
 
   const toggleVimMode = useCallback(() => {
     const currentMode = getEffectiveVimMode();
     const newMode = !currentMode;
     
     // Persist the new vim mode setting
-    settings.setValue(SettingScope.User, 'vimMode', newMode as any);
+    settings.setValue(SettingScope.User, 'vimMode', newMode as unknown as string);
     
     // Update runtime override to reflect the change immediately
     setRuntimeVimModeOverride(newMode);
@@ -285,7 +282,7 @@ export function useVim(
       
       // Handle count input (numbers 1-9, and 0 if count > 0)
       if (/^[1-9]$/.test(key.sequence) || (key.sequence === '0' && count > 0)) {
-        setCount(prev => prev * 10 + parseInt(key.sequence));
+        setCount(prev => prev * 10 + parseInt(key.sequence, 10));
         return true; // Handled by vim
       }
 
@@ -302,7 +299,7 @@ export function useVim(
             
             // Change N characters to the left
             for (let i = 0; i < repeatCount; i++) {
-              const currentRow = buffer.cursor[0];
+              const _currentRow = buffer.cursor[0];
               const currentCol = buffer.cursor[1];
               if (currentCol > 0) {
                 buffer.move('left');
@@ -480,7 +477,7 @@ export function useVim(
             clearCount();
             
             const text = buffer.text;
-            let currentOffset = getCurrentOffset();
+            const currentOffset = getCurrentOffset();
             let endOffset = currentOffset;
             
             // Delete from cursor through N words
@@ -526,7 +523,7 @@ export function useVim(
             clearCount();
             
             const text = buffer.text;
-            let currentOffset = getCurrentOffset();
+            const currentOffset = getCurrentOffset();
             let endOffset = currentOffset;
             
             // Change from cursor through N words
@@ -575,7 +572,7 @@ export function useVim(
             clearCount();
             
             const text = buffer.text;
-            let currentOffset = getCurrentOffset();
+            const currentOffset = getCurrentOffset();
             let endOffset = currentOffset;
             
             // Delete from cursor backward through N words
@@ -606,7 +603,7 @@ export function useVim(
             clearCount();
             
             const text = buffer.text;
-            let currentOffset = getCurrentOffset();
+            const currentOffset = getCurrentOffset();
             let endOffset = currentOffset;
             
             // Change from cursor backward through N words
@@ -649,7 +646,7 @@ export function useVim(
             clearCount();
             
             const text = buffer.text;
-            let currentOffset = getCurrentOffset();
+            const currentOffset = getCurrentOffset();
             let endOffset = currentOffset;
             
             // Delete from cursor to end of N words
@@ -681,7 +678,7 @@ export function useVim(
             clearCount();
             
             const text = buffer.text;
-            let currentOffset = getCurrentOffset();
+            const currentOffset = getCurrentOffset();
             let endOffset = currentOffset;
             
             // Change from cursor to end of N words
@@ -1134,7 +1131,7 @@ export function useVim(
     }
 
     return false; // Not handled by vim
-  }, [mode, count, config, buffer, getCurrentCount, clearCount, findNextWordStart, findPrevWordStart, findWordEnd, getCurrentOffset, setOffsetPosition, getEffectiveVimMode, onSubmit, setModeImmediate]);
+  }, [count, buffer, getCurrentCount, clearCount, findNextWordStart, findPrevWordStart, findWordEnd, getCurrentOffset, setOffsetPosition, getEffectiveVimMode, onSubmit, setModeImmediate, lastCommand, pendingC, pendingD, pendingG]);
 
   // Set the ref to the current function for recursive calls
   handleInputRef.current = handleInput;

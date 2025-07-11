@@ -10,13 +10,14 @@ import { useVim } from './vim.js';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
 import type { LoadedSettings } from '../../config/settings.js';
 import type { Config } from '@google/gemini-cli-core';
+import type { Key } from '../hooks/useKeypress.js';
 
 describe('useVim hook', () => {
   let mockBuffer: Partial<TextBuffer>;
   let mockConfig: Partial<Config>;
   let mockSettings: Partial<LoadedSettings>;
   let mockHandleFinalSubmit: vi.Mock;
-  let vimHandleInput: ((key: any) => boolean) | undefined;
+  let vimHandleInput: ((key: Key) => boolean) | undefined;
 
   beforeEach(() => {
     vi.clearAllMocks();
