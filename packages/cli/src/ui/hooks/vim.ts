@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useCallback, useState, useRef } from 'react';
+import { useCallback, useState, useRef, useEffect } from 'react';
 import { appendFileSync } from 'fs';
 import { useKeypress, Key } from './useKeypress.js';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
@@ -26,6 +26,7 @@ export function useVim(
   onSubmit?: (value: string) => void
 ) {
   const [mode, setMode] = useState<VimMode>('NORMAL');
+  const modeRef = useRef<VimMode>('NORMAL');
   const [count, setCount] = useState<number>(0);
   const [pendingG, setPendingG] = useState(false);
   const [pendingD, setPendingD] = useState(false);
@@ -33,6 +34,17 @@ export function useVim(
   const [lastCommand, setLastCommand] = useState<string | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [runtimeVimModeOverride, setRuntimeVimModeOverride] = useState<boolean | null>(null);
+
+  // Keep mode ref in sync with state
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+
+  // Helper to update both state and ref immediately
+  const setModeImmediate = useCallback((newMode: VimMode) => {
+    modeRef.current = newMode;
+    setMode(newMode);
+  }, []);
 
   const getCurrentCount = useCallback(() => {
     return count || 1;
@@ -156,10 +168,13 @@ export function useVim(
     }
   }, [getEffectiveVimMode, mode]);
 
-  const handleInput = useCallback((key: Key) => {
+  const handleInputRef = useRef<((key: Key) => boolean) | null>(null);
+  
+  const handleInput = useCallback((key: Key): boolean => {
     if (!getEffectiveVimMode()) {
-      return false; // Let other handlers process
+      return false; // Let InputPrompt handle it
     }
+
 
     // Clear any existing debounce timer
     if (debounceTimerRef.current !== null) {
@@ -168,8 +183,16 @@ export function useVim(
     }
 
     // Handle INSERT mode
-    if (mode === 'INSERT') {
-      if (key.name === 'escape') {
+    if (modeRef.current === 'INSERT') {
+      // Debug escape detection
+      if (key.sequence && key.sequence.startsWith('\u001b')) {
+        appendFileSync('/tmp/vim-debug.log', `DETECTED ESCAPE SEQUENCE: ${JSON.stringify(key.sequence)}\n`);
+      }
+      
+      // Handle escape key OR escape sequence (ESC+key pressed quickly)
+      if (key.name === 'escape' || (key.sequence && key.sequence.startsWith('\u001b'))) {
+        appendFileSync('/tmp/vim-debug.log', `ENTERING ESCAPE HANDLER\n`);
+        
         // In vim, exiting INSERT mode moves cursor one position left
         // unless already at the beginning of the line
         const currentRow = buffer.cursor[0];
@@ -180,12 +203,40 @@ export function useVim(
           buffer.move('left');
         }
         
-        setMode('NORMAL');
+        // Update both state and ref immediately
+        setModeImmediate('NORMAL');
+        appendFileSync('/tmp/vim-debug.log', `MODE SET TO NORMAL\n`);
         clearCount();
         setPendingD(false);
         setPendingC(false);
         setPendingG(false);
-        return true; // Handled by vim
+        
+        // If this was an escape sequence (ESC+key), process the key part in NORMAL mode
+        if (key.sequence && key.sequence.startsWith('\u001b') && key.sequence.length > 1) {
+          const remainingSequence = key.sequence.substring(1); // Remove the \u001b part
+          appendFileSync('/tmp/vim-debug.log', `REMAINING SEQUENCE: ${JSON.stringify(remainingSequence)}\n`);
+          if (remainingSequence) {
+            // Create a new key object for the remaining part
+            const normalModeKey: Key = {
+              name: remainingSequence.length === 1 ? '' : key.name,
+              sequence: remainingSequence,
+              ctrl: false,
+              meta: false,
+              shift: false,
+              paste: false
+            };
+            appendFileSync('/tmp/vim-debug.log', `CREATED NORMAL MODE KEY: ${JSON.stringify(normalModeKey)}\n`);
+            // Process this key immediately in NORMAL mode by calling ourselves recursively
+            appendFileSync('/tmp/vim-debug.log', `RECURSIVELY PROCESSING IN NORMAL MODE\n`);
+            return handleInputRef.current?.(normalModeKey) ?? false;
+          } else {
+            appendFileSync('/tmp/vim-debug.log', `NO REMAINING SEQUENCE, RETURNING\n`);
+            return true; // Just escape, nothing more to process
+          }
+        } else {
+          appendFileSync('/tmp/vim-debug.log', `NOT AN ESCAPE SEQUENCE, RETURNING\n`);
+          return true; // Just escape, nothing more to process
+        }
       }
       
       // Special handling for Enter key to allow command submission
@@ -206,7 +257,8 @@ export function useVim(
     }
 
     // Handle NORMAL mode
-    if (mode === 'NORMAL') {
+    if (modeRef.current === 'NORMAL') {
+      appendFileSync('/tmp/vim-debug.log', `NORMAL MODE: processing key=${JSON.stringify(key)}\n`);
       // Handle Escape key in NORMAL mode - clear all pending states
       if (key.name === 'escape') {
         clearCount();
@@ -246,7 +298,7 @@ export function useVim(
             // Record this command for repeat and switch to INSERT mode
             setLastCommand('ch');
             setPendingC(false);
-            setMode('INSERT');
+            setModeImmediate('INSERT');
             return true;
           }
           
@@ -304,7 +356,7 @@ export function useVim(
             // Record this command for repeat and switch to INSERT mode
             setLastCommand('cj');
             setPendingC(false);
-            setMode('INSERT');
+            setModeImmediate('INSERT');
             return true;
           }
           
@@ -357,7 +409,7 @@ export function useVim(
             // Record this command for repeat and switch to INSERT mode
             setLastCommand('ck');
             setPendingC(false);
-            setMode('INSERT');
+            setModeImmediate('INSERT');
             return true;
           }
           
@@ -383,7 +435,7 @@ export function useVim(
             // Record this command for repeat and switch to INSERT mode
             setLastCommand('cl');
             setPendingC(false);
-            setMode('INSERT');
+            setModeImmediate('INSERT');
             return true;
           }
           
@@ -481,7 +533,7 @@ export function useVim(
             // Record this command for repeat and switch to INSERT mode
             setLastCommand('cw');
             setPendingC(false);
-            setMode('INSERT');
+            setModeImmediate('INSERT');
             return true;
           }
           
@@ -561,7 +613,7 @@ export function useVim(
             // Record this command for repeat and switch to INSERT mode
             setLastCommand('cb');
             setPendingC(false);
-            setMode('INSERT');
+            setModeImmediate('INSERT');
             return true;
           }
           
@@ -637,7 +689,7 @@ export function useVim(
             // Record this command for repeat and switch to INSERT mode
             setLastCommand('ce');
             setPendingC(false);
-            setMode('INSERT');
+            setModeImmediate('INSERT');
             return true;
           }
           
@@ -676,7 +728,7 @@ export function useVim(
 
         case 'i': {
           // Enter INSERT mode at current position
-          setMode('INSERT');
+          setModeImmediate('INSERT');
           clearCount();
           return true;
         }
@@ -690,7 +742,7 @@ export function useVim(
           if (currentCol < currentLine.length) {
             buffer.move('right');
           }
-          setMode('INSERT');
+          setModeImmediate('INSERT');
           clearCount();
           return true;
         }
@@ -699,7 +751,7 @@ export function useVim(
           // Insert new line after current line and enter INSERT mode
           buffer.move('end');
           buffer.newline();
-          setMode('INSERT');
+          setModeImmediate('INSERT');
           clearCount();
           return true;
         }
@@ -709,7 +761,7 @@ export function useVim(
           buffer.move('home');
           buffer.newline();
           buffer.move('up');
-          setMode('INSERT');
+          setModeImmediate('INSERT');
           clearCount();
           return true;
         }
@@ -795,7 +847,7 @@ export function useVim(
           }
           offset += col;
           buffer.moveToOffset(offset);
-          setMode('INSERT');
+          setModeImmediate('INSERT');
           clearCount();
           return true;
         }
@@ -803,7 +855,7 @@ export function useVim(
         case 'A': {
           // Enter INSERT mode at end of line
           buffer.move('end');
-          setMode('INSERT');
+          setModeImmediate('INSERT');
           clearCount();
           return true;
         }
@@ -896,7 +948,7 @@ export function useVim(
               buffer.replaceRangeByOffset(startOffset, endOffset, '');
             }
             
-            setMode('INSERT');
+            setModeImmediate('INSERT');
             setLastCommand('cc');
             setPendingC(false);
           } else {
@@ -945,7 +997,7 @@ export function useVim(
             buffer.replaceRangeByOffset(startOffset, endOffset, '');
           }
           
-          setMode('INSERT');
+          setModeImmediate('INSERT');
           setLastCommand('C');
           clearCount();
           return true;
@@ -1015,7 +1067,7 @@ export function useVim(
               buffer.replaceRangeByOffset(startOffset, endOffset, '');
             }
             
-            setMode('INSERT');
+            setModeImmediate('INSERT');
           } else if (lastCommand === 'D') {
             // Repeat D command
             const currentRow = buffer.cursor[0];
@@ -1049,7 +1101,7 @@ export function useVim(
               buffer.replaceRangeByOffset(startOffset, endOffset, '');
             }
             
-            setMode('INSERT');
+            setModeImmediate('INSERT');
           }
           
           clearCount();
@@ -1068,10 +1120,14 @@ export function useVim(
     }
 
     return false; // Not handled by vim
-  }, [mode, count, config, buffer, getCurrentCount, clearCount, findNextWordStart, findPrevWordStart, findWordEnd, getCurrentOffset, setOffsetPosition, getEffectiveVimMode, onSubmit]);
+  }, [mode, count, config, buffer, getCurrentCount, clearCount, findNextWordStart, findPrevWordStart, findWordEnd, getCurrentOffset, setOffsetPosition, getEffectiveVimMode, onSubmit, setModeImmediate]);
+
+  // Set the ref to the current function for recursive calls
+  handleInputRef.current = handleInput;
 
   // Use useKeypress to handle all input with proper platform-specific key mapping
-  useKeypress(handleInput, { isActive: getEffectiveVimMode() });
+  const vimModeEnabled = getEffectiveVimMode();
+  useKeypress(handleInput, { isActive: vimModeEnabled });
 
   return {
     mode,

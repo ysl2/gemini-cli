@@ -473,7 +473,7 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
     ],
   );
 
-  useKeypress(handleInput, { isActive: focus });
+  useKeypress(handleInput, { isActive: focus && !(vimModeEnabled ?? config.getVimMode()) });
 
   const linesToRender = buffer.viewportVisualLines;
   const [cursorVisualRowAbsolute, cursorVisualColAbsolute] =
