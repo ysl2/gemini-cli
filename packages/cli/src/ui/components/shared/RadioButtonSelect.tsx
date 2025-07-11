@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { Text, Box } from 'ink';
+import { Text, Box, useInput } from 'ink';
 import SelectInput, {
   type ItemProps as InkSelectItemProps,
   type IndicatorProps as InkSelectIndicatorProps,
@@ -61,6 +61,23 @@ export function RadioButtonSelect<T>({
   onHighlight,
   isFocused, // This prop indicates if the current RadioButtonSelect group is focused
 }: RadioButtonSelectProps<T>): React.JSX.Element {
+  useInput((input) => {
+    if (!isFocused) {
+      return;
+    }
+
+    // Support number keys to select options, for up to 9 options.
+    if (items.length < 10) {
+      const num = parseInt(input, 10);
+      if (!isNaN(num) && num > 0 && num <= items.length) {
+        const selectedItem = items[num - 1];
+        if (selectedItem && !selectedItem.disabled) {
+          onSelect(selectedItem.value);
+        }
+      }
+    }
+  });
+
   const handleSelect = (item: RadioSelectItem<T>) => {
     onSelect(item.value);
   };
@@ -95,10 +112,18 @@ export function RadioButtonSelect<T>({
     props: InkSelectItemProps,
   ): React.JSX.Element {
     const { isSelected = false, label } = props;
-    const itemWithThemeProps = props as typeof props & {
+
+    const itemIndex = items.findIndex((item) => item.label === label);
+    const currentItem = itemIndex !== -1 ? items[itemIndex] : undefined;
+
+    // Fallback for safety, though should not happen in normal use.
+    if (!currentItem) {
+      return <Text>{label}</Text>;
+    }
+
+    const itemWithThemeProps = currentItem as typeof currentItem & {
       themeNameDisplay?: string;
       themeTypeDisplay?: string;
-      disabled?: boolean;
     };
 
     let textColor = Colors.Foreground;
@@ -108,12 +133,15 @@ export function RadioButtonSelect<T>({
       textColor = Colors.Gray;
     }
 
+    const numberPrefix = items.length < 10 ? `[${itemIndex + 1}] ` : '';
+
     if (
       itemWithThemeProps.themeNameDisplay &&
       itemWithThemeProps.themeTypeDisplay
     ) {
       return (
         <Text color={textColor} wrap="truncate">
+          <Text color={Colors.Gray}>{numberPrefix}</Text>
           {itemWithThemeProps.themeNameDisplay}{' '}
           <Text color={Colors.Gray}>{itemWithThemeProps.themeTypeDisplay}</Text>
         </Text>
@@ -122,6 +150,7 @@ export function RadioButtonSelect<T>({
 
     return (
       <Text color={textColor} wrap="truncate">
+        <Text color={Colors.Gray}>{numberPrefix}</Text>
         {label}
       </Text>
     );
