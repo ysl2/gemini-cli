@@ -25,8 +25,7 @@ export function useVim(
   buffer: TextBuffer, 
   config: { getVimMode(): boolean },
   settings: LoadedSettings,
-  onSubmit?: (value: string) => void,
-  getCompletionHandler?: () => ((key: Key) => boolean) | null
+  onSubmit?: (value: string) => void
 ) {
   const [mode, setMode] = useState<VimMode>('NORMAL');
   const modeRef = useRef<VimMode>('NORMAL');
@@ -247,13 +246,9 @@ export function useVim(
         }
       }
       
-      // Delegate completion navigation and selection keys to completion handler if available
-      const completionHandler = getCompletionHandler?.();
-      if (completionHandler && (key.name === 'tab' || (key.name === 'return' && !key.ctrl) || key.name === 'up' || key.name === 'down')) {
-        const handled = completionHandler(key);
-        if (handled) {
-          return true; // Completion handler processed it
-        }
+      // In INSERT mode, let InputPrompt handle completion keys
+      if (key.name === 'tab' || (key.name === 'return' && !key.ctrl) || key.name === 'up' || key.name === 'down') {
+        return false; // Let InputPrompt handle completion
       }
       
       // Special handling for Enter key to allow command submission (lower priority than completion)
@@ -1140,14 +1135,11 @@ export function useVim(
   // Set the ref to the current function for recursive calls
   handleInputRef.current = handleInput;
 
-  // Use useKeypress to handle all input with proper platform-specific key mapping
-  const vimModeEnabled = getEffectiveVimMode();
-  useKeypress(handleInput, { isActive: vimModeEnabled });
-
   return {
     mode,
     setMode,
     vimModeEnabled: getEffectiveVimMode(),
     toggleVimMode,
+    handleInput, // Expose the input handler for InputPrompt to use
   };
 }

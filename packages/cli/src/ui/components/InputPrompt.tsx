@@ -41,7 +41,7 @@ export interface InputPromptProps {
   shellModeActive: boolean;
   setShellModeActive: (value: boolean) => void;
   vimModeEnabled?: boolean;
-  onCompletionHandlerReady?: (handler: (key: Key) => boolean) => void;
+  vimHandleInput?: (key: Key) => boolean;
 }
 
 export const InputPrompt: React.FC<InputPromptProps> = ({
@@ -59,7 +59,7 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
   shellModeActive,
   setShellModeActive,
   vimModeEnabled,
-  onCompletionHandlerReady,
+  vimHandleInput,
 }) => {
   const [justNavigatedHistory, setJustNavigatedHistory] = useState(false);
 
@@ -283,57 +283,19 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
     }
   }, [buffer, config]);
 
-  // Completion handler for vim mode - only handles completion-related keys
-  const handleCompletionKeys = useCallback(
-    (key: Key): boolean => {
-      if (!focus) {
-        return false;
-      }
-
-      if (completion.showSuggestions) {
-        if (key.name === 'up') {
-          completion.navigateUp();
-          return true;
-        }
-        if (key.name === 'down') {
-          completion.navigateDown();
-          return true;
-        }
-
-        if (key.name === 'tab' || (key.name === 'return' && !key.ctrl)) {
-          if (completion.suggestions.length > 0) {
-            const targetIndex =
-              completion.activeSuggestionIndex === -1
-                ? 0 // Default to the first if none is active
-                : completion.activeSuggestionIndex;
-            if (targetIndex < completion.suggestions.length) {
-              handleAutocomplete(targetIndex);
-            }
-          }
-          return true;
-        }
-      }
-
-      return false; // Not handled
-    },
-    [focus, completion, handleAutocomplete],
-  );
-
-  // Notify vim hook about completion handler
-  useEffect(() => {
-    if (onCompletionHandlerReady) {
-      onCompletionHandlerReady(handleCompletionKeys);
-    }
-  }, [handleCompletionKeys, onCompletionHandlerReady]);
-
   const handleInput = useCallback(
     (key: Key) => {
       if (!focus) {
         return;
       }
-      // When vim mode is enabled, let vim hook handle ALL input (both INSERT and NORMAL modes)
-      if (vimModeEnabled ?? config.getVimMode()) {
-        return;
+      
+      // When vim mode is enabled, let vim hook handle input first
+      if (vimModeEnabled && vimHandleInput) {
+        const handled = vimHandleInput(key);
+        if (handled) {
+          return; // Vim handled it, don't process further
+        }
+        // If vim returned false, continue with normal input processing (completion, etc.)
       }
 
       if (
@@ -515,10 +477,12 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
       shellHistory,
       handleClipboardImage,
       resetCompletionState,
+      vimModeEnabled,
+      vimHandleInput,
     ],
   );
 
-  useKeypress(handleInput, { isActive: focus && !(vimModeEnabled ?? config.getVimMode()) });
+  useKeypress(handleInput, { isActive: focus });
 
   const linesToRender = buffer.viewportVisualLines;
   const [cursorVisualRowAbsolute, cursorVisualColAbsolute] =
