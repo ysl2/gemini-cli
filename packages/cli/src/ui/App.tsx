@@ -971,12 +971,6 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
                   onCompletionHandlerReady={handleCompletionHandlerReady}
                 />
               )}
-
-              {vimModeEnabled && isInputActive && (
-                <Box>
-                  <Text color={Colors.AccentCyan}>[{vimMode}]</Text>
-                </Box>
-              )}
             </>
           )}
 
@@ -1026,6 +1020,8 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
             }
             promptTokenCount={sessionStats.lastPromptTokenCount}
             nightly={nightly}
+            vimModeEnabled={vimModeEnabled}
+            vimMode={vimMode}
           />
         </Box>
       </Box>
