@@ -99,6 +99,8 @@ export function RadioButtonSelect<T>({
         }
         inputBuffer.current = '';
       }, 350);
+    } else {
+      inputBuffer.current = '';
     }
   });
 
