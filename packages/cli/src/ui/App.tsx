@@ -438,7 +438,6 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     shellModeActive,
   });
 
-
   const handleExit = useCallback(
     (
       pressedOnce: boolean,

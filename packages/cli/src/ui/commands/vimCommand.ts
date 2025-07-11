@@ -13,7 +13,6 @@ export const vimCommand: SlashCommand = {
   action: async (context, args) => {
     const { toggleVimMode } = context.ui;
     
-    // Toggle vim mode immediately without restart
     toggleVimMode();
     
     // No message - silent toggle
