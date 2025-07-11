@@ -10,17 +10,19 @@ import { getOauthClient } from './oauth2.js';
 import { setupUser } from './setup.js';
 import type { HttpOptions } from './server.js';
 import { CodeAssistServer } from './server.js';
+import type { Config } from '../config/config.js';
 
 export async function createCodeAssistContentGenerator(
   httpOptions: HttpOptions,
   authType: AuthType,
+  config: Config,
   sessionId?: string,
 ): Promise<ContentGenerator> {
   if (
     authType === AuthType.LOGIN_WITH_GOOGLE ||
     authType === AuthType.CLOUD_SHELL
   ) {
-    const authClient = await getOauthClient(authType);
+    const authClient = await getOauthClient(authType, config);
     const projectId = await setupUser(authClient);
     return new CodeAssistServer(authClient, projectId, httpOptions, sessionId);
   }
