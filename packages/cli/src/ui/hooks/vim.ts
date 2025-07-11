@@ -284,8 +284,8 @@ export function useVim(
         return true; // Handled by vim
       }
       
-      // Handle count input (numbers 1-9)
-      if (/^[1-9]$/.test(key.sequence)) {
+      // Handle count input (numbers 1-9, and 0 if count > 0)
+      if (/^[1-9]$/.test(key.sequence) || (key.sequence === '0' && count > 0)) {
         setCount(prev => prev * 10 + parseInt(key.sequence));
         return true; // Handled by vim
       }
@@ -829,17 +829,16 @@ export function useVim(
         }
 
         case 'G': {
-          const repeatCount = getCurrentCount();
-          if (repeatCount > 1) {
-            // Go to specific line number (1-based)
-            const lineNum = Math.min(repeatCount - 1, buffer.lines.length - 1);
+          if (count > 0) {
+            // Go to specific line number (1-based) when a count was provided
+            const lineNum = Math.min(count - 1, buffer.lines.length - 1);
             let offset = 0;
             for (let i = 0; i < lineNum; i++) {
               offset += buffer.lines[i].length + 1;
             }
             buffer.moveToOffset(offset);
           } else {
-            // Go to last line
+            // Go to last line when no count was provided
             const text = buffer.text;
             const lastLineStart = text.lastIndexOf('\n') + 1;
             buffer.moveToOffset(lastLineStart);
