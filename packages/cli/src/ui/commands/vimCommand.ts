@@ -16,10 +16,6 @@ export const vimCommand: SlashCommand = {
     // Toggle vim mode immediately without restart
     toggleVimMode();
     
-    return {
-      type: 'message',
-      messageType: 'info',
-      content: 'Vim mode toggled.',
-    };
+    // No message - silent toggle
   },
 };

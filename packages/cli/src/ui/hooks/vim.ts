@@ -8,6 +8,8 @@ import { useCallback, useState, useRef, useEffect } from 'react';
 import { appendFileSync } from 'fs';
 import { useKeypress, Key } from './useKeypress.js';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
+import type { LoadedSettings } from '../../config/settings.js';
+import { SettingScope } from '../../config/settings.js';
 
 export type VimMode = 'NORMAL' | 'INSERT';
 
@@ -23,6 +25,7 @@ export type VimMode = 'NORMAL' | 'INSERT';
 export function useVim(
   buffer: TextBuffer, 
   config: { getVimMode(): boolean },
+  settings: LoadedSettings,
   onSubmit?: (value: string) => void
 ) {
   const [mode, setMode] = useState<VimMode>('NORMAL');
@@ -161,12 +164,19 @@ export function useVim(
 
   const toggleVimMode = useCallback(() => {
     const currentMode = getEffectiveVimMode();
-    setRuntimeVimModeOverride(!currentMode);
+    const newMode = !currentMode;
+    
+    // Persist the new vim mode setting
+    settings.setValue(SettingScope.User, 'vimMode', newMode as any);
+    
+    // Update runtime override to reflect the change immediately
+    setRuntimeVimModeOverride(newMode);
+    
     // If disabling vim mode while in INSERT, switch to NORMAL first
     if (currentMode && mode === 'INSERT') {
       setMode('NORMAL');
     }
-  }, [getEffectiveVimMode, mode]);
+  }, [getEffectiveVimMode, mode, settings]);
 
   const handleInputRef = useRef<((key: Key) => boolean) | null>(null);
   

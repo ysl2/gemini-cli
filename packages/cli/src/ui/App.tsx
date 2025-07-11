@@ -557,7 +557,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   const toggleVimModeRef = useRef<(() => void) | null>(null);
   
   // Initialize vim mode
-  const { mode: vimMode, vimModeEnabled, toggleVimMode } = useVim(buffer, config, handleFinalSubmit);
+  const { mode: vimMode, vimModeEnabled, toggleVimMode } = useVim(buffer, config, settings, handleFinalSubmit);
   
   // Store the toggle function in the ref
   toggleVimModeRef.current = toggleVimMode;
