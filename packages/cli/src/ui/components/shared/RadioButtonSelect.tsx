@@ -8,7 +8,6 @@ import React from 'react';
 import { Text, Box, useInput } from 'ink';
 import SelectInput, {
   type ItemProps as InkSelectItemProps,
-  type IndicatorProps as InkSelectIndicatorProps,
 } from 'ink-select-input';
 import { Colors } from '../../colors.js';
 
@@ -88,19 +87,10 @@ export function RadioButtonSelect<T>({
   };
 
   /**
-   * Custom indicator component displaying radio button style (◉/○).
-   * Color changes based on whether the item is selected and if its group is focused.
+   * Custom indicator component that is empty because the CustomThemeItemComponent will render the indicator.
    */
-  function DynamicRadioIndicator({
-    isSelected = false,
-  }: InkSelectIndicatorProps): React.JSX.Element {
-    return (
-      <Box minWidth={2} flexShrink={0}>
-        <Text color={isSelected ? Colors.AccentGreen : Colors.Foreground}>
-          {isSelected ? '●' : '○'}
-        </Text>
-      </Box>
-    );
+  function EmptyIndicator(): React.JSX.Element {
+    return <Box />;
   }
 
   /**
@@ -134,32 +124,38 @@ export function RadioButtonSelect<T>({
     }
 
     const numberPrefix = items.length < 10 ? `[${itemIndex + 1}] ` : '';
+    const indicator = isSelected ? '●' : '○';
 
-    if (
-      itemWithThemeProps.themeNameDisplay &&
-      itemWithThemeProps.themeTypeDisplay
-    ) {
-      return (
-        <Text color={textColor} wrap="truncate">
-          <Text color={Colors.Gray}>{numberPrefix}</Text>
-          {itemWithThemeProps.themeNameDisplay}{' '}
-          <Text color={Colors.Gray}>{itemWithThemeProps.themeTypeDisplay}</Text>
-        </Text>
-      );
-    }
+    const content = itemWithThemeProps.themeNameDisplay ? (
+      <>
+        {itemWithThemeProps.themeNameDisplay}{' '}
+        <Text color={Colors.Gray}>{itemWithThemeProps.themeTypeDisplay}</Text>
+      </>
+    ) : (
+      label
+    );
 
     return (
-      <Text color={textColor} wrap="truncate">
-        <Text color={Colors.Gray}>{numberPrefix}</Text>
-        {label}
-      </Text>
+      <Box>
+        <Box minWidth={items.length < 10 ? 3 : 0}>
+          <Text color={Colors.Gray}>{numberPrefix}</Text>
+        </Box>
+        <Box minWidth={2}>
+          <Text color={isSelected ? Colors.AccentGreen : Colors.Foreground}>
+            {indicator}
+          </Text>
+        </Box>
+        <Text color={textColor} wrap="truncate">
+          {content}
+        </Text>
+      </Box>
     );
   }
 
   initialIndex = initialIndex ?? 0;
   return (
     <SelectInput
-      indicatorComponent={DynamicRadioIndicator}
+      indicatorComponent={EmptyIndicator}
       itemComponent={CustomThemeItemComponent}
       items={items}
       initialIndex={initialIndex}
