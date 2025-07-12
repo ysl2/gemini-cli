@@ -573,14 +573,6 @@ export function useVim(
             const currentOffset = getCurrentOffset();
             let endOffset = currentOffset;
             
-            // Log original dw command
-            const logMsg = (msg: string) => process.stderr.write(`DW_DEBUG: ${msg}\n`);
-            logMsg(`[${new Date().toISOString()}] DW_ORIGINAL_START`);
-            logMsg(`  cursor: [${buffer.cursor[0]}, ${buffer.cursor[1]}]`);
-            logMsg(`  currentOffset: ${currentOffset}`);
-            logMsg(`  text: "${text}"`);
-            logMsg(`  repeatCount: ${repeatCount}`);
-            
             
             // Delete from cursor through N words using consistent logic
             let searchOffset = currentOffset;
@@ -872,9 +864,6 @@ export function useVim(
             }
             
             // Record this command for repeat using command data instead of closure
-            const logMsg = (msg: string) => process.stderr.write(`DW_DEBUG: ${msg}\n`);
-            logMsg(`[${new Date().toISOString()}] CE_ORIGINAL_EXECUTED`);
-            logMsg(`  storing command data: ce with count ${repeatCount}`);
             lastCommandDataRef.current = { type: 'ce', count: repeatCount };
             lastCommandRef.current = null; // Clear old closure-based command
             setPendingC(false);
@@ -1204,17 +1193,10 @@ export function useVim(
 
         case '.': {
           // Repeat last command
-          const logMsg = (msg: string) => process.stderr.write(`DW_DEBUG: ${msg}\n`);
-          logMsg(`[${new Date().toISOString()}] REPEAT_TRIGGERED`);
-          logMsg(`  cursor before repeat: [${buffer.cursor[0]}, ${buffer.cursor[1]}]`);
-          logMsg(`  text before repeat: "${buffer.text}"`);
-          logMsg(`  hasLastCommand: ${!!lastCommandRef.current}`);
-          logMsg(`  hasCommandData: ${!!lastCommandDataRef.current}`);
           
           // Check for new command data first (no closure issues)
           if (lastCommandDataRef.current) {
             const cmdData = lastCommandDataRef.current;
-            logMsg(`  executing command data: ${cmdData.type} with count ${cmdData.count}`);
             
             if (cmdData.type === 'dw') {
               // Execute dw fresh without closure
@@ -1222,16 +1204,11 @@ export function useVim(
               const currentOffset = getCurrentOffset();
               let endOffset = currentOffset;
               
-              logMsg(`  FRESH_DW: currentOffset=${currentOffset}, cursor=[${buffer.cursor[0]}, ${buffer.cursor[1]}]`);
-              
               // Find N words from current position
               let searchOffset = currentOffset;
               for (let i = 0; i < cmdData.count; i++) {
                 const nextWordOffset = findNextWordStart(currentText, searchOffset);
-                logMsg(`  findNextWordStart(${searchOffset}) returned ${nextWordOffset}`);
-                logMsg(`  char at ${searchOffset}: "${currentText[searchOffset] || 'EOF'}"`);
                 if (nextWordOffset <= searchOffset) {
-                  logMsg(`  no next word found, breaking`);
                   break;
                 }
                 endOffset = nextWordOffset;
@@ -1239,7 +1216,6 @@ export function useVim(
               }
               
               if (endOffset > currentOffset) {
-                logMsg(`  FRESH_DW: deleting from ${currentOffset} to ${endOffset}`);
                 buffer.replaceRangeByOffset(currentOffset, endOffset, '');
               }
             } else if (cmdData.type === 'ce') {
@@ -1248,18 +1224,12 @@ export function useVim(
               const currentOffset = getCurrentOffset();
               let endOffset = currentOffset;
               
-              logMsg(`  FRESH_CE: currentOffset=${currentOffset}, cursor=[${buffer.cursor[0]}, ${buffer.cursor[1]}]`);
-              
               // Find end of N words from current position
               let searchOffset = currentOffset;
               for (let i = 0; i < cmdData.count; i++) {
                 const wordEndOffset = findWordEnd(currentText, searchOffset);
-                logMsg(`  word ${i}: findWordEnd(${searchOffset}) returned ${wordEndOffset}`);
-                logMsg(`  word ${i}: char at ${searchOffset}: "${currentText[searchOffset] || 'EOF'}"`);
-                logMsg(`  word ${i}: char at wordEnd ${wordEndOffset}: "${currentText[wordEndOffset] || 'EOF'}"`);
                 
                 if (wordEndOffset <= searchOffset) {
-                  logMsg(`  word ${i}: no word end found, breaking`);
                   break;
                 }
                 
@@ -1270,23 +1240,19 @@ export function useVim(
                 // For next iteration, move to start of next word
                 if (i < cmdData.count - 1) { // Only if there are more iterations
                   const nextWordStart = findNextWordStart(currentText, wordEndOffset + 1);
-                  logMsg(`  word ${i}: moving to next word start: ${nextWordStart}`);
                   searchOffset = nextWordStart;
                   if (nextWordStart <= wordEndOffset) {
-                    logMsg(`  word ${i}: no next word found, breaking`);
                     break;
                   }
                 }
               }
               
               if (endOffset > currentOffset) {
-                logMsg(`  FRESH_CE: deleting from ${currentOffset} to ${endOffset}`);
                 buffer.replaceRangeByOffset(currentOffset, endOffset, '');
                 setModeImmediate('INSERT');
               }
             } else if (cmdData.type === 'x') {
               // Execute x fresh without closure
-              logMsg(`  FRESH_X: deleting ${cmdData.count} character(s) from cursor=[${buffer.cursor[0]}, ${buffer.cursor[1]}]`);
               
               for (let i = 0; i < cmdData.count; i++) {
                 const currentRow = buffer.cursor[0];
@@ -1306,7 +1272,6 @@ export function useVim(
               }
             } else if (cmdData.type === 'dd') {
               // Execute dd fresh without closure
-              logMsg(`  FRESH_DD: deleting ${cmdData.count} line(s) from cursor=[${buffer.cursor[0]}, ${buffer.cursor[1]}]`);
               
               const startRow = buffer.cursor[0];
               const totalLines = buffer.lines.length;
