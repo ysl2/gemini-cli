@@ -260,9 +260,14 @@ export function useVim(
         }
       }
       
-      // In INSERT mode, let InputPrompt handle completion keys
+      // In INSERT mode, let InputPrompt handle completion keys and special commands
       if (key.name === 'tab' || (key.name === 'return' && !key.ctrl) || key.name === 'up' || key.name === 'down') {
         return false; // Let InputPrompt handle completion
+      }
+      
+      // Let InputPrompt handle Ctrl+V for clipboard image pasting
+      if (key.ctrl && key.name === 'v') {
+        return false; // Let InputPrompt handle clipboard functionality
       }
       
       // Special handling for Enter key to allow command submission (lower priority than completion)
