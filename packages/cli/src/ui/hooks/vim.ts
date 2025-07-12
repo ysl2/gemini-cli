@@ -37,7 +37,8 @@ export function useVim(
   const [pendingG, setPendingG] = useState(false);
   const [pendingD, setPendingD] = useState(false);
   const [pendingC, setPendingC] = useState(false);
-  const [lastCommand, setLastCommand] = useState<string | null>(null);
+  const lastCommandRef = useRef<(() => void) | null>(null);
+  const lastCommandDataRef = useRef<{type: string, count: number} | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [runtimeVimModeOverride, setRuntimeVimModeOverride] = useState<boolean | null>(null);
 
@@ -61,9 +62,21 @@ export function useVim(
   const findNextWordStart = useCallback((text: string, currentOffset: number): number => {
     let i = currentOffset;
     
-    // Skip current word if we're in the middle of one
-    while (i < text.length && /\w/.test(text[i])) {
-      i++;
+    if (i >= text.length) return i;
+    
+    const currentChar = text[i];
+    
+    // Skip current word/sequence based on character type
+    if (/\w/.test(currentChar)) {
+      // Skip current word characters
+      while (i < text.length && /\w/.test(text[i])) {
+        i++;
+      }
+    } else if (!/\s/.test(currentChar)) {
+      // Skip current non-word, non-whitespace characters (like "/", ".", etc.)
+      while (i < text.length && !/\w/.test(text[i]) && !/\s/.test(text[i])) {
+        i++;
+      }
     }
     
     // Skip whitespace
@@ -72,15 +85,15 @@ export function useVim(
     }
     
     // If we reached the end of text and there's no next word,
-    // vim behavior is to move to the end of the current word
+    // vim behavior for dw is to delete to the end of the current word
     if (i >= text.length) {
       // Go back to find the end of the last word
       let endOfLastWord = text.length - 1;
       while (endOfLastWord >= 0 && /\s/.test(text[endOfLastWord])) {
         endOfLastWord--;
       }
-      // Position cursor at the last character of the last word
-      return Math.max(0, endOfLastWord);
+      // For dw on last word, return position AFTER the last character to delete entire word
+      return Math.max(currentOffset + 1, endOfLastWord + 1);
     }
     
     return i;
@@ -294,23 +307,26 @@ export function useVim(
         case 'h': {
           // Check if this is part of a change command (ch)
           if (pendingC) {
-            const repeatCount = getCurrentCount();
-            clearCount();
-            
-            // Change N characters to the left
-            for (let i = 0; i < repeatCount; i++) {
-              const _currentRow = buffer.cursor[0];
-              const currentCol = buffer.cursor[1];
-              if (currentCol > 0) {
-                buffer.move('left');
-                buffer.del();
+            const commandRepeatCount = getCurrentCount();
+            const executeChCommand = () => {
+              // Change N characters to the left
+              for (let i = 0; i < commandRepeatCount; i++) {
+                const _currentRow = buffer.cursor[0];
+                const currentCol = buffer.cursor[1];
+                if (currentCol > 0) {
+                  buffer.move('left');
+                  buffer.del();
+                }
               }
-            }
+              setModeImmediate('INSERT');
+            };
             
-            // Record this command for repeat and switch to INSERT mode
-            setLastCommand('ch');
+            clearCount();
+            executeChCommand();
+            
+            // Record this command for repeat
+            lastCommandRef.current = executeChCommand;
             setPendingC(false);
-            setModeImmediate('INSERT');
             return true;
           }
           
@@ -366,7 +382,37 @@ export function useVim(
             }
             
             // Record this command for repeat and switch to INSERT mode
-            setLastCommand('cj');
+            const commandRepeatCount = repeatCount;
+            lastCommandRef.current = () => {
+              const currentRow = buffer.cursor[0];
+              const totalLines = buffer.lines.length;
+              const linesToChange = Math.min(commandRepeatCount + 1, totalLines - currentRow); // +1 to include current line
+              
+              if (totalLines === 1) {
+                // Single line - clear the content but keep the line
+                const currentLine = buffer.lines[0] || '';
+                buffer.replaceRangeByOffset(0, currentLine.length, '');
+              } else {
+                // Multi-line - change N lines including newlines
+                let startOffset = 0;
+                for (let row = 0; row < currentRow; row++) {
+                  startOffset += buffer.lines[row].length + 1; // +1 for newline
+                }
+                
+                let endOffset = startOffset;
+                for (let i = 0; i < linesToChange; i++) {
+                  if (currentRow + i < totalLines) {
+                    endOffset += buffer.lines[currentRow + i].length;
+                    if (currentRow + i < totalLines - 1) {
+                      endOffset += 1; // +1 for newline, except for last line
+                    }
+                  }
+                }
+                
+                buffer.replaceRangeByOffset(startOffset, endOffset, '');
+              }
+              setModeImmediate('INSERT');
+            };
             setPendingC(false);
             setModeImmediate('INSERT');
             return true;
@@ -419,7 +465,41 @@ export function useVim(
             }
             
             // Record this command for repeat and switch to INSERT mode
-            setLastCommand('ck');
+            const commandRepeatCount = repeatCount;
+            lastCommandRef.current = () => {
+              const currentRow = buffer.cursor[0];
+              const linesToChange = Math.min(commandRepeatCount + 1, currentRow + 1); // +1 to include current line
+              const startRow = currentRow - commandRepeatCount;
+              
+              if (buffer.lines.length === 1) {
+                // Single line - clear the content but keep the line
+                const currentLine = buffer.lines[0] || '';
+                buffer.replaceRangeByOffset(0, currentLine.length, '');
+              } else {
+                // Multi-line - change N lines including newlines
+                let startOffset = 0;
+                for (let row = 0; row < Math.max(0, startRow); row++) {
+                  startOffset += buffer.lines[row].length + 1; // +1 for newline
+                }
+                
+                let endOffset = startOffset;
+                for (let i = 0; i < linesToChange; i++) {
+                  const lineIndex = Math.max(0, startRow) + i;
+                  if (lineIndex < buffer.lines.length) {
+                    endOffset += buffer.lines[lineIndex].length;
+                    if (lineIndex < buffer.lines.length - 1) {
+                      endOffset += 1; // +1 for newline
+                    } else if (Math.max(0, startRow) > 0 && lineIndex === buffer.lines.length - 1) {
+                      // Last line - include the newline before it instead
+                      startOffset -= 1;
+                    }
+                  }
+                }
+                
+                buffer.replaceRangeByOffset(startOffset, endOffset, '');
+              }
+              setModeImmediate('INSERT');
+            };
             setPendingC(false);
             setModeImmediate('INSERT');
             return true;
@@ -445,7 +525,20 @@ export function useVim(
             }
             
             // Record this command for repeat and switch to INSERT mode
-            setLastCommand('cl');
+            const commandRepeatCount = repeatCount;
+            lastCommandRef.current = () => {
+              // Change N characters to the right
+              for (let i = 0; i < commandRepeatCount; i++) {
+                const currentRow = buffer.cursor[0];
+                const currentCol = buffer.cursor[1];
+                const currentLine = buffer.lines[currentRow] || '';
+                
+                if (currentCol < currentLine.length) {
+                  buffer.del();
+                }
+              }
+              setModeImmediate('INSERT');
+            };
             setPendingC(false);
             setModeImmediate('INSERT');
             return true;
@@ -480,39 +573,48 @@ export function useVim(
             const currentOffset = getCurrentOffset();
             let endOffset = currentOffset;
             
-            // Delete from cursor through N words
-            let offset = currentOffset;
+            // Log original dw command
+            const logMsg = (msg: string) => process.stderr.write(`DW_DEBUG: ${msg}\n`);
+            logMsg(`[${new Date().toISOString()}] DW_ORIGINAL_START`);
+            logMsg(`  cursor: [${buffer.cursor[0]}, ${buffer.cursor[1]}]`);
+            logMsg(`  currentOffset: ${currentOffset}`);
+            logMsg(`  text: "${text}"`);
+            logMsg(`  repeatCount: ${repeatCount}`);
+            
+            
+            // Delete from cursor through N words using consistent logic
+            let searchOffset = currentOffset;
             for (let i = 0; i < repeatCount; i++) {
-              // For dw, we want to delete to the start of the next word,
-              // or to the end of text if there's no next word
-              let nextPos = offset;
+              // Inline word finding for consistency with repeat function
+              let wordEnd = searchOffset;
               
-              // Skip current word
-              while (nextPos < text.length && /\w/.test(text[nextPos])) {
-                nextPos++;
+              // Skip current word if we're in the middle of one
+              while (wordEnd < text.length && /\w/.test(text[wordEnd])) {
+                wordEnd++;
               }
               
               // Skip whitespace to get to next word start
-              while (nextPos < text.length && /\s/.test(text[nextPos])) {
-                nextPos++;
+              while (wordEnd < text.length && /\s/.test(text[wordEnd])) {
+                wordEnd++;
               }
               
-              // If we reached end of text, that's our target
-              if (nextPos >= text.length) {
-                offset = text.length;
-                break;
+              // If we found a next word, continue; otherwise stop
+              if (wordEnd < text.length) {
+                searchOffset = wordEnd;
+                endOffset = wordEnd;
               } else {
-                offset = nextPos;
+                // No more words, stop here
+                break;
               }
             }
-            endOffset = offset;
             
-            if (endOffset !== currentOffset) {
-              buffer.replaceRangeByOffset(Math.min(currentOffset, endOffset), Math.max(currentOffset, endOffset), '');
+            if (endOffset > currentOffset) {
+              buffer.replaceRangeByOffset(currentOffset, endOffset, '');
             }
             
-            // Record this command for repeat
-            setLastCommand('dw');
+            // Record this command for repeat using command data instead of closure
+            lastCommandDataRef.current = { type: 'dw', count: repeatCount };
+            lastCommandRef.current = null; // Clear old closure-based command
             setPendingD(false);
             return true;
           }
@@ -542,8 +644,9 @@ export function useVim(
               buffer.replaceRangeByOffset(Math.min(currentOffset, endOffset), Math.max(currentOffset, endOffset), '');
             }
             
-            // Record this command for repeat and switch to INSERT mode
-            setLastCommand('cw');
+            // Record this command for repeat using command data instead of closure
+            lastCommandDataRef.current = { type: 'cw', count: repeatCount };
+            lastCommandRef.current = null; // Clear old closure-based command
             setPendingC(false);
             setModeImmediate('INSERT');
             return true;
@@ -592,7 +695,28 @@ export function useVim(
             }
             
             // Record this command for repeat
-            setLastCommand('db');
+            const commandRepeatCount = repeatCount;
+            lastCommandRef.current = () => {
+              const text = buffer.text;
+              const currentOffset = getCurrentOffset();
+              let endOffset = currentOffset;
+              
+              // Delete from cursor backward through N words
+              let offset = currentOffset;
+              for (let i = 0; i < commandRepeatCount; i++) {
+                const prevWordOffset = findPrevWordStart(text, offset);
+                if (prevWordOffset < offset) {
+                  offset = prevWordOffset;
+                } else {
+                  break;
+                }
+              }
+              endOffset = offset;
+              
+              if (endOffset !== currentOffset) {
+                buffer.replaceRangeByOffset(Math.min(currentOffset, endOffset), Math.max(currentOffset, endOffset), '');
+              }
+            };
             setPendingD(false);
             return true;
           }
@@ -623,7 +747,29 @@ export function useVim(
             }
             
             // Record this command for repeat and switch to INSERT mode
-            setLastCommand('cb');
+            const commandRepeatCount = repeatCount;
+            lastCommandRef.current = () => {
+              const text = buffer.text;
+              const currentOffset = getCurrentOffset();
+              let endOffset = currentOffset;
+              
+              // Change from cursor backward through N words
+              let offset = currentOffset;
+              for (let i = 0; i < commandRepeatCount; i++) {
+                const prevWordOffset = findPrevWordStart(text, offset);
+                if (prevWordOffset < offset) {
+                  offset = prevWordOffset;
+                } else {
+                  break;
+                }
+              }
+              endOffset = offset;
+              
+              if (endOffset !== currentOffset) {
+                buffer.replaceRangeByOffset(Math.min(currentOffset, endOffset), Math.max(currentOffset, endOffset), '');
+              }
+              setModeImmediate('INSERT');
+            };
             setPendingC(false);
             setModeImmediate('INSERT');
             return true;
@@ -667,7 +813,28 @@ export function useVim(
             }
             
             // Record this command for repeat
-            setLastCommand('de');
+            const commandRepeatCount = repeatCount;
+            lastCommandRef.current = () => {
+              const text = buffer.text;
+              const currentOffset = getCurrentOffset();
+              let endOffset = currentOffset;
+              
+              // Delete from cursor to end of N words
+              let offset = currentOffset;
+              for (let i = 0; i < commandRepeatCount; i++) {
+                const wordEndOffset = findWordEnd(text, offset);
+                if (wordEndOffset > offset) {
+                  offset = wordEndOffset;
+                } else {
+                  break;
+                }
+              }
+              endOffset = offset;
+              
+              if (endOffset !== currentOffset) {
+                buffer.replaceRangeByOffset(Math.min(currentOffset, endOffset), Math.max(currentOffset, endOffset), '');
+              }
+            };
             setPendingD(false);
             return true;
           }
@@ -682,24 +849,34 @@ export function useVim(
             let endOffset = currentOffset;
             
             // Change from cursor to end of N words
-            let offset = currentOffset;
+            let searchOffset = currentOffset;
             for (let i = 0; i < repeatCount; i++) {
-              const wordEndOffset = findWordEnd(text, offset);
-              if (wordEndOffset > offset) {
-                offset = wordEndOffset;
+              const wordEndOffset = findWordEnd(text, searchOffset);
+              if (wordEndOffset > searchOffset) {
+                endOffset = wordEndOffset + 1; // +1 to include the character at end position for 'ce'
+                
+                // For next iteration, move to start of next word
+                if (i < repeatCount - 1) { // Only if there are more iterations
+                  searchOffset = findNextWordStart(text, wordEndOffset + 1);
+                  if (searchOffset <= wordEndOffset) {
+                    break; // No next word found
+                  }
+                }
               } else {
                 break;
               }
             }
-            // Include the character at the end position for 'ce'
-            endOffset = Math.min(offset + 1, text.length);
             
             if (endOffset !== currentOffset) {
               buffer.replaceRangeByOffset(Math.min(currentOffset, endOffset), Math.max(currentOffset, endOffset), '');
             }
             
-            // Record this command for repeat and switch to INSERT mode
-            setLastCommand('ce');
+            // Record this command for repeat using command data instead of closure
+            const logMsg = (msg: string) => process.stderr.write(`DW_DEBUG: ${msg}\n`);
+            logMsg(`[${new Date().toISOString()}] CE_ORIGINAL_EXECUTED`);
+            logMsg(`  storing command data: ce with count ${repeatCount}`);
+            lastCommandDataRef.current = { type: 'ce', count: repeatCount };
+            lastCommandRef.current = null; // Clear old closure-based command
             setPendingC(false);
             setModeImmediate('INSERT');
             return true;
@@ -733,7 +910,10 @@ export function useVim(
               }
             }
           }
-          setLastCommand('x');
+          
+          // Record this command for repeat using command data instead of closure
+          lastCommandDataRef.current = { type: 'x', count: repeatCount };
+          lastCommandRef.current = null; // Clear old closure-based command
           clearCount();
           return true;
         }
@@ -910,8 +1090,9 @@ export function useVim(
               buffer.replaceRangeByOffset(startOffset, endOffset, '');
             }
             
-            // Record this command for repeat
-            setLastCommand('dd');
+            // Record this command for repeat using command data instead of closure
+            lastCommandDataRef.current = { type: 'dd', count: repeatCount };
+            lastCommandRef.current = null; // Clear old closure-based command
             setPendingD(false);
           } else {
             // First 'd' - wait for movement command
@@ -960,7 +1141,10 @@ export function useVim(
             }
             
             setModeImmediate('INSERT');
-            setLastCommand('cc');
+            
+            // Record this command for repeat using command data instead of closure
+            lastCommandDataRef.current = { type: 'cc', count: repeatCount };
+            lastCommandRef.current = null; // Clear old closure-based command
             setPendingC(false);
           } else {
             // First 'c' - wait for movement command
@@ -986,7 +1170,9 @@ export function useVim(
             buffer.replaceRangeByOffset(startOffset, endOffset, '');
           }
           
-          setLastCommand('D');
+          // Record this command for repeat using command data instead of closure
+          lastCommandDataRef.current = { type: 'D', count: 1 };
+          lastCommandRef.current = null; // Clear old closure-based command
           clearCount();
           return true;
         }
@@ -1009,110 +1195,244 @@ export function useVim(
           }
           
           setModeImmediate('INSERT');
-          setLastCommand('C');
+          // Record this command for repeat using command data instead of closure
+          lastCommandDataRef.current = { type: 'C', count: 1 };
+          lastCommandRef.current = null; // Clear old closure-based command
           clearCount();
           return true;
         }
 
         case '.': {
           // Repeat last command
-          if (lastCommand === 'x') {
-            // Repeat x command
-            const currentRow = buffer.cursor[0];
-            const currentCol = buffer.cursor[1];
-            const currentLine = buffer.lines[currentRow] || '';
+          const logMsg = (msg: string) => process.stderr.write(`DW_DEBUG: ${msg}\n`);
+          logMsg(`[${new Date().toISOString()}] REPEAT_TRIGGERED`);
+          logMsg(`  cursor before repeat: [${buffer.cursor[0]}, ${buffer.cursor[1]}]`);
+          logMsg(`  text before repeat: "${buffer.text}"`);
+          logMsg(`  hasLastCommand: ${!!lastCommandRef.current}`);
+          logMsg(`  hasCommandData: ${!!lastCommandDataRef.current}`);
+          
+          // Check for new command data first (no closure issues)
+          if (lastCommandDataRef.current) {
+            const cmdData = lastCommandDataRef.current;
+            logMsg(`  executing command data: ${cmdData.type} with count ${cmdData.count}`);
             
-            if (currentCol < currentLine.length) {
-              buffer.del();
+            if (cmdData.type === 'dw') {
+              // Execute dw fresh without closure
+              const currentText = buffer.text;
+              const currentOffset = getCurrentOffset();
+              let endOffset = currentOffset;
+              
+              logMsg(`  FRESH_DW: currentOffset=${currentOffset}, cursor=[${buffer.cursor[0]}, ${buffer.cursor[1]}]`);
+              
+              // Find N words from current position
+              let searchOffset = currentOffset;
+              for (let i = 0; i < cmdData.count; i++) {
+                const nextWordOffset = findNextWordStart(currentText, searchOffset);
+                logMsg(`  findNextWordStart(${searchOffset}) returned ${nextWordOffset}`);
+                logMsg(`  char at ${searchOffset}: "${currentText[searchOffset] || 'EOF'}"`);
+                if (nextWordOffset <= searchOffset) {
+                  logMsg(`  no next word found, breaking`);
+                  break;
+                }
+                endOffset = nextWordOffset;
+                searchOffset = nextWordOffset;
+              }
+              
+              if (endOffset > currentOffset) {
+                logMsg(`  FRESH_DW: deleting from ${currentOffset} to ${endOffset}`);
+                buffer.replaceRangeByOffset(currentOffset, endOffset, '');
+              }
+            } else if (cmdData.type === 'ce') {
+              // Execute ce fresh without closure
+              const currentText = buffer.text;
+              const currentOffset = getCurrentOffset();
+              let endOffset = currentOffset;
+              
+              logMsg(`  FRESH_CE: currentOffset=${currentOffset}, cursor=[${buffer.cursor[0]}, ${buffer.cursor[1]}]`);
+              
+              // Find end of N words from current position
+              let searchOffset = currentOffset;
+              for (let i = 0; i < cmdData.count; i++) {
+                const wordEndOffset = findWordEnd(currentText, searchOffset);
+                logMsg(`  word ${i}: findWordEnd(${searchOffset}) returned ${wordEndOffset}`);
+                logMsg(`  word ${i}: char at ${searchOffset}: "${currentText[searchOffset] || 'EOF'}"`);
+                logMsg(`  word ${i}: char at wordEnd ${wordEndOffset}: "${currentText[wordEndOffset] || 'EOF'}"`);
+                
+                if (wordEndOffset <= searchOffset) {
+                  logMsg(`  word ${i}: no word end found, breaking`);
+                  break;
+                }
+                
+                // For 'ce', we want to delete through the end of the word (inclusive)
+                // findWordEnd returns position of last char, so +1 to delete after it
+                endOffset = wordEndOffset + 1;
+                
+                // For next iteration, move to start of next word
+                if (i < cmdData.count - 1) { // Only if there are more iterations
+                  const nextWordStart = findNextWordStart(currentText, wordEndOffset + 1);
+                  logMsg(`  word ${i}: moving to next word start: ${nextWordStart}`);
+                  searchOffset = nextWordStart;
+                  if (nextWordStart <= wordEndOffset) {
+                    logMsg(`  word ${i}: no next word found, breaking`);
+                    break;
+                  }
+                }
+              }
+              
+              if (endOffset > currentOffset) {
+                logMsg(`  FRESH_CE: deleting from ${currentOffset} to ${endOffset}`);
+                buffer.replaceRangeByOffset(currentOffset, endOffset, '');
+                setModeImmediate('INSERT');
+              }
+            } else if (cmdData.type === 'x') {
+              // Execute x fresh without closure
+              logMsg(`  FRESH_X: deleting ${cmdData.count} character(s) from cursor=[${buffer.cursor[0]}, ${buffer.cursor[1]}]`);
+              
+              for (let i = 0; i < cmdData.count; i++) {
+                const currentRow = buffer.cursor[0];
+                const currentCol = buffer.cursor[1];
+                const currentLine = buffer.lines[currentRow] || '';
+                
+                if (currentCol < currentLine.length) {
+                  const isLastChar = currentCol === currentLine.length - 1;
+                  buffer.del();
+                  
+                  // In vim, when deleting the last character on a line,
+                  // the cursor moves to the previous position
+                  if (isLastChar && currentCol > 0) {
+                    buffer.move('left');
+                  }
+                }
+              }
+            } else if (cmdData.type === 'dd') {
+              // Execute dd fresh without closure
+              logMsg(`  FRESH_DD: deleting ${cmdData.count} line(s) from cursor=[${buffer.cursor[0]}, ${buffer.cursor[1]}]`);
+              
+              const startRow = buffer.cursor[0];
+              const totalLines = buffer.lines.length;
+              const linesToDelete = Math.min(cmdData.count, totalLines - startRow);
+              
+              if (totalLines === 1) {
+                // Single line - clear the content but keep the line
+                const currentLine = buffer.lines[0] || '';
+                buffer.replaceRangeByOffset(0, currentLine.length, '');
+              } else {
+                // Multi-line - delete N lines including newlines
+                let startOffset = 0;
+                for (let row = 0; row < startRow; row++) {
+                  startOffset += buffer.lines[row].length + 1; // +1 for newline
+                }
+                
+                let endOffset = startOffset;
+                for (let i = 0; i < linesToDelete; i++) {
+                  const lineIndex = startRow + i;
+                  if (lineIndex < totalLines) {
+                    endOffset += buffer.lines[lineIndex].length;
+                    if (lineIndex < totalLines - 1) {
+                      endOffset += 1; // +1 for newline
+                    } else if (startRow > 0 && lineIndex === totalLines - 1) {
+                      // Last line - include the newline before it instead
+                      startOffset -= 1;
+                    }
+                  }
+                }
+                
+                buffer.replaceRangeByOffset(startOffset, endOffset, '');
+              }
+            } else if (cmdData.type === 'cc') {
+              // Execute cc fresh without closure
+              
+              const startRow = buffer.cursor[0];
+              const totalLines = buffer.lines.length;
+              const linesToChange = Math.min(cmdData.count, totalLines - startRow);
+              
+              if (totalLines === 1) {
+                // Single line - clear the content but keep the line
+                const currentLine = buffer.lines[0] || '';
+                buffer.replaceRangeByOffset(0, currentLine.length, '');
+              } else {
+                // Multi-line - change N lines including newlines
+                let startOffset = 0;
+                for (let row = 0; row < startRow; row++) {
+                  startOffset += buffer.lines[row].length + 1; // +1 for newline
+                }
+                
+                let endOffset = startOffset;
+                for (let i = 0; i < linesToChange; i++) {
+                  const lineIndex = startRow + i;
+                  if (lineIndex < totalLines) {
+                    endOffset += buffer.lines[lineIndex].length;
+                    if (lineIndex < totalLines - 1) {
+                      endOffset += 1; // +1 for newline
+                    } else if (startRow > 0 && lineIndex === totalLines - 1) {
+                      // Last line - include the newline before it instead
+                      startOffset -= 1;
+                    }
+                  }
+                }
+                
+                buffer.replaceRangeByOffset(startOffset, endOffset, '');
+              }
+              setModeImmediate('INSERT');
+            } else if (cmdData.type === 'cw') {
+              // Execute cw fresh without closure
+              const currentText = buffer.text;
+              const currentOffset = getCurrentOffset();
+              let endOffset = currentOffset;
+              
+              // Change from cursor through N words
+              let offset = currentOffset;
+              for (let i = 0; i < cmdData.count; i++) {
+                const nextWordOffset = findNextWordStart(currentText, offset);
+                if (nextWordOffset > offset) {
+                  offset = nextWordOffset;
+                } else {
+                  break;
+                }
+              }
+              endOffset = offset;
+              
+              if (endOffset !== currentOffset) {
+                buffer.replaceRangeByOffset(Math.min(currentOffset, endOffset), Math.max(currentOffset, endOffset), '');
+              }
+              setModeImmediate('INSERT');
+            } else if (cmdData.type === 'D') {
+              // Execute D fresh without closure
+              const currentRow = buffer.cursor[0];
+              const currentCol = buffer.cursor[1];
+              const currentLine = buffer.lines[currentRow] || '';
+              
+              if (currentCol < currentLine.length) {
+                let startOffset = 0;
+                for (let i = 0; i < currentRow; i++) {
+                  startOffset += buffer.lines[i].length + 1;
+                }
+                startOffset += currentCol;
+                
+                const endOffset = startOffset + (currentLine.length - currentCol);
+                buffer.replaceRangeByOffset(startOffset, endOffset, '');
+              }
+            } else if (cmdData.type === 'C') {
+              // Execute C fresh without closure
+              const currentRow = buffer.cursor[0];
+              const currentCol = buffer.cursor[1];
+              const currentLine = buffer.lines[currentRow] || '';
+              
+              if (currentCol < currentLine.length) {
+                let startOffset = 0;
+                for (let i = 0; i < currentRow; i++) {
+                  startOffset += buffer.lines[i].length + 1;
+                }
+                startOffset += currentCol;
+                
+                const endOffset = startOffset + (currentLine.length - currentCol);
+                buffer.replaceRangeByOffset(startOffset, endOffset, '');
+              }
+              setModeImmediate('INSERT');
             }
-          } else if (lastCommand === 'dd') {
-            // Repeat dd command
-            const startRow = buffer.cursor[0];
-            const totalLines = buffer.lines.length;
-            
-            if (totalLines === 1) {
-              // Single line - clear the content but keep the line
-              const currentLine = buffer.lines[0] || '';
-              buffer.replaceRangeByOffset(0, currentLine.length, '');
-            } else {
-              // Multi-line - delete current line
-              let startOffset = 0;
-              for (let row = 0; row < startRow; row++) {
-                startOffset += buffer.lines[row].length + 1; // +1 for newline
-              }
-              
-              let endOffset = startOffset + buffer.lines[startRow].length;
-              if (startRow < totalLines - 1) {
-                endOffset += 1; // Include newline
-              } else if (startRow > 0) {
-                // Last line - include the newline before it
-                startOffset -= 1;
-              }
-              
-              buffer.replaceRangeByOffset(startOffset, endOffset, '');
-            }
-          } else if (lastCommand === 'cc') {
-            // Repeat cc command
-            const startRow = buffer.cursor[0];
-            const totalLines = buffer.lines.length;
-            
-            if (totalLines === 1) {
-              // Single line - clear the content but keep the line
-              const currentLine = buffer.lines[0] || '';
-              buffer.replaceRangeByOffset(0, currentLine.length, '');
-            } else {
-              // Multi-line - change current line
-              let startOffset = 0;
-              for (let row = 0; row < startRow; row++) {
-                startOffset += buffer.lines[row].length + 1; // +1 for newline
-              }
-              
-              let endOffset = startOffset + buffer.lines[startRow].length;
-              if (startRow < totalLines - 1) {
-                endOffset += 1; // Include newline
-              } else if (startRow > 0) {
-                // Last line - include the newline before it
-                startOffset -= 1;
-              }
-              
-              buffer.replaceRangeByOffset(startOffset, endOffset, '');
-            }
-            
-            setModeImmediate('INSERT');
-          } else if (lastCommand === 'D') {
-            // Repeat D command
-            const currentRow = buffer.cursor[0];
-            const currentCol = buffer.cursor[1];
-            const currentLine = buffer.lines[currentRow] || '';
-            
-            if (currentCol < currentLine.length) {
-              let startOffset = 0;
-              for (let i = 0; i < currentRow; i++) {
-                startOffset += buffer.lines[i].length + 1;
-              }
-              startOffset += currentCol;
-              
-              const endOffset = startOffset + (currentLine.length - currentCol);
-              buffer.replaceRangeByOffset(startOffset, endOffset, '');
-            }
-          } else if (lastCommand === 'C') {
-            // Repeat C command
-            const currentRow = buffer.cursor[0];
-            const currentCol = buffer.cursor[1];
-            const currentLine = buffer.lines[currentRow] || '';
-            
-            if (currentCol < currentLine.length) {
-              let startOffset = 0;
-              for (let i = 0; i < currentRow; i++) {
-                startOffset += buffer.lines[i].length + 1;
-              }
-              startOffset += currentCol;
-              
-              const endOffset = startOffset + (currentLine.length - currentCol);
-              buffer.replaceRangeByOffset(startOffset, endOffset, '');
-            }
-            
-            setModeImmediate('INSERT');
+          } else if (lastCommandRef.current) {
+            // Fallback to old closure-based commands
+            lastCommandRef.current();
           }
           
           clearCount();
@@ -1131,7 +1451,7 @@ export function useVim(
     }
 
     return false; // Not handled by vim
-  }, [count, buffer, getCurrentCount, clearCount, findNextWordStart, findPrevWordStart, findWordEnd, getCurrentOffset, setOffsetPosition, getEffectiveVimMode, onSubmit, setModeImmediate, lastCommand, pendingC, pendingD, pendingG]);
+  }, [count, buffer, getCurrentCount, clearCount, findNextWordStart, findPrevWordStart, findWordEnd, getCurrentOffset, setOffsetPosition, getEffectiveVimMode, onSubmit, setModeImmediate, pendingC, pendingD, pendingG]);
 
   // Set the ref to the current function for recursive calls
   handleInputRef.current = handleInput;
