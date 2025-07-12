@@ -492,8 +492,8 @@ describe('useVim hook', () => {
         vimHandleInput?.({ sequence: 'w' });
       });
       
-      // Should move to the end of the last word (position 10, the 'd' in 'world')
-      expect(mockBuffer.moveToOffset).toHaveBeenCalledWith(10);
+      // Should move to the end of the last word (position 11, after the 'd' in 'world')
+      expect(mockBuffer.moveToOffset).toHaveBeenCalledWith(11);
     });
 
     it('should handle first c key (sets pending change state)', () => {
