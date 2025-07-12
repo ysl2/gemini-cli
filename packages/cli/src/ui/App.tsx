@@ -554,13 +554,17 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
 
   // Create a ref for vim toggle function to avoid circular dependency
   const toggleVimModeRef = useRef<(() => void) | null>(null);
-  
+
   // Initialize vim mode
-  const { mode: vimMode, vimModeEnabled, toggleVimMode, handleInput: vimHandleInput } = useVim(buffer, config, settings, handleFinalSubmit);
-  
+  const {
+    mode: vimMode,
+    vimModeEnabled,
+    toggleVimMode,
+    handleInput: vimHandleInput,
+  } = useVim(buffer, config, settings, handleFinalSubmit);
+
   // Store the toggle function in the ref
   toggleVimModeRef.current = toggleVimMode;
-
 
   const logger = useLogger();
   const [userMessages, setUserMessages] = useState<string[]>([]);

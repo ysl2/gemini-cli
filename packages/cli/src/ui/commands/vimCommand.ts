@@ -11,9 +11,9 @@ export const vimCommand: SlashCommand = {
   description: 'toggle vim mode on/off',
   action: async (context, _args) => {
     const { toggleVimMode } = context.ui;
-    
+
     toggleVimMode();
-    
+
     // No message - silent toggle
   },
 };

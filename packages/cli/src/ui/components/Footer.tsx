@@ -48,9 +48,7 @@ export const Footer: React.FC<FooterProps> = ({
   return (
     <Box marginTop={1} justifyContent="space-between" width="100%">
       <Box>
-        {vimMode && (
-          <Text color={Colors.Gray}>[{vimMode}] </Text>
-        )}
+        {vimMode && <Text color={Colors.Gray}>[{vimMode}] </Text>}
         {nightly ? (
           <Gradient colors={Colors.GradientColors}>
             <Text>
