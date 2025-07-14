@@ -278,9 +278,7 @@ export async function discoverTools(
         );
       } catch (error) {
         console.error(
-          `Error processing tool '${
-            funcDecl.name
-          }' from MCP server '${mcpServerName}': ${(error as Error).message}`,
+          `Error processing tool '${funcDecl?.name || 'unknown'}' from MCP server '${mcpServerName}': ${(error as Error).message}`,
         );
       }
     }
