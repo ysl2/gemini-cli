@@ -3,7 +3,13 @@ name: Gemini Scheduled Issue Triage
 on:
   schedule:
     - cron: '0 * * * *' # Runs every hour
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Run the workflow in dry-run mode. No issues will be modified.'
+        required: true
+        default: true
+        type: boolean
 
 jobs:
   triage-issues:
@@ -17,7 +23,7 @@ jobs:
     steps:
       - name: Generate GitHub App Token
         id: generate_token
-        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2
+        uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.PRIVATE_KEY }}
@@ -31,7 +37,7 @@ jobs:
           NO_LABEL_ISSUES=$(gh issue list --repo ${{ github.repository }} --search "is:open is:issue no:label" --json number,title,body)
 
           echo "🏷️ Finding issues that need triage..."
-          NEED_TRIAGE_ISSUES=$(gh issue list --repo ${{ github.repository }} --search "is:open is:issue label:\"status/need-triage\"" --json number,title,body)
+          NEED_TRIAGE_ISSUES=$(gh issue list --repo ${{ github.repository }} --search "is:open is:issue label:"status/need-triage"" --json number,title,body)
 
           echo "🔄 Merging and deduplicating issues..."
           ISSUES=$(echo "$NO_LABEL_ISSUES" "$NEED_TRIAGE_ISSUES" | jq -c -s 'add | unique_by(.number)')
@@ -39,7 +45,7 @@ jobs:
           echo "📝 Setting output for GitHub Actions..."
           echo "issues_to_triage=$ISSUES" >> "$GITHUB_OUTPUT"
 
-          echo "✅ Found $(echo "$ISSUES" | jq 'length') issues to triage! 🎯"
+          echo "✅ Found $(echo "${ISSUES:-[]}" | jq 'length') issues to triage! 🎯"
 
       - name: Run Gemini Issue Triage
         if: steps.find_issues.outputs.issues_to_triage != '[]'
@@ -51,8 +57,6 @@ jobs:
         with:
           version: 0.1.8-rc.0
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          OTLP_GCP_WIF_PROVIDER: ${{ secrets.OTLP_GCP_WIF_PROVIDER }}
-          OTLP_GOOGLE_CLOUD_PROJECT: ${{ secrets.OTLP_GOOGLE_CLOUD_PROJECT }}
           settings_json: |
             {
               "coreTools": [
@@ -60,41 +64,225 @@ jobs:
                 "run_shell_command(gh label list)",
                 "run_shell_command(gh issue edit)",
                 "run_shell_command(gh issue list)"
-              ],
-              "telemetry": {
-                "enabled": true,
-                "target": "gcp"
-              },
-              "sandbox": false
+              ]
             }
           prompt: |
-            You are an issue triage assistant. Analyze issues and apply appropriate labels ONE AT A TIME.
+            You are an issue triage assistant for the ${{ github.repository }} GitHub repository. Your task is to analyze issues and apply appropriate labels based on their content.
 
-            Repository: ${{ github.repository }}
+            **Here's how to perform the triage:**
 
-            Steps:
-            1. Run: `gh label list --repo ${{ github.repository }} --limit 100` to see available labels
-            2. Check environment variable for issues to triage: $ISSUES_TO_TRIAGE (JSON array of issues)
-            3. Parse the JSON array from step 2 and for EACH INDIVIDUAL issue, apply appropriate labels using separate commands:
-               - `gh issue edit ISSUE_NUMBER --repo ${{ github.repository }} --add-label "label1"`
-               - `gh issue edit ISSUE_NUMBER --repo ${{ github.repository }} --add-label "label2"`
-               - Continue for each label separately
+            1.  **Retrieve Available Labels**: First, get the list of all available labels in the repository by running:
+                `gh label list --repo ${{ github.repository }} --limit 100`
+                *Carefully review these labels to understand what's available.*
 
-            IMPORTANT: Label each issue individually, one command per issue, one label at a time if needed.
+            2.  **Process Issues**: You will be provided with a JSON array of issues to triage in the `$ISSUES_TO_TRIAGE` environment variable. Iterate through EACH INDIVIDUAL issue in this array.
 
-            Guidelines:
-            - Only use existing repository labels from step 1
-            - Do not add comments to issues
-            - Triage each issue independently based on title and body content
-            - Focus on applying: kind/* (bug/enhancement/documentation), area/* (core/cli/testing/windows), and priority/* labels
-            - If an issue has insufficient information, consider applying "status/need-information"
-            - After applying appropriate labels to an issue, remove the "status/need-triage" label if present: `gh issue edit ISSUE_NUMBER --repo ${{ github.repository }} --remove-label "status/need-triage"`
-            - Execute one `gh issue edit` command per issue, wait for success before proceeding to the next
+            3.  **Apply Labels**: For each issue, based on its `title` and `body`:
+                * Determine the most relevant `kind/*` label (e.g., `kind/bug`, `kind/enhancement`, `kind/documentation`).
+                * Determine the most relevant `area/*` label (e.g., `area/core`, `area/cli`, `area/testing`, `area/windows`).
+                * Determine the most relevant `priority/*` label (e.g., `priority/p0`, `priority/p1`, `priority/p2`).
+                * If the issue lacks sufficient information for proper triage, consider adding `status/need-information`.
+                * **Execute a separate `gh issue edit` command for EACH label you want to add.** For example:
+                    `gh issue edit ISSUE_NUMBER --repo ${{ github.repository }} --add-label "label-name"`
+                    *Example: `gh issue edit 123 --repo google-gemini/gemini-cli --add-label "kind/bug"`*
 
-            Example triage logic:
-            - Issues with "bug", "error", "broken" → kind/bug
-            - Issues with "feature", "enhancement", "improve" → kind/enhancement
-            - Issues about Windows/performance → area/windows, area/performance
-            - Critical bugs → priority/p0, other bugs → priority/p1, enhancements → priority/p2
+            4.  **Remove Triage Status**: After you have applied all appropriate labels to an issue, if the issue had the `status/need-triage` label, remove it using:
+                `gh issue edit ISSUE_NUMBER --repo ${{ github.repository }} --remove-label "status/need-triage"`
+                *Example: `gh issue edit 123 --repo google-gemini/gemini-cli --remove-label "status/need-triage"`*
 
-            Process each issue sequentially and confirm each labeling operation before moving to the next issue.
+            **Key Guidelines:**
+
+            * **Only Use Existing Labels**: Do not attempt to create new labels. Use only the labels retrieved in Step 1.
+            * **No Comments**: Do not add comments to issues. Your sole focus is label management.
+            * **Independent Triage**: Triage each issue independently.
+            * **Sequential Processing**: Process one issue completely (add all labels, remove `status/need-triage`) before moving to the next.
+
+            **Example Triage Logic for Guidance:**
+
+            * If keywords like "bug", "error", "broken", "crash" are present → `kind/bug`
+            * If keywords like "feature", "enhancement", "improve", "add support for" are present → `kind/enhancement`
+            * If related to documentation, examples, or guides → `kind/documentation`
+            * If keywords like "Windows", "cross-platform", "OS" and performance are present → `area/windows`, `area/performance`
+            * Critical bugs affecting core functionality or data loss → `priority/p0`
+            * Other significant bugs or highly requested features → `priority/p1`
+            * Minor enhancements or low-impact issues → `priority/p2`
+
+            Start by listing available labels, then proceed to analyze and label issues from `$ISSUES_TO_TRIAGE`.
+
+  determine-areas:
+    timeout-minutes: 10
+    if: ${{ github.repository == 'google-gemini/gemini-cli' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      issues: read
+    outputs:
+      area_labels: ${{ steps.get_area_labels.outputs.area_labels }}
+    steps:
+      - name: Generate GitHub App Token
+        id: generate_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY }}
+      - name: Get Area Labels
+        id: get_area_labels
+        env:
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: |
+          echo "🏷️ Finding area labels..."
+          AREA_LABELS=$(gh label list --repo ${{ github.repository }} --search "area/" --json name | jq -c '[.[].name  | select(startswith("area/"))]')
+          echo "area_labels=$AREA_LABELS" >> "$GITHUB_OUTPUT"
+          echo "✅ Found $(echo "${AREA_LABELS:-[]}" | jq 'length') area labels! 🎯"
+
+  find-and-mark-duplicates-in-area:
+    needs: determine-areas
+    timeout-minutes: 10
+    if: ${{ github.repository == 'google-gemini/gemini-cli' && needs.determine-areas.outputs.area_labels != '[]' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
+    strategy:
+      max-parallel: 3
+      matrix:
+        area: ${{ fromJson(needs.determine-areas.outputs.area_labels || '[]') }}
+    steps:
+      - name: Generate GitHub App Token
+        id: generate_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY }}
+      - name: Get All Issues in Area
+        id: get_all_issues
+        env:
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: |
+          echo "🔎 Finding all issues for area: ${{ matrix.area }}"
+          ISSUES=$(gh issue list --repo ${{ github.repository }} --search "is:open is:issue label:"${{ matrix.area }}" -label:"kind/duplicate" -label:"status/need-triage"" --limit 1000 --json number,title)
+          echo "ISSUES_TO_CLUSTER=$ISSUES" >> "$GITHUB_OUTPUT"
+          echo "✅ Found $(echo "${ISSUES:-[]}" | jq 'length') issues to cluster in ${{ matrix.area }}! 🎯"
+      - name: Run Gemini Title Clustering
+        id: gemini_cluster
+        if: steps.get_all_issues.outputs.ISSUES_TO_CLUSTER != '[]' && $(echo '${{ steps.get_all_issues.outputs.ISSUES_TO_CLUSTER }}' | jq 'length') > 1
+        uses: google-gemini/gemini-cli-action@df3f890f003d28c60a2a09d2c29e0126e4d1e2ff
+        env:
+          ISSUES_TO_CLUSTER: ${{ steps.get_all_issues.outputs.ISSUES_TO_CLUSTER }}
+        with:
+          version: 0.1.8-rc.0
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          settings_json: |
+            {
+              "coreTools": [
+                "run_shell_command(echo)"
+              ]
+            }
+          prompt: |
+            You are an expert GitHub issue triaging bot. Your task is to identify potential duplicate issues based on their titles.
+
+            Analyze the list of issue titles provided below and group them into clusters of potential duplicates.
+
+            **Issues to Analyze (JSON format):**
+            ${{ env.ISSUES_TO_CLUSTER }}
+
+            **Instructions:**
+
+            1.  Carefully review all issue titles provided.
+            2.  Identify groups (clusters) of issues that seem to be describing the same problem.
+            3.  Respond with a JSON object containing an array of these clusters. Each cluster should be an array of issue numbers.
+
+            **JSON Output Format:**
+            ```json
+            {
+              "potential_duplicate_clusters": [
+                [123, 456, 789],
+                [111, 222]
+              ]
+            }
+            ```
+
+            If no potential duplicate clusters are found, respond with an empty array: `{"potential_duplicate_clusters": []}`.
+
+            Your response must be only the JSON object and nothing else.
+      - name: Check for potential duplicates
+        id: check_duplicates
+        if: steps.gemini_cluster.outputs.result != ''
+        run: |
+          echo "Checking for potential duplicates..."
+          CLUSTER_OUTPUT='${{ steps.gemini_cluster.outputs.result }}'
+          echo "Cluster output: $CLUSTER_OUTPUT"
+          HAS_DUPLICATES=$(echo "$CLUSTER_OUTPUT" | jq 'if .potential_duplicate_clusters | length > 0 then "true" else "false" end')
+          echo "has_duplicates=$HAS_DUPLICATES" >> "$GITHUB_OUTPUT"
+          echo "✅ Has duplicates: $HAS_DUPLICATES"
+
+      - name: Run Gemini Duplicate Analysis
+        id: gemini_analyze
+        if: steps.check_duplicates.outputs.has_duplicates == 'true'
+        uses: google-gemini/gemini-cli-action@df3f890f003d28c60a2a09d2c29e0126e4d1e2ff
+        env:
+          POTENTIAL_DUPLICATES: ${{ steps.gemini_cluster.outputs.result }}
+        with:
+          version: 0.1.8-rc.0
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          settings_json: |
+            {
+              "coreTools": [
+                "run_shell_command(echo)",
+                "run_shell_command(gh issue list)"
+              ]
+            }
+          prompt: |
+            You are an expert GitHub issue triaging bot. Your task is to analyze clusters of potential duplicate issues and determine which ones are duplicates.
+
+            You will be given a JSON object containing clusters of issue numbers that are potentially duplicates.
+
+            **Potential Duplicate Clusters (JSON format):**
+            ${{ env.POTENTIAL_DUPLICATES }}
+
+            **Instructions:**
+
+            1.  **Iterate through each cluster** in the `potential_duplicate_clusters` array.
+            2.  For each cluster, **fetch the full content (title and body) of all issues** in that cluster using the `gh issue list` command.
+            3.  **Analyze the full content** to determine if they are truly duplicates.
+            4.  If they are duplicates, **select one issue as the "canonical" issue** (e.g., the oldest or most detailed one).
+            5.  **Respond with a JSON object** containing an array of objects, where each object represents a confirmed duplicate cluster, with the canonical issue and a list of duplicates to mark.
+
+            **JSON Output Format:**
+            ```json
+            {
+              "confirmed_duplicate_clusters": [
+                {
+                  "canonical_issue": 123,
+                  "duplicates_to_mark": [456, 789]
+                }
+              ]
+            }
+            ```
+
+            If no duplicate clusters are confirmed, respond with an empty array: `{"confirmed_duplicate_clusters": []}`.
+
+            Your response must be only the JSON object and nothing else.
+      - name: Mark Duplicates
+        if: steps.gemini_analyze.outputs.result != '' && steps.gemini_analyze.outputs.result != '{"confirmed_duplicate_clusters":[]}'
+        env:
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+          CLUSTERS: ${{ steps.gemini_analyze.outputs.result }}
+        run: |
+          if [ "${{ github.event.inputs.dry-run }}" == 'true' ]; then
+            echo "🌵 DRY-RUN MODE: No issues will be modified."
+            echo "The following duplicate clusters would have been processed:"
+            echo "$CLUSTERS" | jq '.'
+          else
+            echo "🚨 LIVE MODE: Issues will be commented on and labeled."
+            echo "$CLUSTERS" | jq -c '.confirmed_duplicate_clusters[]' | while read -r cluster; do
+              CANONICAL_ISSUE=$(echo "$cluster" | jq -r '.canonical_issue')
+              echo "$cluster" | jq -c '.duplicates_to_mark[]' | while read -r issue_to_mark; do
+                echo "Processing duplicate issue #$issue_to_mark, canonical issue #$CANONICAL_ISSUE"
+                gh issue comment "$issue_to_mark" --repo "${{ github.repository }}" --body "🤖 This issue might be a duplicate of #${CANONICAL_ISSUE}. I'm tagging it for a human to review. 🧐"
+                gh issue edit "$issue_to_mark" --repo "${{ github.repository }}" --add-label "kind/duplicate,status/need-review"
+              done
+            done
+          fi
