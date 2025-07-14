@@ -25,6 +25,7 @@ import {
   EVENT_CLI_CONFIG,
   EVENT_TOOL_CALL,
   EVENT_USER_PROMPT,
+  EVENT_FLASH_FALLBACK,
 } from './constants.js';
 import {
   logApiRequest,
@@ -32,6 +33,7 @@ import {
   logCliConfiguration,
   logUserPrompt,
   logToolCall,
+  logFlashFallback,
 } from './loggers.js';
 import {
   ApiRequestEvent,
@@ -40,6 +42,7 @@ import {
   ToolCallDecision,
   ToolCallEvent,
   UserPromptEvent,
+  FlashFallbackEvent,
 } from './types.js';
 import * as metrics from './metrics.js';
 import * as sdk from './sdk.js';
@@ -347,6 +350,29 @@ describe('loggers', () => {
           'event.timestamp': '2025-01-01T00:00:00.000Z',
           model: 'test-model',
           prompt_id: 'prompt-id-6',
+        },
+      });
+    });
+  });
+
+  describe('logFlashFallback', () => {
+    const mockConfig = {
+      getSessionId: () => 'test-session-id',
+      getUsageStatisticsEnabled: () => true,
+    } as unknown as Config;
+
+    it('should log flash fallback event', () => {
+      const event = new FlashFallbackEvent(AuthType.USE_VERTEX_AI);
+
+      logFlashFallback(mockConfig, event);
+
+      expect(mockLogger.emit).toHaveBeenCalledWith({
+        body: 'Switching to flash as Fallback.',
+        attributes: {
+          'session.id': 'test-session-id',
+          'event.name': EVENT_FLASH_FALLBACK,
+          'event.timestamp': '2025-01-01T00:00:00.000Z',
+          auth_type: 'vertex-ai',
         },
       });
     });

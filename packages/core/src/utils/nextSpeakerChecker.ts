@@ -6,6 +6,7 @@
 
 import type { Content, SchemaUnion } from '@google/genai';
 import { Type } from '@google/genai';
+import { DEFAULT_GEMINI_FLASH_MODEL } from '../config/models.js';
 import type { GeminiClient } from '../core/client.js';
 import type { GeminiChat } from '../core/geminiChat.js';
 import { isFunctionResponse } from './messageInspectors.js';
@@ -132,6 +133,7 @@ export async function checkNextSpeaker(
       contents,
       RESPONSE_SCHEMA,
       abortSignal,
+      DEFAULT_GEMINI_FLASH_MODEL,
     )) as unknown as NextSpeakerResponse;
 
     if (

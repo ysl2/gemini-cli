@@ -21,6 +21,12 @@ import { useKeypress } from '../hooks/useKeypress.js';
 import { isAtCommand, isSlashCommand } from '../utils/commandUtils.js';
 import type { CommandContext, SlashCommand } from '../commands/types.js';
 import type { Config } from '@google/gemini-cli-core';
+import {
+  clipboardHasImage,
+  saveClipboardImage,
+  cleanupOldClipboardImages,
+} from '../utils/clipboardUtils.js';
+import * as path from 'path';
 
 export interface InputPromptProps {
   buffer: TextBuffer;
@@ -54,7 +60,6 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
   setShellModeActive,
 }) => {
   const [justNavigatedHistory, setJustNavigatedHistory] = useState(false);
-
   const completion = useCompletion(
     buffer.text,
     config.getTargetDir(),
@@ -180,6 +185,54 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
     [resetCompletionState, buffer, completionSuggestions, slashCommands],
   );
 
+  // Handle clipboard image pasting with Ctrl+V
+  const handleClipboardImage = useCallback(async () => {
+    try {
+      if (await clipboardHasImage()) {
+        const imagePath = await saveClipboardImage(config.getTargetDir());
+        if (imagePath) {
+          // Clean up old images
+          cleanupOldClipboardImages(config.getTargetDir()).catch(() => {
+            // Ignore cleanup errors
+          });
+
+          // Get relative path from current directory
+          const relativePath = path.relative(config.getTargetDir(), imagePath);
+
+          // Insert @path reference at cursor position
+          const insertText = `@${relativePath}`;
+          const currentText = buffer.text;
+          const [row, col] = buffer.cursor;
+
+          // Calculate offset from row/col
+          let offset = 0;
+          for (let i = 0; i < row; i++) {
+            offset += buffer.lines[i].length + 1; // +1 for newline
+          }
+          offset += col;
+
+          // Add spaces around the path if needed
+          let textToInsert = insertText;
+          const charBefore = offset > 0 ? currentText[offset - 1] : '';
+          const charAfter =
+            offset < currentText.length ? currentText[offset] : '';
+
+          if (charBefore && charBefore !== ' ' && charBefore !== '\n') {
+            textToInsert = ' ' + textToInsert;
+          }
+          if (!charAfter || (charAfter !== ' ' && charAfter !== '\n')) {
+            textToInsert = textToInsert + ' ';
+          }
+
+          // Insert at cursor position
+          buffer.replaceRangeByOffset(offset, offset, textToInsert);
+        }
+      }
+    } catch (error) {
+      console.error('Error handling clipboard image:', error);
+    }
+  }, [buffer, config]);
+
   const handleInput = useCallback(
     (key: Key) => {
       if (!focus) {
@@ -278,7 +331,15 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
 
         if (key.name === 'return' && !key.ctrl && !key.meta && !key.paste) {
           if (buffer.text.trim()) {
-            handleSubmitAndClear(buffer.text);
+            const [row, col] = buffer.cursor;
+            const line = buffer.lines[row];
+            const charBefore = col > 0 ? cpSlice(line, col - 1, col) : '';
+            if (charBefore === '\\') {
+              buffer.backspace();
+              buffer.newline();
+            } else {
+              handleSubmitAndClear(buffer.text);
+            }
           }
           return;
         }
@@ -317,6 +378,12 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
         return;
       }
 
+      // Ctrl+V for clipboard image paste
+      if (key.ctrl && key.name === 'v') {
+        handleClipboardImage();
+        return;
+      }
+
       // Fallback to the text buffer's default input handling for all other keys
       buffer.handleInput(key);
     },
@@ -331,6 +398,7 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
       handleAutocomplete,
       handleSubmitAndClear,
       shellHistory,
+      handleClipboardImage,
     ],
   );
 
@@ -374,6 +442,7 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
 
               if (visualIdxInRenderedSet === cursorVisualRow) {
                 const relativeVisualColForHighlight = cursorVisualColAbsolute;
+
                 if (relativeVisualColForHighlight >= 0) {
                   if (relativeVisualColForHighlight < cpLen(display)) {
                     const charToHighlight =

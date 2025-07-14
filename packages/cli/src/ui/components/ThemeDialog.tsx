@@ -5,7 +5,7 @@
  */
 
 import type React from 'react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { Colors } from '../colors.js';
 import { themeManager, DEFAULT_THEME } from '../themes/theme-manager.js';
@@ -62,19 +62,25 @@ export function ThemeDialog({
     { label: 'System Settings', value: SettingScope.System },
   ];
 
-  const handleThemeSelect = (themeName: string) => {
-    onSelect(themeName, selectedScope);
-  };
+  const handleThemeSelect = useCallback(
+    (themeName: string) => {
+      onSelect(themeName, selectedScope);
+    },
+    [onSelect, selectedScope],
+  );
 
-  const handleScopeHighlight = (scope: SettingScope) => {
+  const handleScopeHighlight = useCallback((scope: SettingScope) => {
     setSelectedScope(scope);
     setSelectInputKey(Date.now());
-  };
+  }, []);
 
-  const handleScopeSelect = (scope: SettingScope) => {
-    handleScopeHighlight(scope);
-    setFocusedSection('theme'); // Reset focus to theme section
-  };
+  const handleScopeSelect = useCallback(
+    (scope: SettingScope) => {
+      handleScopeHighlight(scope);
+      setFocusedSection('theme'); // Reset focus to theme section
+    },
+    [handleScopeHighlight],
+  );
 
   const [focusedSection, setFocusedSection] = useState<'theme' | 'scope'>(
     'theme',
@@ -198,6 +204,8 @@ export function ThemeDialog({
             onSelect={handleThemeSelect}
             onHighlight={onHighlight}
             isFocused={currenFocusedSection === 'theme'}
+            maxItemsToShow={8}
+            showScrollArrows={true}
           />
 
           {/* Scope Selection */}
