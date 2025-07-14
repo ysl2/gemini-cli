@@ -5,8 +5,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import type {
-  DOMElement,
+import {
+  type DOMElement,
   Box,
   measureElement,
   Static,
@@ -48,8 +48,8 @@ import { HistoryItemDisplay } from './components/HistoryItemDisplay.js';
 import { ContextSummaryDisplay } from './components/ContextSummaryDisplay.js';
 import { useHistory } from './hooks/useHistoryManager.js';
 import process from 'node:process';
-import type {
-  EditorType,
+import {
+  type EditorType,
   getErrorMessage,
   type Config,
   getAllGeminiMdFilenames,
