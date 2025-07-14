@@ -150,7 +150,7 @@ export function RadioButtonSelect<T>({
       textColor = Colors.Gray;
     }
 
-    const numberPrefix = showNumbers ? `[${itemIndex + 1}] ` : '';
+    const numberPrefix = showNumbers ? `${itemIndex + 1}.` : '';
     const indicator = isSelected ? '●' : '○';
 
     const content = itemWithThemeProps.themeNameDisplay ? (
@@ -164,13 +164,11 @@ export function RadioButtonSelect<T>({
 
     return (
       <Box>
-        <Box minWidth={showNumbers ? 4 : 0}>
+        <Text color={isSelected ? Colors.AccentGreen : Colors.Foreground}>
+          {indicator}
+        </Text>
+        <Box marginLeft={1} marginRight={1}>
           <Text color={Colors.Gray}>{numberPrefix}</Text>
-        </Box>
-        <Box minWidth={2}>
-          <Text color={isSelected ? Colors.AccentGreen : Colors.Foreground}>
-            {indicator}
-          </Text>
         </Box>
         <Text color={textColor} wrap="truncate">
           {content}
