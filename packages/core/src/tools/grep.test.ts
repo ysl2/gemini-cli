@@ -10,6 +10,7 @@ import { GrepTool } from './grep.js';
 import path from 'path';
 import fs from 'fs/promises';
 import os from 'os';
+import type { Config } from '../config/config.js';
 
 // Mock the child_process module to control grep/git grep behavior
 vi.mock('child_process', () => ({
@@ -31,9 +32,13 @@ describe('GrepTool', () => {
   let grepTool: GrepTool;
   const abortSignal = new AbortController().signal;
 
+  const mockConfig = {
+    getTargetDir: () => tempRootDir,
+  } as unknown as Config;
+
   beforeEach(async () => {
     tempRootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'grep-tool-root-'));
-    grepTool = new GrepTool(tempRootDir);
+    grepTool = new GrepTool(mockConfig);
 
     // Create some test files and directories
     await fs.writeFile(
