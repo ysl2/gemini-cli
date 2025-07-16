@@ -42,8 +42,8 @@ import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { DEFAULT_GEMINI_FLASH_MODEL } from '../config/models.js';
 import { LoopDetectionService } from '../services/loopDetectionService.js';
 
-const PROMPT_CHECK_AFTER_TURNS = 10;
-const PROMPT_CHECK_INTERVAL = 3;
+const LLM_CHECK_AFTER_TURNS = 10;
+const LLM_CHECK_INTERVAL = 3;
 
 function isThinkingSupported(model: string) {
   if (model.startsWith('gemini-2.5')) return true;
@@ -296,8 +296,8 @@ export class GeminiClient {
     }
 
     if (
-      this.turnsInCurrentPrompt >= PROMPT_CHECK_AFTER_TURNS &&
-      this.turnsInCurrentPrompt % PROMPT_CHECK_INTERVAL === 0
+      this.turnsInCurrentPrompt >= LLM_CHECK_AFTER_TURNS &&
+      this.turnsInCurrentPrompt % LLM_CHECK_INTERVAL === 0
     ) {
       this.loopDetector.checkForLoopWithLLM(signal, loopAbortController);
     }
