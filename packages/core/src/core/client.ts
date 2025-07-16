@@ -42,6 +42,9 @@ import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { DEFAULT_GEMINI_FLASH_MODEL } from '../config/models.js';
 import { LoopDetectionService } from '../services/loopDetectionService.js';
 
+const PROMPT_CHECK_AFTER_TURNS = 10;
+const PROMPT_CHECK_INTERVAL = 3;
+
 function isThinkingSupported(model: string) {
   if (model.startsWith('gemini-2.5')) return true;
   return false;
@@ -103,6 +106,7 @@ export class GeminiClient {
 
   private readonly loopDetector: LoopDetectionService;
   private lastPromptId?: string;
+  private turnsInCurrentPrompt = 0;
 
   constructor(private config: Config) {
     if (config.getProxy()) {
@@ -110,7 +114,7 @@ export class GeminiClient {
     }
 
     this.embeddingModel = config.getEmbeddingModel();
-    this.loopDetector = new LoopDetectionService(config);
+    this.loopDetector = new LoopDetectionService(config, this);
   }
 
   async initialize(contentGeneratorConfig: ContentGeneratorConfig) {
@@ -277,10 +281,27 @@ export class GeminiClient {
     turns: number = this.MAX_TURNS,
     originalModel?: string,
   ): AsyncGenerator<ServerGeminiStreamEvent, Turn> {
+    const loopAbortController = new AbortController();
+    const combinedSignal = AbortSignal.any([
+      signal,
+      loopAbortController.signal,
+    ]);
+
     if (this.lastPromptId !== prompt_id) {
       this.loopDetector.reset();
       this.lastPromptId = prompt_id;
+      this.turnsInCurrentPrompt = 0;
+    } else {
+      this.turnsInCurrentPrompt++;
     }
+
+    if (
+      this.turnsInCurrentPrompt >= PROMPT_CHECK_AFTER_TURNS &&
+      this.turnsInCurrentPrompt % PROMPT_CHECK_INTERVAL === 0
+    ) {
+      this.loopDetector.checkForLoopWithLLM(signal, loopAbortController);
+    }
+
     this.sessionTurnCount++;
     if (
       this.config.getMaxSessionTurns() > 0 &&
@@ -304,7 +325,7 @@ export class GeminiClient {
       yield { type: GeminiEventType.ChatCompressed, value: compressed };
     }
     const turn = new Turn(this.getChat(), prompt_id);
-    const resultStream = turn.run(request, signal);
+    const resultStream = turn.run(request, combinedSignal);
     for await (const event of resultStream) {
       if (this.loopDetector.addAndCheck(event)) {
         yield { type: GeminiEventType.LoopDetected };
@@ -312,6 +333,16 @@ export class GeminiClient {
       }
       yield event;
     }
+
+    if (signal.aborted) {
+      yield { type: GeminiEventType.UserCancelled };
+      return turn;
+    }
+    if (loopAbortController.signal.aborted) {
+      yield { type: GeminiEventType.LoopDetected };
+      return turn;
+    }
+
     if (!turn.pendingToolCalls.length && signal && !signal.aborted) {
       // Check if model was switched during the call (likely due to quota error)
       const currentModel = this.config.getModel();

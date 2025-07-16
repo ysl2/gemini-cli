@@ -229,7 +229,6 @@ export class Turn {
         throw error;
       }
       if (signal.aborted) {
-        yield { type: GeminiEventType.UserCancelled };
         // Regular cancellation error, fail gracefully.
         return;
       }

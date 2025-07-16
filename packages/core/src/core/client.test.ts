@@ -654,6 +654,7 @@ describe('Gemini Client (client.ts)', () => {
 
       const mockGenerator: Partial<ContentGenerator> = {
         countTokens: vi.fn().mockResolvedValue({ totalTokens: 0 }),
+        generateContent: mockGenerateContentFn,
       };
       client['contentGenerator'] = mockGenerator as ContentGenerator;
 
@@ -703,6 +704,7 @@ describe('Gemini Client (client.ts)', () => {
 
       const mockGenerator: Partial<ContentGenerator> = {
         countTokens: vi.fn().mockResolvedValue({ totalTokens: 0 }),
+        generateContent: mockGenerateContentFn,
       };
       client['contentGenerator'] = mockGenerator as ContentGenerator;
 
@@ -795,6 +797,7 @@ describe('Gemini Client (client.ts)', () => {
 
       const mockGenerator: Partial<ContentGenerator> = {
         countTokens: vi.fn().mockResolvedValue({ totalTokens: 0 }),
+        generateContent: mockGenerateContentFn,
       };
       client['contentGenerator'] = mockGenerator as ContentGenerator;
 
@@ -856,6 +859,7 @@ describe('Gemini Client (client.ts)', () => {
 
       const mockGenerator: Partial<ContentGenerator> = {
         countTokens: vi.fn().mockResolvedValue({ totalTokens: 0 }),
+        generateContent: mockGenerateContentFn,
       };
       client['contentGenerator'] = mockGenerator as ContentGenerator;
 

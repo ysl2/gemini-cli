@@ -14,6 +14,7 @@ import {
 import { ServerGeminiStreamEvent } from '../core/turn.js';
 import { Config } from '../config/config.js';
 import * as loggers from '../telemetry/loggers.js';
+import { GeminiClient } from '../core/client.js';
 
 vi.mock('../telemetry/loggers.js', () => ({
   logLoopDetected: vi.fn(),
@@ -25,12 +26,17 @@ const CONTENT_LOOP_THRESHOLD = 10;
 describe('LoopDetectionService', () => {
   let service: LoopDetectionService;
   let mockConfig: Config;
+  let mockClient: GeminiClient;
 
   beforeEach(() => {
     mockConfig = {
       getTelemetryEnabled: () => true,
     } as unknown as Config;
-    service = new LoopDetectionService(mockConfig);
+    mockClient = {
+      getHistory: vi.fn(),
+      generateJson: vi.fn(),
+    } as unknown as GeminiClient;
+    service = new LoopDetectionService(mockConfig, mockClient);
     vi.clearAllMocks();
   });
 
