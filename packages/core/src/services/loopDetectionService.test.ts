@@ -33,7 +33,7 @@ describe('LoopDetectionService', () => {
       getTelemetryEnabled: () => true,
     } as unknown as Config;
     mockClient = {
-      getHistory: vi.fn(),
+      getHistory: vi.fn().mockReturnValue([]),
       generateJson: vi.fn(),
     } as unknown as GeminiClient;
     service = new LoopDetectionService(mockConfig, mockClient);
@@ -312,6 +312,40 @@ describe('LoopDetectionService', () => {
       } as unknown as ServerGeminiStreamEvent;
       expect(service.addAndCheck(otherEvent)).toBe(false);
       expect(service.addAndCheck(otherEvent)).toBe(false);
+    });
+  });
+
+  describe('checkForLoopWithLLM', () => {
+    it('should call generateJson with the correct parameters', async () => {
+      const abortController = new AbortController();
+      vi.mocked(mockClient.generateJson).mockResolvedValue({ is_loop: false });
+      await service.checkForLoopWithLLM(
+        new AbortController().signal,
+        abortController,
+      );
+      expect(mockClient.generateJson).toHaveBeenCalledTimes(1);
+    });
+
+    it('should abort the controller when a loop is detected', async () => {
+      const abortController = new AbortController();
+      vi.mocked(mockClient.generateJson).mockResolvedValue({ is_loop: true });
+      await service.checkForLoopWithLLM(
+        new AbortController().signal,
+        abortController,
+      );
+      expect(abortController.signal.aborted).toBe(true);
+      expect(loggers.logLoopDetected).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not abort the controller when no loop is detected', async () => {
+      const abortController = new AbortController();
+      vi.mocked(mockClient.generateJson).mockResolvedValue({ is_loop: false });
+      await service.checkForLoopWithLLM(
+        new AbortController().signal,
+        abortController,
+      );
+      expect(abortController.signal.aborted).toBe(false);
+      expect(loggers.logLoopDetected).not.toHaveBeenCalled();
     });
   });
 });
