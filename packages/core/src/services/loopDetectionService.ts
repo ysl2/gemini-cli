@@ -128,11 +128,12 @@ export class LoopDetectionService {
     streamSignal: AbortSignal,
     abortController: AbortController,
   ) {
-    const recentHistory = this.client!.getHistory().slice(
-      -LLM_LOOP_CHECK_HISTORY_COUNT,
-    );
+    try {
+      const recentHistory = this.client!.getHistory().slice(
+        -LLM_LOOP_CHECK_HISTORY_COUNT,
+      );
 
-    const prompt = `You are an expert at detecting conversation loops.
+      const prompt = `You are an expert at detecting conversation loops.
 The following is the recent history of a conversation with an AI assistant.
 Please analyze it to determine if the conversation is stuck in a repetitive loop.
 A loop is defined as the AI assistant making a sequence of 5 or more tool calls that are repetitive and not making progress.
@@ -144,30 +145,34 @@ Respond with JSON. The JSON object should have a single key "is_loop" with a boo
 Conversation history:
 ${JSON.stringify(recentHistory, null, 2)}
 `;
-    const schema = {
-      type: 'object',
-      properties: {
-        is_loop: {
-          type: 'boolean',
-          description: 'Whether the conversation is in a loop.',
+      const schema = {
+        type: 'object',
+        properties: {
+          is_loop: {
+            type: 'boolean',
+            description: 'Whether the conversation is in a loop.',
+          },
         },
-      },
-      required: ['is_loop'],
-    };
+        required: ['is_loop'],
+      };
 
-    const result = await this.client.generateJson(
-      [{ role: 'user', parts: [{ text: prompt }] }],
-      schema,
-      streamSignal,
-      DEFAULT_GEMINI_FLASH_MODEL,
-    );
-
-    if (typeof result.is_loop === 'boolean' && result.is_loop) {
-      logLoopDetected(
-        this.config,
-        new LoopDetectedEvent(LoopType.LLM_DETECTED_LOOP),
+      const result = await this.client.generateJson(
+        [{ role: 'user', parts: [{ text: prompt }] }],
+        schema,
+        streamSignal,
+        DEFAULT_GEMINI_FLASH_MODEL,
       );
-      abortController.abort();
+
+      if (typeof result.is_loop === 'boolean' && result.is_loop) {
+        logLoopDetected(
+          this.config,
+          new LoopDetectedEvent(LoopType.LLM_DETECTED_LOOP),
+        );
+        abortController.abort();
+      }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (e) {
+      // Do nothing, treat it as a non-loop.
     }
   }
 
