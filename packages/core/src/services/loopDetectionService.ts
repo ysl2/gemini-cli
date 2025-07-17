@@ -64,7 +64,6 @@ export class LoopDetectionService {
       case GeminiEventType.Content:
         return this.checkContentLoop(event.value);
       default:
-        this.reset();
         return false;
     }
   }
