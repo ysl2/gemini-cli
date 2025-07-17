@@ -22,11 +22,11 @@ describe('useConsoleMessages', () => {
   const useTestableConsoleMessages = () => {
     const { handleNewMessage, ...rest } = useConsoleMessages();
     const log = useCallback(
-      (content: string) => handleNewMessage({ type: 'log', content }),
+      (content: string) => handleNewMessage({ type: 'log', content, count: 1 }),
       [handleNewMessage],
     );
     const error = useCallback(
-      (content: string) => handleNewMessage({ type: 'error', content }),
+      (content: string) => handleNewMessage({ type: 'error', content, count: 1 }),
       [handleNewMessage],
     );
     return {
