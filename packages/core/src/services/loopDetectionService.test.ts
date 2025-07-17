@@ -4,16 +4,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { LoopDetectionService } from './loopDetectionService.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Config } from '../config/config.js';
+import { GeminiClient } from '../core/client.js';
 import {
   GeminiEventType,
   ServerGeminiContentEvent,
+  ServerGeminiStreamEvent,
   ServerGeminiToolCallRequestEvent,
 } from '../core/turn.js';
-import { ServerGeminiStreamEvent } from '../core/turn.js';
-import { Config } from '../config/config.js';
 import * as loggers from '../telemetry/loggers.js';
+import { LoopDetectedEvent, LoopType } from '../telemetry/types.js';
+import { LoopDetectionService } from './loopDetectionService.js';
 
 vi.mock('../telemetry/loggers.js', () => ({
   logLoopDetected: vi.fn(),
@@ -328,5 +330,113 @@ describe('LoopDetectionService', () => {
       expect(service.addAndCheck(otherEvent)).toBe(false);
       expect(service.addAndCheck(otherEvent)).toBe(false);
     });
+  });
+});
+
+describe('LoopDetectionService LLM Checks', () => {
+  let service: LoopDetectionService;
+  let mockConfig: Config;
+  let mockGeminiClient: GeminiClient;
+  let abortController: AbortController;
+
+  beforeEach(() => {
+    mockGeminiClient = {
+      getHistory: vi.fn().mockReturnValue([]),
+      generateJson: vi.fn(),
+    } as unknown as GeminiClient;
+
+    mockConfig = {
+      getGeminiClient: () => mockGeminiClient,
+      getDebugMode: () => false,
+      getTelemetryEnabled: () => true,
+    } as unknown as Config;
+
+    service = new LoopDetectionService(mockConfig);
+    abortController = new AbortController();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const advanceTurns = async (count: number) => {
+    for (let i = 0; i < count; i++) {
+      await service.turnStarted(abortController.signal);
+    }
+  };
+
+  it('should not trigger LLM check before LLM_CHECK_AFTER_TURNS', async () => {
+    await advanceTurns(9);
+    expect(mockGeminiClient.generateJson).not.toHaveBeenCalled();
+  });
+
+  it('should trigger LLM check on the 10th turn', async () => {
+    mockGeminiClient.generateJson = vi
+      .fn()
+      .mockResolvedValue({ confidence: 0.1 });
+    await advanceTurns(10);
+    expect(mockGeminiClient.generateJson).toHaveBeenCalledTimes(1);
+  });
+
+  it('should detect a cognitive loop when confidence is high', async () => {
+    mockGeminiClient.generateJson = vi
+      .fn()
+      .mockResolvedValue({ confidence: 0.85, reasoning: 'Repetitive actions' });
+    await advanceTurns(10);
+
+    mockGeminiClient.generateJson = vi
+      .fn()
+      .mockResolvedValue({ confidence: 0.95, reasoning: 'Repetitive actions' });
+    await service.turnStarted(abortController.signal);
+
+    // This is turn 12. The first check was on turn 10.
+    // The confidence of 0.85 will result in a low interval.
+    // Let's check the result of the next turn.
+    const finalResult = await service.turnStarted(abortController.signal);
+
+    // The check at turn 10 will have set the interval low.
+    // The check at turn 11 will use that low interval.
+    // The check at turn 12 should detect the loop.
+    expect(finalResult).toBe(true);
+    expect(loggers.logLoopDetected).toHaveBeenCalledWith(
+      mockConfig,
+      new LoopDetectedEvent(LoopType.LLM_DETECTED_LOOP),
+    );
+  });
+
+  it('should not detect a loop when confidence is low', async () => {
+    mockGeminiClient.generateJson = vi
+      .fn()
+      .mockResolvedValue({ confidence: 0.5, reasoning: 'Looks okay' });
+    await advanceTurns(10);
+    const result = await service.turnStarted(abortController.signal);
+    expect(result).toBe(false);
+    expect(loggers.logLoopDetected).not.toHaveBeenCalled();
+  });
+
+  it('should adjust the check interval based on confidence', async () => {
+    // Confidence is 0.0, so interval should be MAX_LLM_CHECK_INTERVAL (10)
+    mockGeminiClient.generateJson = vi
+      .fn()
+      .mockResolvedValue({ confidence: 0.0 });
+    await advanceTurns(10); // First check at turn 10
+    expect(mockGeminiClient.generateJson).toHaveBeenCalledTimes(1);
+
+    await advanceTurns(9); // Advance to turn 19
+    expect(mockGeminiClient.generateJson).toHaveBeenCalledTimes(1);
+
+    await service.turnStarted(abortController.signal); // Turn 20
+    expect(mockGeminiClient.generateJson).toHaveBeenCalledTimes(2);
+  });
+
+  it('should handle errors from generateJson gracefully', async () => {
+    mockGeminiClient.generateJson = vi
+      .fn()
+      .mockRejectedValue(new Error('API error'));
+    await advanceTurns(10);
+    const result = await service.turnStarted(abortController.signal);
+    expect(result).toBe(false);
+    expect(loggers.logLoopDetected).not.toHaveBeenCalled();
   });
 });
