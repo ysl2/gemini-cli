@@ -17,8 +17,8 @@ const CONTENT_LOOP_THRESHOLD = 10;
 const LLM_LOOP_CHECK_HISTORY_COUNT = 20;
 const LLM_CHECK_AFTER_TURNS = 30;
 const DEFAULT_LLM_CHECK_INTERVAL = 3;
-const MIN_LLM_CHECK_INTERVAL = 1;
-const MAX_LLM_CHECK_INTERVAL = 10;
+const MIN_LLM_CHECK_INTERVAL = 5;
+const MAX_LLM_CHECK_INTERVAL = 15;
 
 const SENTENCE_ENDING_PUNCTUATION_REGEX = /[.!?]+(?=\s|$)/;
 
@@ -173,37 +173,32 @@ Cognitive Loop: The assistant seems unable to determine the next logical step. I
 Crucially, differentiate between a true unproductive state and legitimate, incremental progress.
 For example, a series of 'replace' or 'write_file' tool calls that make small, distinct changes to the same file (like adding docstrings to functions one by one) is considered forward progress and is NOT a loop. A loop would be repeatedly replacing the same text with the same content, or cycling between a small set of files with no net change.
 
-Please analyze the conversation history to determine the possibility that the conversation is stuck in a repetitive, non-productive state.
-
-**Conversation History:**:
-${JSON.stringify(recentHistory, null, 2)}
-`;
+Please analyze the conversation history to determine the possibility that the conversation is stuck in a repetitive, non-productive state.`;
+    const contents = [
+      ...recentHistory,
+      { role: 'user', parts: [{ text: prompt }] },
+    ];
     const schema: SchemaUnion = {
       type: Type.OBJECT,
       properties: {
-        confidence: {
-          type: Type.NUMBER,
-          description:
-            'A number between 0.0 and 1.0 representing your confidence that the conversation is in an unproductive state.',
-        },
         reasoning: {
           type: Type.STRING,
           description:
             'Your reasoning on if the conversation is looping without forward progress.',
         },
+        confidence: {
+          type: Type.NUMBER,
+          description:
+            'A number between 0.0 and 1.0 representing your confidence that the conversation is in an unproductive state.',
+        },
       },
-      required: ['confidence', 'reasoning'],
+      required: ['reasoning', 'confidence'],
     };
     let result;
     try {
       result = await this.config
         .getGeminiClient()
-        .generateJson(
-          [{ role: 'user', parts: [{ text: prompt }] }],
-          schema,
-          signal,
-          DEFAULT_GEMINI_FLASH_MODEL,
-        );
+        .generateJson(contents, schema, signal, DEFAULT_GEMINI_FLASH_MODEL);
     } catch (e) {
       // Do nothing, treat it as a non-loop.
       this.config.getDebugMode() ? console.error(e) : console.debug(e);
@@ -212,6 +207,9 @@ ${JSON.stringify(recentHistory, null, 2)}
 
     if (typeof result.confidence === 'number') {
       if (result.confidence > 0.9) {
+        if (typeof result.reasoning === 'string' && result.reasoning) {
+          console.warn(result.reasoning);
+        }
         logLoopDetected(
           this.config,
           new LoopDetectedEvent(LoopType.LLM_DETECTED_LOOP),
