@@ -41,7 +41,7 @@ function consoleMessagesReducer(
           // the change, preventing mutation of the existing state object.
           newMessages[newMessages.length - 1] = {
             ...lastMessage,
-            count: (lastMessage.count || 1) + 1,
+            count: lastMessage.count + 1,
           };
         } else {
           newMessages.push({ ...queuedMessage, count: 1 });
