@@ -9,6 +9,7 @@ import { GeminiEventType, ServerGeminiStreamEvent } from '../core/turn.js';
 import { logLoopDetected } from '../telemetry/loggers.js';
 import { LoopDetectedEvent, LoopType } from '../telemetry/types.js';
 import { Config, DEFAULT_GEMINI_FLASH_MODEL } from '../config/config.js';
+import { SchemaUnion, Type } from '@google/genai';
 
 const TOOL_CALL_LOOP_THRESHOLD = 5;
 const CONTENT_LOOP_THRESHOLD = 10;
@@ -154,20 +155,30 @@ A loop is defined as the AI assistant making a sequence of 5 or more tool calls 
 This can be a single tool call repeated 5 times, or a repeating pattern of tool calls (e.g., A, B, A, B, A, B, A, B, A, B).
 
 Analyze the tool calls made by the model in the conversation history to identify such patterns.
-Respond with JSON. The JSON object should have a single key "is_loop" with a boolean value.
+Respond with JSON. The JSON object should have a single key "loopDetected" with a boolean value.
 
 Conversation history:
 ${JSON.stringify(recentHistory, null, 2)}
 `;
-    const schema = {
-      type: 'object',
+    const schema: SchemaUnion = {
+      type: Type.OBJECT,
       properties: {
-        is_loop: {
-          type: 'boolean',
-          description: 'Whether the conversation is in a loop.',
+        loopDetected: {
+          type: Type.BOOLEAN,
+          description:
+            'Whether the conversation is looping and not making forward progress.',
+        },
+        reasoning: {
+          type: Type.STRING,
+          description:
+            'Your reasoning on if the conversation is looping without forward progress',
+        },
+        confidence: {
+          type: Type.NUMBER,
+          description: 'Confidence interval between 0 and 1.',
         },
       },
-      required: ['is_loop'],
+      required: ['loopDetected', 'reasoning', 'confidence'],
     };
     let result;
     try {
@@ -179,9 +190,10 @@ ${JSON.stringify(recentHistory, null, 2)}
           signal,
           DEFAULT_GEMINI_FLASH_MODEL,
         );
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      console.log(result);
     } catch (e) {
       // Do nothing, treat it as a non-loop.
+      this.config.getDebugMode() ? console.error(e) : console.debug(e);
       return false;
     }
 
