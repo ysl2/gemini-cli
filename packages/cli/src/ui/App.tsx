@@ -405,7 +405,6 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     openEditorDialog,
     toggleCorgiMode,
     () => toggleVimModeRef.current?.(), // Wrapper function that calls the ref
-    showToolDescriptions,
     setQuittingMessages,
     openPrivacyNotice,
   );

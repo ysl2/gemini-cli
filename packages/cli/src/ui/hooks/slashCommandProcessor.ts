@@ -40,7 +40,6 @@ export const useSlashCommandProcessor = (
   openEditorDialog: () => void,
   toggleCorgiMode: () => void,
   toggleVimMode: () => void,
-  showToolDescriptions: boolean = false,
   setQuittingMessages: (message: HistoryItem[]) => void,
   openPrivacyNotice: () => void,
 ) => {
