@@ -16,7 +16,9 @@ const CONTENT_LOOP_THRESHOLD = 10;
 const LLM_LOOP_CHECK_HISTORY_COUNT = 20;
 
 const LLM_CHECK_AFTER_TURNS = 10;
-const LLM_CHECK_INTERVAL = 3;
+const DEFAULT_LLM_CHECK_INTERVAL = 3;
+const MIN_LLM_CHECK_INTERVAL = 1;
+const MAX_LLM_CHECK_INTERVAL = 10;
 
 const SENTENCE_ENDING_PUNCTUATION_REGEX = /[.!?]+(?=\s|$)/;
 
@@ -38,6 +40,8 @@ export class LoopDetectionService {
 
   // LLM loop track tracking
   private turnsInCurrentPrompt = 0;
+  private llmCheckInterval = DEFAULT_LLM_CHECK_INTERVAL;
+  private lastCheckTurn = 0;
 
   constructor(config: Config) {
     this.config = config;
@@ -68,13 +72,24 @@ export class LoopDetectionService {
     }
   }
 
+  /**
+   * Signals the start of a new turn in the conversation.
+   *
+   * This method increments the turn counter and, if specific conditions are met,
+   * triggers an LLM-based check to detect potential conversation loops. The check
+   * is performed periodically based on the `llmCheckInterval`.
+   *
+   * @param signal - An AbortSignal to allow for cancellation of the asynchronous LLM check.
+   * @returns A promise that resolves to `true` if a loop is detected, and `false` otherwise.
+   */
   async turnStarted(signal: AbortSignal) {
     this.turnsInCurrentPrompt++;
 
     if (
       this.turnsInCurrentPrompt >= LLM_CHECK_AFTER_TURNS &&
-      this.turnsInCurrentPrompt % LLM_CHECK_INTERVAL === 0
+      this.turnsInCurrentPrompt - this.lastCheckTurn >= this.llmCheckInterval
     ) {
+      this.lastCheckTurn = this.turnsInCurrentPrompt;
       return await this.checkForLoopWithLLM(signal);
     }
 
@@ -147,37 +162,44 @@ export class LoopDetectionService {
       .getHistory()
       .slice(-LLM_LOOP_CHECK_HISTORY_COUNT);
 
-    const prompt = `You are an expert at detecting conversation loops.
+    const prompt = `You are a sophisticated AI diagnostic agent specializing in identifying when a conversational AI is stuck in an unproductive state. Your task is to analyze the provided conversation history and determine if the assistant has ceased to make meaningful progress.
 The following is the recent history of a conversation with an AI assistant.
-Please analyze it to determine if the conversation is stuck in a repetitive loop.
-A loop is defined as the AI assistant making a sequence of 5 or more tool calls that are repetitive and not making progress.
-This can be a single tool call repeated 5 times, or a repeating pattern of tool calls (e.g., A, B, A, B, A, B, A, B, A, B).
+Please analyze it to determine the possibility that the conversation is stuck in a repetitive, non-productive state.
 
-Analyze the tool calls made by the model in the conversation history to identify such patterns.
-Respond with JSON. The JSON object should have a single key "loopDetected" with a boolean value.
+An unproductive state is characterized by one or more of the following patterns over the last 5 or more assistant turns:
 
-Conversation history:
+Repetitive Actions: The assistant repeats the same tool calls or conversational responses. This includes simple loops (e.g., tool_A, tool_A, tool_A) and alternating patterns (e.g., tool_A, tool_B, tool_A, tool_B).
+
+Stagnant Exploration: The assistant calls the same tools with arguments that are not meaningfully different, indicating it is not gathering new information or exploring new solution paths. For instance, re-running the exact same search query.
+
+Crucially, differentiate between a true unproductive state and legitimate, incremental progress.
+For example, a series of 'replace' or 'write_file' tool calls that make small, distinct changes to the same file (like adding docstrings to functions one by one) is considered forward progress and is NOT a loop. A loop would be repeatedly replacing the same text with the same content, or cycling between a small set of files with no net change.
+
+Analyze the conversation history to identify such patterns.
+Respond with a JSON object containing your assessment. The primary field is "confidence", which should be a probability score.
+
+**JSON Output Format:**:
+- "confidence": A number between 0.0 and 1.0 representing the probability that the conversation is in a loop.
+- "reasoning": A brief explanation for your analysis and confidence score.
+
+**Conversation History:**:
 ${JSON.stringify(recentHistory, null, 2)}
 `;
     const schema: SchemaUnion = {
       type: Type.OBJECT,
       properties: {
-        loopDetected: {
-          type: Type.BOOLEAN,
+        confidence: {
+          type: Type.NUMBER,
           description:
-            'Whether the conversation is looping and not making forward progress.',
+            'Probability that the conversation is looping without forward progress, between 0 and 1.',
         },
         reasoning: {
           type: Type.STRING,
           description:
             'Your reasoning on if the conversation is looping without forward progress',
         },
-        confidence: {
-          type: Type.NUMBER,
-          description: 'Confidence interval between 0 and 1.',
-        },
       },
-      required: ['loopDetected', 'reasoning', 'confidence'],
+      required: ['confidence', 'reasoning'],
     };
     let result;
     try {
@@ -189,19 +211,26 @@ ${JSON.stringify(recentHistory, null, 2)}
           signal,
           DEFAULT_GEMINI_FLASH_MODEL,
         );
-      console.log(result);
     } catch (e) {
       // Do nothing, treat it as a non-loop.
       this.config.getDebugMode() ? console.error(e) : console.debug(e);
       return false;
     }
 
-    if (typeof result.is_loop === 'boolean' && result.is_loop) {
-      logLoopDetected(
-        this.config,
-        new LoopDetectedEvent(LoopType.LLM_DETECTED_LOOP),
-      );
-      return true;
+    if (typeof result.confidence === 'number') {
+      if (result.confidence > 0.9) {
+        logLoopDetected(
+          this.config,
+          new LoopDetectedEvent(LoopType.LLM_DETECTED_LOOP),
+        );
+        return true;
+      } else {
+        this.llmCheckInterval = Math.round(
+          MIN_LLM_CHECK_INTERVAL +
+            (MAX_LLM_CHECK_INTERVAL - MIN_LLM_CHECK_INTERVAL) *
+              (1 - result.confidence),
+        );
+      }
     }
     return false;
   }
@@ -212,7 +241,7 @@ ${JSON.stringify(recentHistory, null, 2)}
   reset(): void {
     this.resetToolCallCount();
     this.resetSentenceCount();
-    this.resetTurns();
+    this.resetLlmCheckTracking();
   }
 
   private resetToolCallCount(): void {
@@ -226,7 +255,9 @@ ${JSON.stringify(recentHistory, null, 2)}
     this.partialContent = '';
   }
 
-  private resetTurns(): void {
+  private resetLlmCheckTracking(): void {
     this.turnsInCurrentPrompt = 0;
+    this.llmCheckInterval = DEFAULT_LLM_CHECK_INTERVAL;
+    this.lastCheckTurn = 0;
   }
 }
