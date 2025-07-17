@@ -281,7 +281,6 @@ export class GeminiClient {
       this.loopDetector.reset();
       this.lastPromptId = prompt_id;
     }
-
     this.sessionTurnCount++;
     if (
       this.config.getMaxSessionTurns() > 0 &&
@@ -320,7 +319,6 @@ export class GeminiClient {
       }
       yield event;
     }
-
     if (!turn.pendingToolCalls.length && signal && !signal.aborted) {
       // Check if model was switched during the call (likely due to quota error)
       const currentModel = this.config.getModel();
