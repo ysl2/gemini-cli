@@ -399,7 +399,10 @@ describe('LoopDetectionService LLM Checks', () => {
     expect(finalResult).toBe(true);
     expect(loggers.logLoopDetected).toHaveBeenCalledWith(
       mockConfig,
-      new LoopDetectedEvent(LoopType.LLM_DETECTED_LOOP),
+      expect.objectContaining({
+        'event.name': 'loop_detected',
+        loop_type: LoopType.LLM_DETECTED_LOOP,
+      }),
     );
   });
 
