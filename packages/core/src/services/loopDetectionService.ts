@@ -13,8 +13,8 @@ import { SchemaUnion, Type } from '@google/genai';
 
 const TOOL_CALL_LOOP_THRESHOLD = 5;
 const CONTENT_LOOP_THRESHOLD = 10;
-const LLM_LOOP_CHECK_HISTORY_COUNT = 20;
 
+const LLM_LOOP_CHECK_HISTORY_COUNT = 20;
 const LLM_CHECK_AFTER_TURNS = 10;
 const DEFAULT_LLM_CHECK_INTERVAL = 3;
 const MIN_LLM_CHECK_INTERVAL = 1;
@@ -163,24 +163,17 @@ export class LoopDetectionService {
       .slice(-LLM_LOOP_CHECK_HISTORY_COUNT);
 
     const prompt = `You are a sophisticated AI diagnostic agent specializing in identifying when a conversational AI is stuck in an unproductive state. Your task is to analyze the provided conversation history and determine if the assistant has ceased to make meaningful progress.
-The following is the recent history of a conversation with an AI assistant.
-Please analyze it to determine the possibility that the conversation is stuck in a repetitive, non-productive state.
 
 An unproductive state is characterized by one or more of the following patterns over the last 5 or more assistant turns:
 
-Repetitive Actions: The assistant repeats the same tool calls or conversational responses. This includes simple loops (e.g., tool_A, tool_A, tool_A) and alternating patterns (e.g., tool_A, tool_B, tool_A, tool_B).
+Repetitive Actions: The assistant repeats the same tool calls or conversational responses a decent number of times. This includes simple loops (e.g., tool_A, tool_A, tool_A) and alternating patterns (e.g., tool_A, tool_B, tool_A, tool_B).
 
 Stagnant Exploration: The assistant calls the same tools with arguments that are not meaningfully different, indicating it is not gathering new information or exploring new solution paths. For instance, re-running the exact same search query.
 
 Crucially, differentiate between a true unproductive state and legitimate, incremental progress.
 For example, a series of 'replace' or 'write_file' tool calls that make small, distinct changes to the same file (like adding docstrings to functions one by one) is considered forward progress and is NOT a loop. A loop would be repeatedly replacing the same text with the same content, or cycling between a small set of files with no net change.
 
-Analyze the conversation history to identify such patterns.
-Respond with a JSON object containing your assessment. The primary field is "confidence", which should be a probability score.
-
-**JSON Output Format:**:
-- "confidence": A number between 0.0 and 1.0 representing the probability that the conversation is in a loop.
-- "reasoning": A brief explanation for your analysis and confidence score.
+Please analyze the conversation history to determine the possibility that the conversation is stuck in a repetitive, non-productive state.
 
 **Conversation History:**:
 ${JSON.stringify(recentHistory, null, 2)}
@@ -191,12 +184,12 @@ ${JSON.stringify(recentHistory, null, 2)}
         confidence: {
           type: Type.NUMBER,
           description:
-            'Probability that the conversation is looping without forward progress, between 0 and 1.',
+            'A number between 0.0 and 1.0 representing your confidence that the conversation is in an unproductive state'
         },
         reasoning: {
           type: Type.STRING,
           description:
-            'Your reasoning on if the conversation is looping without forward progress',
+            'Your reasoning on if the conversation is looping without forward progress.',
         },
       },
       required: ['confidence', 'reasoning'],
