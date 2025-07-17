@@ -168,7 +168,7 @@ An unproductive state is characterized by one or more of the following patterns 
 
 Repetitive Actions: The assistant repeats the same tool calls or conversational responses a decent number of times. This includes simple loops (e.g., tool_A, tool_A, tool_A) and alternating patterns (e.g., tool_A, tool_B, tool_A, tool_B).
 
-Stagnant Exploration: The assistant calls the same tools with arguments that are not meaningfully different, indicating it is not gathering new information or exploring new solution paths. For instance, re-running the exact same search query.
+Cognitive Loop: The assistant seems unable to determine the next logical step. It might express confusion, repeatedly ask the same questions, or generate responses that don't logically follow from the previous turns, indicating it's stuck and not advancing the task.
 
 Crucially, differentiate between a true unproductive state and legitimate, incremental progress.
 For example, a series of 'replace' or 'write_file' tool calls that make small, distinct changes to the same file (like adding docstrings to functions one by one) is considered forward progress and is NOT a loop. A loop would be repeatedly replacing the same text with the same content, or cycling between a small set of files with no net change.
@@ -184,7 +184,7 @@ ${JSON.stringify(recentHistory, null, 2)}
         confidence: {
           type: Type.NUMBER,
           description:
-            'A number between 0.0 and 1.0 representing your confidence that the conversation is in an unproductive state'
+            'A number between 0.0 and 1.0 representing your confidence that the conversation is in an unproductive state.',
         },
         reasoning: {
           type: Type.STRING,
