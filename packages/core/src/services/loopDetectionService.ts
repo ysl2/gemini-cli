@@ -14,10 +14,32 @@ import { SchemaUnion, Type } from '@google/genai';
 const TOOL_CALL_LOOP_THRESHOLD = 5;
 const CONTENT_LOOP_THRESHOLD = 10;
 
+/**
+ * The number of recent conversation turns to include in the history when asking the LLM to check for a loop.
+ */
 const LLM_LOOP_CHECK_HISTORY_COUNT = 20;
+
+/**
+ * The number of turns that must pass in a single prompt before the LLM-based loop check is activated.
+ */
 const LLM_CHECK_AFTER_TURNS = 30;
+
+/**
+ * The default interval, in number of turns, at which the LLM-based loop check is performed.
+ * This value is adjusted dynamically based on the LLM's confidence.
+ */
 const DEFAULT_LLM_CHECK_INTERVAL = 3;
+
+/**
+ * The minimum interval for LLM-based loop checks.
+ * This is used when the confidence of a loop is high, to check more frequently.
+ */
 const MIN_LLM_CHECK_INTERVAL = 5;
+
+/**
+ * The maximum interval for LLM-based loop checks.
+ * This is used when the confidence of a loop is low, to check less frequently.
+ */
 const MAX_LLM_CHECK_INTERVAL = 15;
 
 const SENTENCE_ENDING_PUNCTUATION_REGEX = /[.!?]+(?=\s|$)/;
