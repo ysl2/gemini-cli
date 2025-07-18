@@ -26,7 +26,8 @@ describe('useConsoleMessages', () => {
       [handleNewMessage],
     );
     const error = useCallback(
-      (content: string) => handleNewMessage({ type: 'error', content, count: 1 }),
+      (content: string) =>
+        handleNewMessage({ type: 'error', content, count: 1 }),
       [handleNewMessage],
     );
     return {
