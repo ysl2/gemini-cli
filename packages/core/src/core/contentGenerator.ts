@@ -43,6 +43,8 @@ export enum AuthType {
   USE_GEMINI = 'gemini-api-key',
   USE_VERTEX_AI = 'vertex-ai',
   CLOUD_SHELL = 'cloud-shell',
+  USE_OPENAI = 'openai-api-key',
+  USE_ANTHROPIC = 'anthropic-api-key',
 }
 
 export type ContentGeneratorConfig = {
@@ -51,6 +53,7 @@ export type ContentGeneratorConfig = {
   vertexai?: boolean;
   authType?: AuthType | undefined;
   proxy?: string | undefined;
+  baseUrl?: string | undefined;
 };
 
 export function createContentGeneratorConfig(
@@ -61,6 +64,11 @@ export function createContentGeneratorConfig(
   const googleApiKey = process.env.GOOGLE_API_KEY || undefined;
   const googleCloudProject = process.env.GOOGLE_CLOUD_PROJECT || undefined;
   const googleCloudLocation = process.env.GOOGLE_CLOUD_LOCATION || undefined;
+  const openaiApiKey = process.env.OPENAI_API_KEY || undefined;
+  const openaiBaseUrl = process.env.OPENAI_BASE_URL || undefined;
+  const anthropicApiKey = process.env.ANTHROPIC_API_KEY || undefined;
+  const anthropicBaseUrl = process.env.ANTHROPIC_BASE_URL || undefined;
+  const geminiApiService = process.env.GEMINI_API_SERVICE || undefined;
 
   // Use runtime model from config if available, otherwise fallback to parameter or default
   const effectiveModel = config.getModel() || DEFAULT_GEMINI_MODEL;
@@ -99,6 +107,59 @@ export function createContentGeneratorConfig(
     contentGeneratorConfig.vertexai = true;
 
     return contentGeneratorConfig;
+  }
+
+  if (authType === AuthType.USE_OPENAI && openaiApiKey) {
+    contentGeneratorConfig.apiKey = openaiApiKey;
+    contentGeneratorConfig.baseUrl = openaiBaseUrl;
+    return contentGeneratorConfig;
+  }
+
+  if (authType === AuthType.USE_ANTHROPIC && anthropicApiKey) {
+    contentGeneratorConfig.apiKey = anthropicApiKey;
+    contentGeneratorConfig.baseUrl = anthropicBaseUrl;
+    return contentGeneratorConfig;
+  }
+
+  // Handle GEMINI_API_SERVICE environment variable for explicit service selection
+  if (!authType && geminiApiService) {
+    if (geminiApiService === 'openai' && openaiApiKey) {
+      contentGeneratorConfig.authType = AuthType.USE_OPENAI;
+      contentGeneratorConfig.apiKey = openaiApiKey;
+      contentGeneratorConfig.baseUrl = openaiBaseUrl;
+      return contentGeneratorConfig;
+    }
+    
+    if (geminiApiService === 'anthropic' && anthropicApiKey) {
+      contentGeneratorConfig.authType = AuthType.USE_ANTHROPIC;
+      contentGeneratorConfig.apiKey = anthropicApiKey;
+      contentGeneratorConfig.baseUrl = anthropicBaseUrl;
+      return contentGeneratorConfig;
+    }
+  }
+
+  // Automatic provider detection when authType is not explicitly set
+  if (!authType) {
+    if (anthropicApiKey) {
+      contentGeneratorConfig.authType = AuthType.USE_ANTHROPIC;
+      contentGeneratorConfig.apiKey = anthropicApiKey;
+      contentGeneratorConfig.baseUrl = anthropicBaseUrl;
+      return contentGeneratorConfig;
+    }
+    
+    if (openaiApiKey) {
+      contentGeneratorConfig.authType = AuthType.USE_OPENAI;
+      contentGeneratorConfig.apiKey = openaiApiKey;
+      contentGeneratorConfig.baseUrl = openaiBaseUrl;
+      return contentGeneratorConfig;
+    }
+    
+    if (geminiApiKey) {
+      contentGeneratorConfig.authType = AuthType.USE_GEMINI;
+      contentGeneratorConfig.apiKey = geminiApiKey;
+      contentGeneratorConfig.vertexai = false;
+      return contentGeneratorConfig;
+    }
   }
 
   return contentGeneratorConfig;
@@ -140,7 +201,30 @@ export async function createContentGenerator(
     return googleGenAI.models;
   }
 
+  if (
+    config.authType === AuthType.USE_OPENAI ||
+    config.authType === AuthType.USE_ANTHROPIC
+  ) {
+    // For OpenAI and Anthropic, we'll create a compatible content generator
+    return createCompatibleContentGenerator(config);
+  }
+
   throw new Error(
     `Error creating contentGenerator: Unsupported authType: ${config.authType}`,
   );
+}
+
+async function createCompatibleContentGenerator(config: ContentGeneratorConfig): Promise<ContentGenerator> {
+  const { OpenAIAdapter } = await import('../adapters/openaiAdapter.js');
+  const { AnthropicAdapter } = await import('../adapters/anthropicAdapter.js');
+  
+  if (config.authType === AuthType.USE_OPENAI) {
+    return new OpenAIAdapter(config);
+  }
+  
+  if (config.authType === AuthType.USE_ANTHROPIC) {
+    return new AnthropicAdapter(config);
+  }
+  
+  throw new Error(`Unsupported auth type for compatible content generator: ${config.authType}`);
 }

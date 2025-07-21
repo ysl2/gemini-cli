@@ -59,7 +59,13 @@ export function RadioButtonSelect<T>({
   maxItemsToShow = 10,
   showNumbers = true,
 }: RadioButtonSelectProps<T>): React.JSX.Element {
-  const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const [activeIndex, setActiveIndex] = useState(() => {
+    // Ensure initialIndex is within valid bounds
+    if (initialIndex >= 0 && initialIndex < items.length) {
+      return initialIndex;
+    }
+    return items.length > 0 ? 0 : -1;
+  });
   const [scrollOffset, setScrollOffset] = useState(0);
   const [numberInput, setNumberInput] = useState('');
   const numberInputTimer = useRef<NodeJS.Timeout | null>(null);
@@ -98,19 +104,28 @@ export function RadioButtonSelect<T>({
       if (input === 'k' || key.upArrow) {
         const newIndex = activeIndex > 0 ? activeIndex - 1 : items.length - 1;
         setActiveIndex(newIndex);
-        onHighlight?.(items[newIndex]!.value);
+        const newItem = items[newIndex];
+        if (newItem) {
+          onHighlight?.(newItem.value);
+        }
         return;
       }
 
       if (input === 'j' || key.downArrow) {
         const newIndex = activeIndex < items.length - 1 ? activeIndex + 1 : 0;
         setActiveIndex(newIndex);
-        onHighlight?.(items[newIndex]!.value);
+        const newItem = items[newIndex];
+        if (newItem) {
+          onHighlight?.(newItem.value);
+        }
         return;
       }
 
       if (key.return) {
-        onSelect(items[activeIndex]!.value);
+        const selectedItem = items[activeIndex];
+        if (selectedItem) {
+          onSelect(selectedItem.value);
+        }
         return;
       }
 

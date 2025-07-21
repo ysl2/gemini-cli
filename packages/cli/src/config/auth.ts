@@ -38,5 +38,19 @@ export const validateAuthMethod = (authMethod: string): string | null => {
     return null;
   }
 
+  if (authMethod === AuthType.USE_OPENAI) {
+    if (!process.env.OPENAI_API_KEY) {
+      return 'OPENAI_API_KEY environment variable not found. Add that to your environment and try again (no reload needed if using .env)!';
+    }
+    return null;
+  }
+
+  if (authMethod === AuthType.USE_ANTHROPIC) {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return 'ANTHROPIC_API_KEY environment variable not found. Add that to your environment and try again (no reload needed if using .env)!';
+    }
+    return null;
+  }
+
   return 'Invalid auth method selected.';
 };
