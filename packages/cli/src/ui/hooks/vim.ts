@@ -212,7 +212,7 @@ export function useVim(
     settings.setValue(
       SettingScope.User,
       'vimMode',
-      newMode as unknown as string,
+      newMode,
     );
 
     // Update runtime override to reflect the change immediately
