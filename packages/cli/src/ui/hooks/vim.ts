@@ -209,11 +209,7 @@ export function useVim(
     const newMode = !currentMode;
 
     // Persist the new vim mode setting
-    settings.setValue(
-      SettingScope.User,
-      'vimMode',
-      newMode,
-    );
+    settings.setValue(SettingScope.User, 'vimMode', newMode);
 
     // Update runtime override to reflect the change immediately
     setRuntimeVimModeOverride(newMode);
@@ -1312,7 +1308,10 @@ export function useVim(
                   } else {
                     // If findNextWordStart doesn't advance, we're likely at the last word
                     // In this case, delete to the end of the current word
-                    const wordEndOffset = findWordEnd(currentText, searchOffset);
+                    const wordEndOffset = findWordEnd(
+                      currentText,
+                      searchOffset,
+                    );
                     endOffset = Math.min(wordEndOffset + 1, currentText.length);
                     break;
                   }
