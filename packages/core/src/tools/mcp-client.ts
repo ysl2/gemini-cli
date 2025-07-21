@@ -18,6 +18,7 @@ import {
 import { parse } from 'shell-quote';
 import { MCPServerConfig } from '../config/config.js';
 import { DiscoveredMCPTool } from './mcp-tool.js';
+import { z } from 'zod';
 
 import { FunctionDeclaration, mcpToTool } from '@google/genai';
 import { ToolRegistry } from './tool-registry.js';
@@ -230,6 +231,8 @@ export async function connectAndDiscover(
         );
       }
 
+      await discoverPrompts(mcpServerName, mcpClient);
+
       const tools = await discoverTools(
         mcpServerName,
         mcpServerConfig,
@@ -244,7 +247,9 @@ export async function connectAndDiscover(
     }
   } catch (error) {
     console.error(
-      `Error connecting to MCP server '${mcpServerName}': ${getErrorMessage(error)}`,
+      `Error connecting to MCP server '${mcpServerName}': ${getErrorMessage(
+        error,
+      )}`,
     );
     updateMCPServerStatus(mcpServerName, MCPServerStatus.DISCONNECTED);
   }
@@ -291,6 +296,7 @@ export async function discoverTools(
           mcpServerConfig.trust,
         ),
       );
+      console.log(`Discovered tool: ${funcDecl.name}`);
     }
     if (discoveredTools.length === 0) {
       throw Error('No enabled tools found');
@@ -298,6 +304,44 @@ export async function discoverTools(
     return discoveredTools;
   } catch (error) {
     throw new Error(`Error discovering tools: ${error}`);
+  }
+}
+
+const PromptListResponseSchema = z.object({
+  prompts: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string().optional(),
+    }),
+  ),
+});
+
+/**
+ * Discovers and logs prompts from a connected MCP client.
+ * It retrieves prompt declarations from the client and logs their names.
+ *
+ * @param mcpServerName The name of the MCP server.
+ * @param mcpClient The active MCP client instance.
+ */
+export async function discoverPrompts(
+  mcpServerName: string,
+  mcpClient: Client,
+): Promise<void> {
+  try {
+    const response = await mcpClient.request(
+      { method: 'prompts/list', params: {} },
+      PromptListResponseSchema,
+    );
+
+    const promptNames = response.prompts.map((p) => p.name);
+
+    if (promptNames.length > 0) {
+      console.log(
+        `Discovered prompts from ${mcpServerName}: ${promptNames.join(', ')}`,
+      );
+    }
+  } catch (error) {
+    console.error(error);
   }
 }
 
