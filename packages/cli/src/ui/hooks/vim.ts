@@ -636,28 +636,18 @@ export function useVim(
               const currentOffset = getCurrentOffset();
               let endOffset = currentOffset;
 
-              // Delete from cursor through N words using consistent logic
+              // Delete from cursor through N words using findNextWordStart for consistency
               let searchOffset = currentOffset;
               for (let i = 0; i < repeatCount; i++) {
-                // Inline word finding for consistency with repeat function
-                let wordEnd = searchOffset;
-
-                // Skip current word if we're in the middle of one
-                while (wordEnd < text.length && /\w/.test(text[wordEnd])) {
-                  wordEnd++;
-                }
-
-                // Skip whitespace to get to next word start
-                while (wordEnd < text.length && /\s/.test(text[wordEnd])) {
-                  wordEnd++;
-                }
-
-                // If we found a next word, continue; otherwise stop
-                if (wordEnd < text.length) {
-                  searchOffset = wordEnd;
-                  endOffset = wordEnd;
+                const nextWordOffset = findNextWordStart(text, searchOffset);
+                if (nextWordOffset > searchOffset) {
+                  searchOffset = nextWordOffset;
+                  endOffset = nextWordOffset;
                 } else {
-                  // No more words, stop here
+                  // If findNextWordStart doesn't advance, we're likely at the last word
+                  // In this case, delete to the end of the current word
+                  const wordEndOffset = findWordEnd(text, searchOffset);
+                  endOffset = Math.min(wordEndOffset + 1, text.length);
                   break;
                 }
               }
@@ -682,13 +672,17 @@ export function useVim(
               const currentOffset = getCurrentOffset();
               let endOffset = currentOffset;
 
-              // Change from cursor through N words
+              // Change from cursor through N words using findNextWordStart for consistency
               let offset = currentOffset;
               for (let i = 0; i < repeatCount; i++) {
                 const nextWordOffset = findNextWordStart(text, offset);
                 if (nextWordOffset > offset) {
                   offset = nextWordOffset;
                 } else {
+                  // If findNextWordStart doesn't advance, we're likely at the last word
+                  // In this case, change to the end of the current word
+                  const wordEndOffset = findWordEnd(text, offset);
+                  offset = Math.min(wordEndOffset + 1, text.length);
                   break;
                 }
               }
@@ -1312,11 +1306,16 @@ export function useVim(
                     currentText,
                     searchOffset,
                   );
-                  if (nextWordOffset <= searchOffset) {
+                  if (nextWordOffset > searchOffset) {
+                    endOffset = nextWordOffset;
+                    searchOffset = nextWordOffset;
+                  } else {
+                    // If findNextWordStart doesn't advance, we're likely at the last word
+                    // In this case, delete to the end of the current word
+                    const wordEndOffset = findWordEnd(currentText, searchOffset);
+                    endOffset = Math.min(wordEndOffset + 1, currentText.length);
                     break;
                   }
-                  endOffset = nextWordOffset;
-                  searchOffset = nextWordOffset;
                 }
 
                 if (endOffset > currentOffset) {
@@ -1466,6 +1465,10 @@ export function useVim(
                   if (nextWordOffset > offset) {
                     offset = nextWordOffset;
                   } else {
+                    // If findNextWordStart doesn't advance, we're likely at the last word
+                    // In this case, change to the end of the current word
+                    const wordEndOffset = findWordEnd(currentText, offset);
+                    offset = Math.min(wordEndOffset + 1, currentText.length);
                     break;
                   }
                 }
