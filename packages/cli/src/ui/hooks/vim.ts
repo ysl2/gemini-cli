@@ -26,7 +26,6 @@ export type VimMode = 'NORMAL' | 'INSERT';
  */
 export function useVim(
   buffer: TextBuffer,
-  config: { getVimMode(): boolean },
   settings: LoadedSettings,
   onSubmit?: (value: string) => void,
 ) {
@@ -200,8 +199,8 @@ export function useVim(
     () =>
       runtimeVimModeOverride !== null
         ? runtimeVimModeOverride
-        : config.getVimMode(),
-    [runtimeVimModeOverride, config],
+        : settings.merged.vimMode,
+    [runtimeVimModeOverride, settings.merged.vimMode],
   );
 
   const toggleVimMode = useCallback(() => {

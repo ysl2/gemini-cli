@@ -9,12 +9,10 @@ import { renderHook, act } from '@testing-library/react';
 import { useVim } from './vim.js';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
 import type { LoadedSettings } from '../../config/settings.js';
-import type { Config } from '@google/gemini-cli-core';
 import type { Key } from '../hooks/useKeypress.js';
 
 describe('useVim hook', () => {
   let mockBuffer: Partial<TextBuffer>;
-  let mockConfig: Partial<Config>;
   let mockSettings: Partial<LoadedSettings>;
   let mockHandleFinalSubmit: vi.Mock;
   let vimHandleInput: ((key: Key) => boolean) | undefined;
@@ -37,14 +35,12 @@ describe('useVim hook', () => {
       handleInput: vi.fn(),
     };
 
-    mockConfig = {
-      getVimMode: () => true,
-      getDebugMode: () => false,
-    };
-
     mockSettings = {
       getValue: vi.fn().mockReturnValue(true),
       setValue: vi.fn(),
+      merged: {
+        vimMode: true,
+      },
     };
   });
 
@@ -53,7 +49,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -66,7 +61,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -84,7 +78,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -112,7 +105,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -130,7 +122,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -149,7 +140,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -168,7 +158,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -186,7 +175,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -204,7 +192,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -224,7 +211,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -243,7 +229,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -262,7 +247,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -282,7 +266,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -308,7 +291,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -335,7 +317,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -360,7 +341,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -382,7 +362,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -422,14 +401,12 @@ describe('useVim hook', () => {
       };
 
       // Create fresh mocks
-      const freshConfig = {
-        getVimMode: () => true,
-        getDebugMode: () => false,
-      };
-
       const freshSettings = {
         getValue: vi.fn().mockReturnValue(true),
         setValue: vi.fn(),
+        merged: {
+          vimMode: true,
+        },
       };
 
       const freshSubmit = vi.fn();
@@ -438,7 +415,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           freshBuffer as TextBuffer,
-          freshConfig as Config,
           freshSettings as LoadedSettings,
           freshSubmit,
         ),
@@ -475,7 +451,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -567,7 +542,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -594,7 +568,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -614,7 +587,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -632,7 +604,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -655,7 +626,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -676,7 +646,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -699,7 +668,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -721,7 +689,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -744,9 +711,12 @@ describe('useVim hook', () => {
 
   describe('Disabled vim mode', () => {
     beforeEach(() => {
-      mockConfig = {
-        getVimMode: () => false,
-        getDebugMode: () => false,
+      mockSettings = {
+        getValue: vi.fn().mockReturnValue(false),
+        setValue: vi.fn(),
+        merged: {
+          vimMode: false,
+        },
       };
     });
 
@@ -754,7 +724,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -779,7 +748,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -817,7 +785,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -857,7 +824,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -897,7 +863,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -935,7 +900,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -971,7 +935,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -1004,7 +967,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
@@ -1036,7 +998,6 @@ describe('useVim hook', () => {
       const { result } = renderHook(() =>
         useVim(
           mockBuffer as TextBuffer,
-          mockConfig as Config,
           mockSettings as LoadedSettings,
           mockHandleFinalSubmit,
         ),
