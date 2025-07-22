@@ -32,7 +32,7 @@ import {
 export interface CAGenerateContentRequest {
   model: string;
   project?: string;
-  userPromptId?: string;
+  user_prompt_id?: string;
   request: VertexGenerateContentRequest;
 }
 
@@ -123,7 +123,7 @@ export function toGenerateContentRequest(
   return {
     model: req.model,
     project,
-    userPromptId,
+    user_prompt_id: userPromptId,
     request: toVertexGenerateContentRequest(req, sessionId),
   };
 }
