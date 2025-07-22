@@ -463,7 +463,7 @@ export async function discoverTools(
           mcpServerConfig.trust,
         ),
       );
-      console.log(`Discovered tool: ${funcDecl.name}`);
+      console.debug(`Discovered tool: ${funcDecl.name}`);
     }
     if (discoveredTools.length === 0) {
       throw Error('No enabled tools found');
