@@ -503,7 +503,7 @@ export async function discoverPrompts(
     const promptNames = response.prompts.map((p) => p.name);
 
     if (promptNames.length > 0) {
-      console.log(
+      console.debug(
         `Discovered prompts from ${mcpServerName}: ${promptNames.join(', ')}`,
       );
     }
