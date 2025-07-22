@@ -121,6 +121,7 @@ export class GeminiClient {
       this.config.getSessionId(),
     );
     this.chat = await this.startChat();
+    this.lastPromptId = this.config.getSessionId();
   }
 
   getContentGenerator(): ContentGenerator {
@@ -389,16 +390,19 @@ This is the cursor position in the file:
       };
 
       const apiCall = () =>
-        this.getContentGenerator().generateContent({
-          model: modelToUse,
-          config: {
-            ...requestConfig,
-            systemInstruction,
-            responseSchema: schema,
-            responseMimeType: 'application/json',
+        this.getContentGenerator().generateContent(
+          {
+            model: modelToUse,
+            config: {
+              ...requestConfig,
+              systemInstruction,
+              responseSchema: schema,
+              responseMimeType: 'application/json',
+            },
+            contents,
           },
-          contents,
-        });
+          this.lastPromptId,
+        );
 
       const result = await retryWithBackoff(apiCall, {
         onPersistent429: async (authType?: string, error?: unknown) =>
@@ -483,11 +487,14 @@ This is the cursor position in the file:
       };
 
       const apiCall = () =>
-        this.getContentGenerator().generateContent({
-          model: modelToUse,
-          config: requestConfig,
-          contents,
-        });
+        this.getContentGenerator().generateContent(
+          {
+            model: modelToUse,
+            config: requestConfig,
+            contents,
+          },
+          this.lastPromptId,
+        );
 
       const result = await retryWithBackoff(apiCall, {
         onPersistent429: async (authType?: string, error?: unknown) =>

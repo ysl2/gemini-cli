@@ -38,10 +38,13 @@ describe('CodeAssistServer', () => {
     };
     vi.spyOn(server, 'requestPost').mockResolvedValue(mockResponse);
 
-    const response = await server.generateContent({
-      model: 'test-model',
-      contents: [{ role: 'user', parts: [{ text: 'request' }] }],
-    });
+    const response = await server.generateContent(
+      {
+        model: 'test-model',
+        contents: [{ role: 'user', parts: [{ text: 'request' }] }],
+      },
+      'user-prompt-id',
+    );
 
     expect(server.requestPost).toHaveBeenCalledWith(
       'generateContent',
@@ -75,10 +78,13 @@ describe('CodeAssistServer', () => {
     })();
     vi.spyOn(server, 'requestStreamingPost').mockResolvedValue(mockResponse);
 
-    const stream = await server.generateContentStream({
-      model: 'test-model',
-      contents: [{ role: 'user', parts: [{ text: 'request' }] }],
-    });
+    const stream = await server.generateContentStream(
+      {
+        model: 'test-model',
+        contents: [{ role: 'user', parts: [{ text: 'request' }] }],
+      },
+      'user-prompt-id',
+    );
 
     for await (const res of stream) {
       expect(server.requestStreamingPost).toHaveBeenCalledWith(
