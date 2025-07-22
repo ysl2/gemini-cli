@@ -23,7 +23,7 @@ import { z } from 'zod';
 import { FunctionDeclaration, mcpToTool } from '@google/genai';
 import { ToolRegistry } from './tool-registry.js';
 import {
-  ActiveFileNotificationSchema,
+  OpenFilesNotificationSchema,
   IDE_SERVER_NAME,
   ideContext,
 } from '../services/ideContext.js';
@@ -218,15 +218,15 @@ export async function connectAndDiscover(
         console.error(`MCP ERROR (${mcpServerName}):`, error.toString());
         updateMCPServerStatus(mcpServerName, MCPServerStatus.DISCONNECTED);
         if (mcpServerName === IDE_SERVER_NAME) {
-          ideContext.clearActiveFileContext();
+          ideContext.clearOpenFilesContext();
         }
       };
 
       if (mcpServerName === IDE_SERVER_NAME) {
         mcpClient.setNotificationHandler(
-          ActiveFileNotificationSchema,
+          OpenFilesNotificationSchema,
           (notification) => {
-            ideContext.setActiveFileContext(notification.params);
+            ideContext.setOpenFilesContext(notification.params);
           },
         );
       }
