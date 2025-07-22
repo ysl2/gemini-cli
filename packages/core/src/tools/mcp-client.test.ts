@@ -21,6 +21,8 @@ import * as GenAiLib from '@google/genai';
 vi.mock('@modelcontextprotocol/sdk/client/stdio.js');
 vi.mock('@modelcontextprotocol/sdk/client/index.js');
 vi.mock('@google/genai');
+vi.mock('../mcp/oauth-provider.js');
+vi.mock('../mcp/oauth-token-storage.js');
 
 describe('mcp-client', () => {
   afterEach(() => {
@@ -154,7 +156,7 @@ describe('mcp-client', () => {
 
     describe('should connect via httpUrl', () => {
       it('without headers', async () => {
-        const transport = createTransport(
+        const transport = await createTransport(
           'test-server',
           {
             httpUrl: 'http://test-server',
@@ -168,7 +170,7 @@ describe('mcp-client', () => {
       });
 
       it('with headers', async () => {
-        const transport = createTransport(
+        const transport = await createTransport(
           'test-server',
           {
             httpUrl: 'http://test-server',
@@ -189,7 +191,7 @@ describe('mcp-client', () => {
 
     describe('should connect via url', () => {
       it('without headers', async () => {
-        const transport = createTransport(
+        const transport = await createTransport(
           'test-server',
           {
             url: 'http://test-server',
@@ -202,7 +204,7 @@ describe('mcp-client', () => {
       });
 
       it('with headers', async () => {
-        const transport = createTransport(
+        const transport = await createTransport(
           'test-server',
           {
             url: 'http://test-server',
@@ -221,10 +223,10 @@ describe('mcp-client', () => {
       });
     });
 
-    it('should connect via command', () => {
+    it('should connect via command', async () => {
       const mockedTransport = vi.mocked(SdkClientStdioLib.StdioClientTransport);
 
-      createTransport(
+      await createTransport(
         'test-server',
         {
           command: 'test-command',
