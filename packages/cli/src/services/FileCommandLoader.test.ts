@@ -268,7 +268,12 @@ describe('FileCommandLoader', () => {
       const mockConfig = {
         getProjectRoot: vi.fn(() => process.cwd()),
         getExtensions: vi.fn(() => [
-          { name: 'test-ext', version: '1.0.0', isActive: true, path: extensionDir },
+          {
+            name: 'test-ext',
+            version: '1.0.0',
+            isActive: true,
+            path: extensionDir,
+          },
         ]),
       } as Config;
       const loader = new FileCommandLoader(mockConfig);
@@ -308,7 +313,12 @@ describe('FileCommandLoader', () => {
       const mockConfig = {
         getProjectRoot: vi.fn(() => process.cwd()),
         getExtensions: vi.fn(() => [
-          { name: 'test-ext', version: '1.0.0', isActive: true, path: extensionDir },
+          {
+            name: 'test-ext',
+            version: '1.0.0',
+            isActive: true,
+            path: extensionDir,
+          },
         ]),
       } as Config;
       const loader = new FileCommandLoader(mockConfig);
@@ -376,8 +386,18 @@ describe('FileCommandLoader', () => {
       const mockConfig = {
         getProjectRoot: vi.fn(() => process.cwd()),
         getExtensions: vi.fn(() => [
-          { name: 'active-ext', version: '1.0.0', isActive: true, path: extensionDir1 },
-          { name: 'inactive-ext', version: '1.0.0', isActive: false, path: extensionDir2 },
+          {
+            name: 'active-ext',
+            version: '1.0.0',
+            isActive: true,
+            path: extensionDir1,
+          },
+          {
+            name: 'inactive-ext',
+            version: '1.0.0',
+            isActive: false,
+            path: extensionDir2,
+          },
         ]),
       } as Config;
       const loader = new FileCommandLoader(mockConfig);
@@ -406,7 +426,12 @@ describe('FileCommandLoader', () => {
       const mockConfig = {
         getProjectRoot: vi.fn(() => process.cwd()),
         getExtensions: vi.fn(() => [
-          { name: 'no-commands', version: '1.0.0', isActive: true, path: extensionDir },
+          {
+            name: 'no-commands',
+            version: '1.0.0',
+            isActive: true,
+            path: extensionDir,
+          },
         ]),
       } as Config;
       const loader = new FileCommandLoader(mockConfig);
@@ -449,7 +474,11 @@ describe('FileCommandLoader', () => {
       expect(commands).toHaveLength(3);
 
       const commandNames = commands.map((cmd) => cmd.name).sort();
-      expect(commandNames).toEqual(['ext:a:b:c', 'ext:a:b:d:e', 'ext:a:simple']);
+      expect(commandNames).toEqual([
+        'ext:a:b:c',
+        'ext:a:b:d:e',
+        'ext:a:simple',
+      ]);
 
       // Verify one of the commands works correctly
       const nestedCmd = commands.find((cmd) => cmd.name === 'ext:a:b:c');
