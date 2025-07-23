@@ -52,6 +52,18 @@ describe('useVim hook', () => {
       replaceRangeByOffset: vi.fn(),
       handleInput: vi.fn(),
       setText: vi.fn(),
+      // Vim-specific methods
+      vimDeleteWordForward: vi.fn(),
+      vimDeleteWordBackward: vi.fn(),
+      vimDeleteWordEnd: vi.fn(),
+      vimChangeWordForward: vi.fn(),
+      vimChangeWordBackward: vi.fn(),
+      vimChangeWordEnd: vi.fn(),
+      vimDeleteLine: vi.fn(),
+      vimChangeLine: vi.fn(),
+      vimDeleteToEndOfLine: vi.fn(),
+      vimChangeToEndOfLine: vi.fn(),
+      vimChangeMovement: vi.fn(),
     };
   };
 

@@ -32,6 +32,264 @@ function isWordChar(ch: string | undefined): boolean {
   return !/[\s,.;!?]/.test(ch);
 }
 
+// Vim-specific word boundary functions
+const findNextWordStart = (text: string, currentOffset: number): number => {
+  let i = currentOffset;
+
+  if (i >= text.length) return i;
+
+  const currentChar = text[i];
+
+  // Skip current word/sequence based on character type
+  if (/\w/.test(currentChar)) {
+    // Skip current word characters
+    while (i < text.length && /\w/.test(text[i])) {
+      i++;
+    }
+  } else if (!/\s/.test(currentChar)) {
+    // Skip current non-word, non-whitespace characters (like "/", ".", etc.)
+    while (i < text.length && !/\w/.test(text[i]) && !/\s/.test(text[i])) {
+      i++;
+    }
+  }
+
+  // Skip whitespace
+  while (i < text.length && /\s/.test(text[i])) {
+    i++;
+  }
+
+  // If we reached the end of text and there's no next word,
+  // vim behavior for dw is to delete to the end of the current word
+  if (i >= text.length) {
+    // Go back to find the end of the last word
+    let endOfLastWord = text.length - 1;
+    while (endOfLastWord >= 0 && /\s/.test(text[endOfLastWord])) {
+      endOfLastWord--;
+    }
+    // For dw on last word, return position AFTER the last character to delete entire word
+    return Math.max(currentOffset + 1, endOfLastWord + 1);
+  }
+
+  return i;
+};
+
+const findPrevWordStart = (text: string, currentOffset: number): number => {
+  let i = currentOffset;
+
+  // If at beginning of text, return current position
+  if (i <= 0) {
+    return currentOffset;
+  }
+
+  // Move back one character to start searching
+  i--;
+
+  // Skip whitespace moving backwards
+  while (i >= 0 && (text[i] === ' ' || text[i] === '\t' || text[i] === '\n')) {
+    i--;
+  }
+
+  if (i < 0) {
+    return 0; // Reached beginning of text
+  }
+
+  const charAtI = text[i];
+
+  if (/\w/.test(charAtI)) {
+    // We're in a word, move to its beginning
+    while (i >= 0 && /\w/.test(text[i])) {
+      i--;
+    }
+    return i + 1; // Return first character of word
+  } else {
+    // We're in punctuation, move to its beginning
+    while (
+      i >= 0 &&
+      !/\w/.test(text[i]) &&
+      text[i] !== ' ' &&
+      text[i] !== '\t' &&
+      text[i] !== '\n'
+    ) {
+      i--;
+    }
+    return i + 1; // Return first character of punctuation sequence
+  }
+};
+
+const findWordEnd = (text: string, currentOffset: number): number => {
+  let i = currentOffset;
+
+  // If we're not on a word character, find the next word
+  if (!/\w/.test(text[i])) {
+    while (i < text.length && !/\w/.test(text[i])) {
+      i++;
+    }
+  }
+
+  // Move to end of current word
+  while (i < text.length && /\w/.test(text[i])) {
+    i++;
+  }
+
+  // Move back one to be on the last character of the word
+  return Math.max(currentOffset, i - 1);
+};
+
+// Helper functions for vim operations
+const getOffsetFromPosition = (
+  row: number,
+  col: number,
+  lines: string[],
+): number => {
+  let offset = 0;
+  for (let i = 0; i < row; i++) {
+    offset += lines[i].length + 1; // +1 for newline
+  }
+  offset += col;
+  return offset;
+};
+
+const getPositionFromOffsets = (
+  startOffset: number,
+  endOffset: number,
+  lines: string[],
+) => {
+  let offset = 0;
+  let startRow = 0;
+  let startCol = 0;
+  let endRow = 0;
+  let endCol = 0;
+
+  // Find start position
+  for (let i = 0; i < lines.length; i++) {
+    const lineLength = lines[i].length + 1; // +1 for newline
+    if (offset + lineLength > startOffset) {
+      startRow = i;
+      startCol = startOffset - offset;
+      break;
+    }
+    offset += lineLength;
+  }
+
+  // Find end position
+  offset = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const lineLength = lines[i].length + (i < lines.length - 1 ? 1 : 0); // +1 for newline except last line
+    if (offset + lineLength >= endOffset) {
+      endRow = i;
+      endCol = endOffset - offset;
+      break;
+    }
+    offset += lineLength + (i < lines.length - 1 ? 1 : 0);
+  }
+
+  return { startRow, startCol, endRow, endCol };
+};
+
+const getLineRangeOffsets = (
+  startRow: number,
+  lineCount: number,
+  lines: string[],
+) => {
+  let startOffset = 0;
+
+  // Calculate start offset
+  for (let i = 0; i < startRow; i++) {
+    startOffset += lines[i].length + 1; // +1 for newline
+  }
+
+  // Calculate end offset
+  let endOffset = startOffset;
+  for (let i = 0; i < lineCount; i++) {
+    const lineIndex = startRow + i;
+    if (lineIndex < lines.length) {
+      endOffset += lines[lineIndex].length;
+      if (lineIndex < lines.length - 1) {
+        endOffset += 1; // +1 for newline
+      }
+    }
+  }
+
+  return { startOffset, endOffset };
+};
+
+const replaceRangeInternal = (
+  state: TextBufferState,
+  startRow: number,
+  startCol: number,
+  endRow: number,
+  endCol: number,
+  text: string,
+): TextBufferState => {
+  const currentLine = (row: number) => state.lines[row] || '';
+  const currentLineLen = (row: number) => cpLen(currentLine(row));
+  const clamp = (value: number, min: number, max: number) =>
+    Math.min(Math.max(value, min), max);
+
+  if (
+    startRow > endRow ||
+    (startRow === endRow && startCol > endCol) ||
+    startRow < 0 ||
+    startCol < 0 ||
+    endRow >= state.lines.length ||
+    (endRow < state.lines.length && endCol > currentLineLen(endRow))
+  ) {
+    return state; // Invalid range
+  }
+
+  const newLines = [...state.lines];
+
+  const sCol = clamp(startCol, 0, currentLineLen(startRow));
+  const eCol = clamp(endCol, 0, currentLineLen(endRow));
+
+  const prefix = cpSlice(currentLine(startRow), 0, sCol);
+  const suffix = cpSlice(currentLine(endRow), eCol);
+
+  const normalisedReplacement = text
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n');
+  const replacementParts = normalisedReplacement.split('\n');
+
+  // Replace the content
+  if (startRow === endRow) {
+    newLines[startRow] = prefix + normalisedReplacement + suffix;
+  } else {
+    const firstLine = prefix + replacementParts[0];
+    if (replacementParts.length === 1) {
+      // Single line of replacement text, but spanning multiple original lines
+      newLines.splice(startRow, endRow - startRow + 1, firstLine + suffix);
+    } else {
+      // Multi-line replacement text
+      const lastLine = replacementParts[replacementParts.length - 1] + suffix;
+      const middleLines = replacementParts.slice(1, -1);
+      newLines.splice(
+        startRow,
+        endRow - startRow + 1,
+        firstLine,
+        ...middleLines,
+        lastLine,
+      );
+    }
+  }
+
+  const finalCursorRow = startRow + replacementParts.length - 1;
+  const finalCursorCol =
+    replacementParts.length === 1
+      ? sCol + cpLen(replacementParts[0])
+      : cpLen(replacementParts[replacementParts.length - 1]);
+
+  return {
+    ...state,
+    lines: newLines,
+    cursorRow: Math.min(Math.max(finalCursorRow, 0), newLines.length - 1),
+    cursorCol: Math.max(
+      0,
+      Math.min(finalCursorCol, cpLen(newLines[finalCursorRow] || '')),
+    ),
+    preferredCol: null,
+  };
+};
+
 /**
  * Strip characters that can break terminal rendering.
  *
@@ -419,7 +677,21 @@ type TextBufferAction =
     }
   | { type: 'move_to_offset'; payload: { offset: number } }
   | { type: 'create_undo_snapshot' }
-  | { type: 'set_viewport_width'; payload: number };
+  | { type: 'set_viewport_width'; payload: number }
+  | { type: 'vim_delete_word_forward'; payload: { count: number } }
+  | { type: 'vim_delete_word_backward'; payload: { count: number } }
+  | { type: 'vim_delete_word_end'; payload: { count: number } }
+  | { type: 'vim_change_word_forward'; payload: { count: number } }
+  | { type: 'vim_change_word_backward'; payload: { count: number } }
+  | { type: 'vim_change_word_end'; payload: { count: number } }
+  | { type: 'vim_delete_line'; payload: { count: number } }
+  | { type: 'vim_change_line'; payload: { count: number } }
+  | { type: 'vim_delete_to_end_of_line' }
+  | { type: 'vim_change_to_end_of_line' }
+  | {
+      type: 'vim_change_movement';
+      payload: { movement: 'h' | 'j' | 'k' | 'l'; count: number };
+    };
 
 export function textBufferReducer(
   state: TextBufferState,
@@ -943,6 +1215,510 @@ export function textBufferReducer(
       return pushUndo(state);
     }
 
+    // Vim-specific operations
+    case 'vim_delete_word_forward': {
+      const { count } = action.payload;
+      const text = state.lines.join('\n');
+      const currentOffset = getOffsetFromPosition(
+        state.cursorRow,
+        state.cursorCol,
+        state.lines,
+      );
+
+      let endOffset = currentOffset;
+      let searchOffset = currentOffset;
+
+      for (let i = 0; i < count; i++) {
+        const nextWordOffset = findNextWordStart(text, searchOffset);
+        if (nextWordOffset > searchOffset) {
+          searchOffset = nextWordOffset;
+          endOffset = nextWordOffset;
+        } else {
+          // If no next word, delete to end of current word
+          const wordEndOffset = findWordEnd(text, searchOffset);
+          endOffset = Math.min(wordEndOffset + 1, text.length);
+          break;
+        }
+      }
+
+      if (endOffset > currentOffset) {
+        const nextState = pushUndo(state);
+        const { startRow, startCol, endRow, endCol } = getPositionFromOffsets(
+          currentOffset,
+          endOffset,
+          nextState.lines,
+        );
+        return replaceRangeInternal(
+          nextState,
+          startRow,
+          startCol,
+          endRow,
+          endCol,
+          '',
+        );
+      }
+      return state;
+    }
+
+    case 'vim_delete_word_backward': {
+      const { count } = action.payload;
+      const text = state.lines.join('\n');
+      const currentOffset = getOffsetFromPosition(
+        state.cursorRow,
+        state.cursorCol,
+        state.lines,
+      );
+
+      let startOffset = currentOffset;
+
+      for (let i = 0; i < count; i++) {
+        const prevWordOffset = findPrevWordStart(text, startOffset);
+        if (prevWordOffset < startOffset) {
+          startOffset = prevWordOffset;
+        } else {
+          break;
+        }
+      }
+
+      if (startOffset < currentOffset) {
+        const nextState = pushUndo(state);
+        const { startRow, startCol, endRow, endCol } = getPositionFromOffsets(
+          startOffset,
+          currentOffset,
+          nextState.lines,
+        );
+        const newState = replaceRangeInternal(
+          nextState,
+          startRow,
+          startCol,
+          endRow,
+          endCol,
+          '',
+        );
+        return {
+          ...newState,
+          cursorRow: startRow,
+          cursorCol: startCol,
+        };
+      }
+      return state;
+    }
+
+    case 'vim_delete_word_end': {
+      const { count } = action.payload;
+      const text = state.lines.join('\n');
+      const currentOffset = getOffsetFromPosition(
+        state.cursorRow,
+        state.cursorCol,
+        state.lines,
+      );
+
+      let endOffset = currentOffset;
+      let searchOffset = currentOffset;
+
+      for (let i = 0; i < count; i++) {
+        const wordEndOffset = findWordEnd(text, searchOffset);
+        if (wordEndOffset > searchOffset) {
+          endOffset = wordEndOffset + 1; // +1 to include the character at end position
+
+          // For next iteration, move to start of next word
+          if (i < count - 1) {
+            const nextWordStart = findNextWordStart(text, wordEndOffset + 1);
+            searchOffset = nextWordStart;
+            if (nextWordStart <= wordEndOffset) {
+              break; // No next word found
+            }
+          }
+        } else {
+          break;
+        }
+      }
+
+      if (endOffset > currentOffset) {
+        const nextState = pushUndo(state);
+        const { startRow, startCol, endRow, endCol } = getPositionFromOffsets(
+          currentOffset,
+          endOffset,
+          nextState.lines,
+        );
+        return replaceRangeInternal(
+          nextState,
+          startRow,
+          startCol,
+          endRow,
+          endCol,
+          '',
+        );
+      }
+      return state;
+    }
+
+    case 'vim_change_word_forward': {
+      const action_casted = action as {
+        type: 'vim_change_word_forward';
+        payload: { count: number };
+      };
+      const { count } = action_casted.payload;
+      const text = state.lines.join('\n');
+      const currentOffset = getOffsetFromPosition(
+        state.cursorRow,
+        state.cursorCol,
+        state.lines,
+      );
+
+      let endOffset = currentOffset;
+      let offset = currentOffset;
+
+      for (let i = 0; i < count; i++) {
+        const nextWordOffset = findNextWordStart(text, offset);
+        if (nextWordOffset > offset) {
+          offset = nextWordOffset;
+        } else {
+          // If no next word, change to end of current word
+          const wordEndOffset = findWordEnd(text, offset);
+          offset = Math.min(wordEndOffset + 1, text.length);
+          break;
+        }
+      }
+      endOffset = offset;
+
+      if (endOffset !== currentOffset) {
+        const nextState = pushUndo(state);
+        const { startRow, startCol, endRow, endCol } = getPositionFromOffsets(
+          Math.min(currentOffset, endOffset),
+          Math.max(currentOffset, endOffset),
+          nextState.lines,
+        );
+        return replaceRangeInternal(
+          nextState,
+          startRow,
+          startCol,
+          endRow,
+          endCol,
+          '',
+        );
+      }
+      return state;
+    }
+
+    case 'vim_change_word_backward': {
+      const action_casted = action as {
+        type: 'vim_change_word_backward';
+        payload: { count: number };
+      };
+      const { count } = action_casted.payload;
+      const text = state.lines.join('\n');
+      const currentOffset = getOffsetFromPosition(
+        state.cursorRow,
+        state.cursorCol,
+        state.lines,
+      );
+
+      let startOffset = currentOffset;
+
+      for (let i = 0; i < count; i++) {
+        const prevWordOffset = findPrevWordStart(text, startOffset);
+        if (prevWordOffset < startOffset) {
+          startOffset = prevWordOffset;
+        } else {
+          break;
+        }
+      }
+
+      if (startOffset !== currentOffset) {
+        const nextState = pushUndo(state);
+        const { startRow, startCol, endRow, endCol } = getPositionFromOffsets(
+          Math.min(currentOffset, startOffset),
+          Math.max(currentOffset, startOffset),
+          nextState.lines,
+        );
+        return replaceRangeInternal(
+          nextState,
+          startRow,
+          startCol,
+          endRow,
+          endCol,
+          '',
+        );
+      }
+      return state;
+    }
+
+    case 'vim_change_word_end': {
+      const action_casted = action as {
+        type: 'vim_change_word_end';
+        payload: { count: number };
+      };
+      const { count } = action_casted.payload;
+      const text = state.lines.join('\n');
+      const currentOffset = getOffsetFromPosition(
+        state.cursorRow,
+        state.cursorCol,
+        state.lines,
+      );
+
+      let endOffset = currentOffset;
+      let searchOffset = currentOffset;
+
+      for (let i = 0; i < count; i++) {
+        const wordEndOffset = findWordEnd(text, searchOffset);
+        if (wordEndOffset > searchOffset) {
+          endOffset = wordEndOffset + 1; // +1 to include the character at end position for 'ce'
+
+          // For next iteration, move to start of next word
+          if (i < count - 1) {
+            const nextWordStart = findNextWordStart(text, wordEndOffset + 1);
+            searchOffset = nextWordStart;
+            if (nextWordStart <= wordEndOffset) {
+              break; // No next word found
+            }
+          }
+        } else {
+          break;
+        }
+      }
+
+      if (endOffset !== currentOffset) {
+        const nextState = pushUndo(state);
+        const { startRow, startCol, endRow, endCol } = getPositionFromOffsets(
+          Math.min(currentOffset, endOffset),
+          Math.max(currentOffset, endOffset),
+          nextState.lines,
+        );
+        return replaceRangeInternal(
+          nextState,
+          startRow,
+          startCol,
+          endRow,
+          endCol,
+          '',
+        );
+      }
+      return state;
+    }
+
+    case 'vim_delete_line': {
+      const { count } = action.payload;
+      const { cursorRow, lines } = state;
+      const totalLines = lines.length;
+      const linesToDelete = Math.min(count, totalLines - cursorRow);
+
+      if (totalLines === 1) {
+        // If there's only one line, clear it
+        const nextState = pushUndo(state);
+        return replaceRangeInternal(nextState, 0, 0, 0, lines[0].length, '');
+      } else {
+        const nextState = pushUndo(state);
+        const { startOffset, endOffset } = getLineRangeOffsets(
+          cursorRow,
+          linesToDelete,
+          nextState.lines,
+        );
+        const { startRow, startCol, endRow, endCol } = getPositionFromOffsets(
+          startOffset,
+          endOffset,
+          nextState.lines,
+        );
+        return replaceRangeInternal(
+          nextState,
+          startRow,
+          startCol,
+          endRow,
+          endCol,
+          '',
+        );
+      }
+    }
+
+    case 'vim_change_line': {
+      const { count } = action.payload;
+      const { cursorRow, lines } = state;
+      const totalLines = lines.length;
+      const linesToChange = Math.min(count, totalLines - cursorRow);
+
+      if (totalLines === 1) {
+        // If there's only one line, clear it
+        const nextState = pushUndo(state);
+        return replaceRangeInternal(nextState, 0, 0, 0, lines[0].length, '');
+      } else {
+        const nextState = pushUndo(state);
+        const { startOffset, endOffset } = getLineRangeOffsets(
+          cursorRow,
+          linesToChange,
+          nextState.lines,
+        );
+        const { startRow, startCol, endRow, endCol } = getPositionFromOffsets(
+          startOffset,
+          endOffset,
+          nextState.lines,
+        );
+        return replaceRangeInternal(
+          nextState,
+          startRow,
+          startCol,
+          endRow,
+          endCol,
+          '',
+        );
+      }
+    }
+
+    case 'vim_delete_to_end_of_line': {
+      const { cursorRow, cursorCol, lines } = state;
+      const currentLine = lines[cursorRow] || '';
+
+      if (cursorCol < currentLine.length) {
+        const nextState = pushUndo(state);
+        return replaceRangeInternal(
+          nextState,
+          cursorRow,
+          cursorCol,
+          cursorRow,
+          currentLine.length,
+          '',
+        );
+      }
+      return state;
+    }
+
+    case 'vim_change_to_end_of_line': {
+      const { cursorRow, cursorCol, lines } = state;
+      const currentLine = lines[cursorRow] || '';
+
+      if (cursorCol < currentLine.length) {
+        const nextState = pushUndo(state);
+        return replaceRangeInternal(
+          nextState,
+          cursorRow,
+          cursorCol,
+          cursorRow,
+          currentLine.length,
+          '',
+        );
+      }
+      return state;
+    }
+
+    case 'vim_change_movement': {
+      const { movement, count } = action.payload;
+      const { cursorRow, cursorCol } = state;
+
+      const nextState = pushUndo(state);
+
+      switch (movement) {
+        case 'h': {
+          // Change N characters to the left
+          const startCol = Math.max(0, cursorCol - count);
+          return replaceRangeInternal(
+            nextState,
+            cursorRow,
+            startCol,
+            cursorRow,
+            cursorCol,
+            '',
+          );
+        }
+
+        case 'j': {
+          // Change from current line down N lines
+          const totalLines = nextState.lines.length;
+          const linesToChange = Math.min(count + 1, totalLines - cursorRow);
+
+          if (totalLines === 1) {
+            const currentLine = nextState.lines[0] || '';
+            return replaceRangeInternal(
+              nextState,
+              0,
+              0,
+              0,
+              currentLine.length,
+              '',
+            );
+          } else {
+            const { startOffset, endOffset } = getLineRangeOffsets(
+              cursorRow,
+              linesToChange,
+              nextState.lines,
+            );
+            const { startRow, startCol, endRow, endCol } =
+              getPositionFromOffsets(startOffset, endOffset, nextState.lines);
+            return replaceRangeInternal(
+              nextState,
+              startRow,
+              startCol,
+              endRow,
+              endCol,
+              '',
+            );
+          }
+        }
+
+        case 'k': {
+          // Change from current line up N lines
+          const linesToChange = Math.min(count + 1, cursorRow + 1);
+          const startRow = cursorRow - count;
+
+          if (nextState.lines.length === 1) {
+            const currentLine = nextState.lines[0] || '';
+            return replaceRangeInternal(
+              nextState,
+              0,
+              0,
+              0,
+              currentLine.length,
+              '',
+            );
+          } else {
+            const { startOffset, endOffset } = getLineRangeOffsets(
+              Math.max(0, startRow),
+              linesToChange,
+              nextState.lines,
+            );
+            const {
+              startRow: newStartRow,
+              startCol,
+              endRow,
+              endCol,
+            } = getPositionFromOffsets(startOffset, endOffset, nextState.lines);
+            const resultState = replaceRangeInternal(
+              nextState,
+              newStartRow,
+              startCol,
+              endRow,
+              endCol,
+              '',
+            );
+            return {
+              ...resultState,
+              cursorRow: newStartRow,
+              cursorCol: startCol,
+            };
+          }
+        }
+
+        case 'l': {
+          // Change N characters to the right
+          const endCol = Math.min(
+            nextState.lines[cursorRow]?.length || 0,
+            cursorCol + count,
+          );
+          return replaceRangeInternal(
+            nextState,
+            cursorRow,
+            cursorCol,
+            cursorRow,
+            endCol,
+            '',
+          );
+        }
+
+        default:
+          // This should never happen due to type constraints
+          return nextState;
+      }
+      return nextState;
+    }
+
     default: {
       const exhaustiveCheck: never = action;
       console.error(`Unknown action encountered: ${exhaustiveCheck}`);
@@ -1109,6 +1885,54 @@ export function useTextBuffer({
     dispatch({ type: 'kill_line_left' });
   }, []);
 
+  // Vim-specific operations
+  const vimDeleteWordForward = useCallback((count: number): void => {
+    dispatch({ type: 'vim_delete_word_forward', payload: { count } });
+  }, []);
+
+  const vimDeleteWordBackward = useCallback((count: number): void => {
+    dispatch({ type: 'vim_delete_word_backward', payload: { count } });
+  }, []);
+
+  const vimDeleteWordEnd = useCallback((count: number): void => {
+    dispatch({ type: 'vim_delete_word_end', payload: { count } });
+  }, []);
+
+  const vimChangeWordForward = useCallback((count: number): void => {
+    dispatch({ type: 'vim_change_word_forward', payload: { count } });
+  }, []);
+
+  const vimChangeWordBackward = useCallback((count: number): void => {
+    dispatch({ type: 'vim_change_word_backward', payload: { count } });
+  }, []);
+
+  const vimChangeWordEnd = useCallback((count: number): void => {
+    dispatch({ type: 'vim_change_word_end', payload: { count } });
+  }, []);
+
+  const vimDeleteLine = useCallback((count: number): void => {
+    dispatch({ type: 'vim_delete_line', payload: { count } });
+  }, []);
+
+  const vimChangeLine = useCallback((count: number): void => {
+    dispatch({ type: 'vim_change_line', payload: { count } });
+  }, []);
+
+  const vimDeleteToEndOfLine = useCallback((): void => {
+    dispatch({ type: 'vim_delete_to_end_of_line' });
+  }, []);
+
+  const vimChangeToEndOfLine = useCallback((): void => {
+    dispatch({ type: 'vim_change_to_end_of_line' });
+  }, []);
+
+  const vimChangeMovement = useCallback(
+    (movement: 'h' | 'j' | 'k' | 'l', count: number): void => {
+      dispatch({ type: 'vim_change_movement', payload: { movement, count } });
+    },
+    [],
+  );
+
   const openInExternalEditor = useCallback(
     async (opts: { editor?: string } = {}): Promise<void> => {
       const editor =
@@ -1272,6 +2096,18 @@ export function useTextBuffer({
     killLineLeft,
     handleInput,
     openInExternalEditor,
+    // Vim-specific operations
+    vimDeleteWordForward,
+    vimDeleteWordBackward,
+    vimDeleteWordEnd,
+    vimChangeWordForward,
+    vimChangeWordBackward,
+    vimChangeWordEnd,
+    vimDeleteLine,
+    vimChangeLine,
+    vimDeleteToEndOfLine,
+    vimChangeToEndOfLine,
+    vimChangeMovement,
   };
   return returnValue;
 }
@@ -1386,4 +2222,50 @@ export interface TextBuffer {
     replacementText: string,
   ) => void;
   moveToOffset(offset: number): void;
+
+  // Vim-specific operations
+  /**
+   * Delete N words forward from cursor position (vim 'dw' command)
+   */
+  vimDeleteWordForward: (count: number) => void;
+  /**
+   * Delete N words backward from cursor position (vim 'db' command)
+   */
+  vimDeleteWordBackward: (count: number) => void;
+  /**
+   * Delete to end of N words from cursor position (vim 'de' command)
+   */
+  vimDeleteWordEnd: (count: number) => void;
+  /**
+   * Change N words forward from cursor position (vim 'cw' command)
+   */
+  vimChangeWordForward: (count: number) => void;
+  /**
+   * Change N words backward from cursor position (vim 'cb' command)
+   */
+  vimChangeWordBackward: (count: number) => void;
+  /**
+   * Change to end of N words from cursor position (vim 'ce' command)
+   */
+  vimChangeWordEnd: (count: number) => void;
+  /**
+   * Delete N lines from cursor position (vim 'dd' command)
+   */
+  vimDeleteLine: (count: number) => void;
+  /**
+   * Change N lines from cursor position (vim 'cc' command)
+   */
+  vimChangeLine: (count: number) => void;
+  /**
+   * Delete from cursor to end of line (vim 'D' command)
+   */
+  vimDeleteToEndOfLine: () => void;
+  /**
+   * Change from cursor to end of line (vim 'C' command)
+   */
+  vimChangeToEndOfLine: () => void;
+  /**
+   * Change movement operations (vim 'ch', 'cj', 'ck', 'cl' commands)
+   */
+  vimChangeMovement: (movement: 'h' | 'j' | 'k' | 'l', count: number) => void;
 }

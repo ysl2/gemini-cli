@@ -406,52 +406,12 @@ export function useVim(
     (cmdType: string, count: number) => {
       switch (cmdType) {
         case 'dw': {
-          const text = buffer.text;
-          const currentOffset = getCurrentOffset();
-          let endOffset = currentOffset;
-          let searchOffset = currentOffset;
-
-          for (let i = 0; i < count; i++) {
-            const nextWordOffset = findNextWordStart(text, searchOffset);
-            if (nextWordOffset > searchOffset) {
-              searchOffset = nextWordOffset;
-              endOffset = nextWordOffset;
-            } else {
-              const wordEndOffset = findWordEnd(text, searchOffset);
-              endOffset = Math.min(wordEndOffset + 1, text.length);
-              break;
-            }
-          }
-
-          if (endOffset > currentOffset) {
-            buffer.replaceRangeByOffset(currentOffset, endOffset, '');
-          }
+          buffer.vimDeleteWordForward(count);
           break;
         }
 
         case 'db': {
-          const text = buffer.text;
-          const currentOffset = getCurrentOffset();
-          let endOffset = currentOffset;
-          let offset = currentOffset;
-
-          for (let i = 0; i < count; i++) {
-            const prevWordOffset = findPrevWordStart(text, offset);
-            if (prevWordOffset < offset) {
-              offset = prevWordOffset;
-            } else {
-              break;
-            }
-          }
-          endOffset = offset;
-
-          if (endOffset !== currentOffset) {
-            buffer.replaceRangeByOffset(
-              Math.min(currentOffset, endOffset),
-              Math.max(currentOffset, endOffset),
-              '',
-            );
-          }
+          buffer.vimDeleteWordBackward(count);
           break;
         }
 
@@ -858,29 +818,7 @@ export function useVim(
               const repeatCount = getCurrentCount();
               dispatch({ type: 'CLEAR_COUNT' });
 
-              const text = buffer.text;
-              const currentOffset = getCurrentOffset();
-              let endOffset = currentOffset;
-
-              // Delete from cursor through N words using findNextWordStart for consistency
-              let searchOffset = currentOffset;
-              for (let i = 0; i < repeatCount; i++) {
-                const nextWordOffset = findNextWordStart(text, searchOffset);
-                if (nextWordOffset > searchOffset) {
-                  searchOffset = nextWordOffset;
-                  endOffset = nextWordOffset;
-                } else {
-                  // If findNextWordStart doesn't advance, we're likely at the last word
-                  // In this case, delete to the end of the current word
-                  const wordEndOffset = findWordEnd(text, searchOffset);
-                  endOffset = Math.min(wordEndOffset + 1, text.length);
-                  break;
-                }
-              }
-
-              if (endOffset > currentOffset) {
-                buffer.replaceRangeByOffset(currentOffset, endOffset, '');
-              }
+              buffer.vimDeleteWordForward(repeatCount);
 
               // Record this command for repeat
               dispatch({
@@ -896,33 +834,7 @@ export function useVim(
               const repeatCount = getCurrentCount();
               dispatch({ type: 'CLEAR_COUNT' });
 
-              const text = buffer.text;
-              const currentOffset = getCurrentOffset();
-              let endOffset = currentOffset;
-
-              // Change from cursor through N words using findNextWordStart for consistency
-              let offset = currentOffset;
-              for (let i = 0; i < repeatCount; i++) {
-                const nextWordOffset = findNextWordStart(text, offset);
-                if (nextWordOffset > offset) {
-                  offset = nextWordOffset;
-                } else {
-                  // If findNextWordStart doesn't advance, we're likely at the last word
-                  // In this case, change to the end of the current word
-                  const wordEndOffset = findWordEnd(text, offset);
-                  offset = Math.min(wordEndOffset + 1, text.length);
-                  break;
-                }
-              }
-              endOffset = offset;
-
-              if (endOffset !== currentOffset) {
-                buffer.replaceRangeByOffset(
-                  Math.min(currentOffset, endOffset),
-                  Math.max(currentOffset, endOffset),
-                  '',
-                );
-              }
+              buffer.vimChangeWordForward(repeatCount);
 
               // Record this command for repeat
               dispatch({
