@@ -1,162 +1,136 @@
-# Gemini CLI
+# Gemini CLI Nexus
 
-[![Gemini CLI CI](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/google-gemini/gemini-cli/actions/workflows/ci.yml)
+A multi-API provider support version based on `gemini-cli`, maintaining full compatibility with `gemini-cli`. Users can seamlessly switch between different large language model services. I named it `gemini-cli-nexus`.
 
-![Gemini CLI Screenshot](./docs/assets/gemini-screenshot.png)
+`nexus` means "connection point" or "core", this name emphasizes the tool's role as a central hub for interacting with various AI large models.
 
-This repository contains the Gemini CLI, a command-line AI workflow tool that connects to your
-tools, understands your code and accelerates your workflows.
+> This name was recommended by Gemini 😄
 
-With the Gemini CLI you can:
+Supported models include:
 
-- Query and edit large codebases in and beyond Gemini's 1M token context window.
-- Generate new apps from PDFs or sketches, using Gemini's multimodal capabilities.
-- Automate operational tasks, like querying pull requests or handling complex rebases.
-- Use tools and MCP servers to connect new capabilities, including [media generation with Imagen,
-  Veo or Lyria](https://github.com/GoogleCloudPlatform/vertex-ai-creative-studio/tree/main/experiments/mcp-genmedia)
-- Ground your queries with the [Google Search](https://ai.google.dev/gemini-api/docs/grounding)
-  tool, built in to Gemini.
+- **Google Gemini** (default)
+- **OpenAI GPT series**
+- **Anthropic Claude series**
+- DeepSeek
+- Kimi2
+- Other models compatible with the above APIs
 
-## Quickstart
+## Core Features
 
-1. **Prerequisites:** Ensure you have [Node.js version 20](https://nodejs.org/en/download) or higher installed.
-2. **Run the CLI:** Execute the following command in your terminal:
+### 1. Automatic Provider Detection
+- Automatically detects available API keys from environment variables
+- Intelligently selects the optimal provider
+- Supports provider fallback mechanism
 
-   ```bash
-   npx https://github.com/google-gemini/gemini-cli
-   ```
+### 2. Unified API Interface
+- All providers use the same calling interface
+- No need to modify existing code when switching providers
+- Maintains backward compatibility
 
-   Or install it with:
+## Installation
 
-   ```bash
-   npm install -g @google/gemini-cli
-   ```
+Please ensure you have `Node.js 20` or higher installed before installation.
 
-   Then, run the CLI from anywhere:
+The installation method is consistent with gemini-cli. It's recommended to use npx in the project directory.
 
-   ```bash
-   gemini
-   ```
-
-3. **Pick a color theme**
-4. **Authenticate:** When prompted, sign in with your personal Google account. This will grant you up to 60 model requests per minute and 1,000 model requests per day using Gemini.
-
-You are now ready to use the Gemini CLI!
-
-### Use a Gemini API key:
-
-The Gemini API provides a free tier with [100 requests per day](https://ai.google.dev/gemini-api/docs/rate-limits#free-tier) using Gemini 2.5 Pro, control over which model you use, and access to higher rate limits (with a paid plan):
-
-1. Generate a key from [Google AI Studio](https://aistudio.google.com/apikey).
-2. Set it as an environment variable in your terminal. Replace `YOUR_API_KEY` with your generated key.
-
-   ```bash
-   export GEMINI_API_KEY="YOUR_API_KEY"
-   ```
-
-3. (Optionally) Upgrade your Gemini API project to a paid plan on the API key page (will automatically unlock [Tier 1 rate limits](https://ai.google.dev/gemini-api/docs/rate-limits#tier-1))
-
-### Use a Vertex AI API key:
-
-The Vertex AI API provides a [free tier](https://cloud.google.com/vertex-ai/generative-ai/docs/start/express-mode/overview) using express mode for Gemini 2.5 Pro, control over which model you use, and access to higher rate limits with a billing account:
-
-1. Generate a key from [Google Cloud](https://cloud.google.com/vertex-ai/generative-ai/docs/start/api-keys).
-2. Set it as an environment variable in your terminal. Replace `YOUR_API_KEY` with your generated key and set GOOGLE_GENAI_USE_VERTEXAI to true
-
-   ```bash
-   export GOOGLE_API_KEY="YOUR_API_KEY"
-   export GOOGLE_GENAI_USE_VERTEXAI=true
-   ```
-
-3. (Optionally) Add a billing account on your project to get access to [higher usage limits](https://cloud.google.com/vertex-ai/generative-ai/docs/quotas)
-
-For other authentication methods, including Google Workspace accounts, see the [authentication](./docs/cli/authentication.md) guide.
-
-## Examples
-
-Once the CLI is running, you can start interacting with Gemini from your shell.
-
-You can start a project from a new directory:
-
-```sh
-cd new-project/
-gemini
-> Write me a Gemini Discord bot that answers questions using a FAQ.md file I will provide
+```shell
+$ npx https://github.com/ai-embedded/gemini-cli-nexus
 ```
 
-Or work with an existing project:
+> Note: If using npx, please set environment variables before running gemini-cli-nexus. If environment variables are not set, gemini-cli-nexus will use the default gemini model.
 
-```sh
-git clone https://github.com/google-gemini/gemini-cli
-cd gemini-cli
-gemini
-> Give me a summary of all of the changes that went in yesterday
+For global installation, first ensure gemini-cli is not installed. If gemini-cli is already installed, please uninstall it first:
+
+```shell
+$ sudo npm uninstall -g gemini-cli
+$ sudo npm install -g https://github.com/ai-embedded/gemini-cli-nexus
 ```
 
-### Next steps
+## Configuration
 
-- Learn how to [contribute to or build from the source](./CONTRIBUTING.md).
-- Explore the available **[CLI Commands](./docs/cli/commands.md)**.
-- If you encounter any issues, review the **[troubleshooting guide](./docs/troubleshooting.md)**.
-- For more comprehensive documentation, see the [full documentation](./docs/index.md).
-- Take a look at some [popular tasks](#popular-tasks) for more inspiration.
-- Check out our **[Official Roadmap](./ROADMAP.md)**
+When starting gemini-cli-nexus, it will automatically detect API keys in environment variables and .env files, and automatically select providers based on available keys.
+After startup, you'll have 2 more login options compared to gemini-cli. Select different providers to use different API services.
 
-### Troubleshooting
+```bash
+How would you like to authenticate for this project?
 
-Head over to the [troubleshooting guide](docs/troubleshooting.md) if you're
-having issues.
-
-## Popular tasks
-
-### Explore a new codebase
-
-Start by `cd`ing into an existing or newly-cloned repository and running `gemini`.
-
-```text
-> Describe the main pieces of this system's architecture.
+● 1. Login with Google
+  2. Use Gemini API Key
+  3. Vertex AI
+  4. Use OpenAI API Key
+  5. Use Anthropic API Key
 ```
 
-```text
-> What security mechanisms are in place?
+### 1. Environment Variable Configuration
+
+#### Recommended: Using unified MODEL environment variable
+
+```bash
+export OPENAI_API_KEY="sk-your-openai-key-here"
+export OPENAI_BASE_URL=https://api.openai.com/v1 
+# or
+export ANTHROPIC_API_KEY="sk-ant-your-anthropic-key-here"
+export ANTHROPIC_BASE_URL=https://api.anthropic.com
+
+# Set model (unified configuration method)
+export MODEL="gpt-4o-mini"
 ```
 
-### Work with your existing code
+### 2. .env File Configuration
 
-```text
-> Implement a first draft for GitHub issue #123.
+Create a `.env` file in the project root directory:
+
+```bash
+# Option 1: OpenAI
+OPENAI_API_KEY=sk-your-openai-key-here
+OPENAI_BASE_URL=https://api.openai.com/v1  # Optional, defaults to OpenAI
+
+# Option 2: Anthropic
+ANTHROPIC_API_KEY=sk-ant-your-anthropic-key-here
+ANTHROPIC_BASE_URL=https://api.anthropic.com  # Optional, defaults to Anthropic
+
+# Option 3: Gemini (original/default)
+# GEMINI_API_KEY=AIza-your-gemini-key-here
+
+# Option 4: Vertex AI (Google Cloud)
+# GOOGLE_CLOUD_PROJECT=your-project-id
+# GOOGLE_CLOUD_LOCATION=us-central1
+# GOOGLE_API_KEY=your-google-api-key  # Optional for express mode
+
+# Model selection (optional)
+# MODEL=gpt-4o-mini
+# MODEL=claude-3-5-sonnet-20241022
+# MODEL=gemini-2.5-pro
+MODEL=claude-sonnect-4-20250514
 ```
 
-```text
-> Help me migrate this codebase to the latest version of Java. Start with a plan.
+> You can refer to the .env.example file in the project directory for configuration. Please be careful not to commit .env to avoid key leakage.
+
+## Authentication Reset
+
+If you need to re-select authentication method:
+
+```bash
+# Method 1: Delete authentication configuration
+rm ~/.gemini/settings.json
+
+# Method 2: Edit settings file, delete selectedAuthType field
+# Edit ~/.gemini/settings.json
+
+# Method 3: Complete reset
+rm -rf ~/.gemini/
 ```
 
-### Automate your workflows
+Or use the `/logout` command after logging into the command line to log out and log in again.
 
-Use MCP servers to integrate your local system tools with your enterprise collaboration suite.
+For detailed usage instructions of gemini-cli, please refer to [gemini-cli](gemini-cli.md)
 
-```text
-> Make me a slide deck showing the git history from the last 7 days, grouped by feature and team member.
-```
+## Similar Projects
+- [qwen-code](https://github.com/QwenLM/qwen-code)
 
-```text
-> Make a full-screen web app for a wall display to show our most interacted-with GitHub issues.
-```
+## Acknowledgments
+This project is developed based on gemini-cli. Thanks to [gemini-cli](https://github.com/google-gemini/gemini-cli).
 
-### Interact with your system
+## License
 
-```text
-> Convert all the images in this directory to png, and rename them to use dates from the exif data.
-```
-
-```text
-> Organize my PDF invoices by month of expenditure.
-```
-
-### Uninstall
-
-Head over to the [Uninstall](docs/Uninstall.md) guide for uninstallation instructions.
-
-## Terms of Service and Privacy Notice
-
-For details on the terms of service and privacy notice applicable to your use of Gemini CLI, see the [Terms of Service and Privacy Notice](./docs/tos-privacy.md).
+Developed based on the original gemini-cli, following the same license.
