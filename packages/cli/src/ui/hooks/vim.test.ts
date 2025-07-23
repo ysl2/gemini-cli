@@ -10,6 +10,26 @@ import { useVim } from './vim.js';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
 import type { LoadedSettings } from '../../config/settings.js';
 
+// Test constants
+const TEST_SEQUENCES = {
+  ESCAPE: { sequence: '\u001b', name: 'escape' },
+  LEFT: { sequence: 'h' },
+  RIGHT: { sequence: 'l' },
+  UP: { sequence: 'k' },
+  DOWN: { sequence: 'j' },
+  INSERT: { sequence: 'i' },
+  APPEND: { sequence: 'a' },
+  DELETE_CHAR: { sequence: 'x' },
+  DELETE: { sequence: 'd' },
+  CHANGE: { sequence: 'c' },
+  WORD_FORWARD: { sequence: 'w' },
+  WORD_BACKWARD: { sequence: 'b' },
+  WORD_END: { sequence: 'e' },
+  LINE_START: { sequence: '0' },
+  LINE_END: { sequence: '$' },
+  REPEAT: { sequence: '.' },
+} as const;
+
 describe('useVim hook', () => {
   let mockBuffer: Partial<TextBuffer>;
   let mockSettings: Partial<LoadedSettings>;
@@ -102,7 +122,7 @@ describe('useVim hook', () => {
       const { result } = renderVimHook();
 
       act(() => {
-        result.current.handleInput({ sequence: 'i' });
+        result.current.handleInput(TEST_SEQUENCES.INSERT);
       });
 
       expect(result.current.mode).toBe('INSERT');
@@ -112,17 +132,17 @@ describe('useVim hook', () => {
       const { result } = renderVimHook();
 
       act(() => {
-        result.current.handleInput({ sequence: 'i' });
+        result.current.handleInput(TEST_SEQUENCES.INSERT);
       });
       expect(result.current.mode).toBe('INSERT');
 
       act(() => {
-        result.current.handleInput({ sequence: '\u001b', name: 'escape' });
+        result.current.handleInput(TEST_SEQUENCES.ESCAPE);
       });
       expect(result.current.mode).toBe('NORMAL');
     });
 
-    it('should handle rapid escape then command sequence', () => {
+    it('should properly handle escape followed immediately by a command', () => {
       const testBuffer = createMockBuffer('hello world test', [0, 6]);
       const { result } = renderVimHook(testBuffer);
 
@@ -271,7 +291,7 @@ describe('useVim hook', () => {
       expect(mockBuffer.del).toHaveBeenCalled();
     });
 
-    it('should handle x when deleting last character on line', () => {
+    it('should move cursor left when deleting last character on line (vim behavior)', () => {
       const testBuffer = createMockBuffer('hello', [0, 4]);
       const { result } = renderVimHook(testBuffer);
 
@@ -325,7 +345,7 @@ describe('useVim hook', () => {
   });
 
   describe('Word movement', () => {
-    it('should use findNextWordStart for consistent dw behavior', () => {
+    it('should properly initialize vim hook with word movement support', () => {
       const testBuffer = createMockBuffer('cat elephant mouse', [0, 0]);
       const { result } = renderVimHook(testBuffer);
 
@@ -334,7 +354,7 @@ describe('useVim hook', () => {
       expect(result.current.handleInput).toBeDefined();
     });
 
-    it('should handle dw repeat from different line positions correctly', () => {
+    it('should support vim mode and basic operations across multiple lines', () => {
       const testBuffer = createMockBuffer(
         'first line word\nsecond line word',
         [0, 11],
@@ -440,6 +460,41 @@ describe('useVim hook', () => {
       });
 
       expect(mockBuffer.move).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Toggle vim mode', () => {
+    it('should toggle vim mode setting when called', () => {
+      const testSettings = createMockSettings(true);
+      const { result } = renderVimHook(mockBuffer, testSettings);
+
+      expect(result.current.vimModeEnabled).toBe(true);
+
+      act(() => {
+        result.current.toggleVimMode();
+      });
+
+      expect(testSettings.setValue).toHaveBeenCalledWith(
+        expect.anything(),
+        'vimMode',
+        false,
+      );
+    });
+
+    it('should switch from INSERT to NORMAL when disabling vim mode', () => {
+      const testSettings = createMockSettings(true);
+      const { result } = renderVimHook(mockBuffer, testSettings);
+
+      act(() => {
+        result.current.handleInput(TEST_SEQUENCES.INSERT);
+      });
+      expect(result.current.mode).toBe('INSERT');
+
+      act(() => {
+        result.current.toggleVimMode();
+      });
+
+      expect(result.current.mode).toBe('NORMAL');
     });
   });
 
@@ -607,6 +662,59 @@ describe('useVim hook', () => {
       });
       expect(result.current.mode).toBe('NORMAL');
       expect(testBuffer.cursor).toEqual([0, 10]);
+    });
+  });
+
+  describe('Special characters and edge cases', () => {
+    it('should handle ^ (move to first non-whitespace character)', () => {
+      const testBuffer = createMockBuffer('   hello world', [0, 5]);
+      const { result } = renderVimHook(testBuffer);
+
+      act(() => {
+        result.current.handleInput({ sequence: '^' });
+      });
+
+      expect(testBuffer.moveToOffset).toHaveBeenCalledWith(3);
+    });
+
+    it('should handle G without count (go to last line)', () => {
+      const testBuffer = createMockBuffer('line1\nline2\nline3', [0, 0]);
+      const { result } = renderVimHook(testBuffer);
+
+      act(() => {
+        result.current.handleInput({ sequence: 'G' });
+      });
+
+      expect(testBuffer.moveToOffset).toHaveBeenCalled();
+    });
+
+    it('should handle gg (go to first line)', () => {
+      const testBuffer = createMockBuffer('line1\nline2\nline3', [2, 0]);
+      const { result } = renderVimHook(testBuffer);
+
+      // First 'g' sets pending state
+      act(() => {
+        result.current.handleInput({ sequence: 'g' });
+      });
+
+      // Second 'g' executes the command
+      act(() => {
+        result.current.handleInput({ sequence: 'g' });
+      });
+
+      expect(testBuffer.moveToOffset).toHaveBeenCalledWith(0);
+    });
+
+    it('should handle count with movement commands', () => {
+      const testBuffer = createMockBuffer('hello world test', [0, 0]);
+      const { result } = renderVimHook(testBuffer);
+
+      act(() => {
+        result.current.handleInput({ sequence: '3' });
+        result.current.handleInput(TEST_SEQUENCES.WORD_FORWARD);
+      });
+
+      expect(testBuffer.moveToOffset).toHaveBeenCalled();
     });
   });
 });

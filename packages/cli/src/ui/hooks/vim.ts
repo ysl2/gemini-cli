@@ -12,6 +12,35 @@ import { SettingScope } from '../../config/settings.js';
 
 export type VimMode = 'NORMAL' | 'INSERT';
 
+// Constants
+const DIGIT_MULTIPLIER = 10;
+const DEFAULT_COUNT = 1;
+const LINE_SEPARATOR = '\n';
+const WHITESPACE_CHARS = /\s/;
+const WORD_CHARS = /\w/;
+const DIGIT_1_TO_9 = /^[1-9]$/;
+
+// Command types
+const CMD_TYPES = {
+  DELETE_WORD_FORWARD: 'dw',
+  DELETE_WORD_BACKWARD: 'db',
+  DELETE_WORD_END: 'de',
+  CHANGE_WORD_FORWARD: 'cw',
+  CHANGE_WORD_BACKWARD: 'cb',
+  CHANGE_WORD_END: 'ce',
+  DELETE_CHAR: 'x',
+  DELETE_LINE: 'dd',
+  CHANGE_LINE: 'cc',
+  DELETE_TO_EOL: 'D',
+  CHANGE_TO_EOL: 'C',
+  CHANGE_MOVEMENT: {
+    LEFT: 'ch',
+    DOWN: 'cj',
+    UP: 'ck',
+    RIGHT: 'cl',
+  },
+} as const;
+
 // Utility functions moved outside the hook to avoid unnecessary useCallback usage
 const findNextWordStart = (text: string, currentOffset: number): number => {
   let i = currentOffset;
@@ -21,20 +50,24 @@ const findNextWordStart = (text: string, currentOffset: number): number => {
   const currentChar = text[i];
 
   // Skip current word/sequence based on character type
-  if (/\w/.test(currentChar)) {
+  if (WORD_CHARS.test(currentChar)) {
     // Skip current word characters
-    while (i < text.length && /\w/.test(text[i])) {
+    while (i < text.length && WORD_CHARS.test(text[i])) {
       i++;
     }
-  } else if (!/\s/.test(currentChar)) {
+  } else if (!WHITESPACE_CHARS.test(currentChar)) {
     // Skip current non-word, non-whitespace characters (like "/", ".", etc.)
-    while (i < text.length && !/\w/.test(text[i]) && !/\s/.test(text[i])) {
+    while (
+      i < text.length &&
+      !WORD_CHARS.test(text[i]) &&
+      !WHITESPACE_CHARS.test(text[i])
+    ) {
       i++;
     }
   }
 
   // Skip whitespace
-  while (i < text.length && /\s/.test(text[i])) {
+  while (i < text.length && WHITESPACE_CHARS.test(text[i])) {
     i++;
   }
 
@@ -43,7 +76,7 @@ const findNextWordStart = (text: string, currentOffset: number): number => {
   if (i >= text.length) {
     // Go back to find the end of the last word
     let endOfLastWord = text.length - 1;
-    while (endOfLastWord >= 0 && /\s/.test(text[endOfLastWord])) {
+    while (endOfLastWord >= 0 && WHITESPACE_CHARS.test(text[endOfLastWord])) {
       endOfLastWord--;
     }
     // For dw on last word, return position AFTER the last character to delete entire word
@@ -75,9 +108,9 @@ const findPrevWordStart = (text: string, currentOffset: number): number => {
 
   const charAtI = text[i];
 
-  if (/\w/.test(charAtI)) {
+  if (WORD_CHARS.test(charAtI)) {
     // We're in a word, move to its beginning
-    while (i >= 0 && /\w/.test(text[i])) {
+    while (i >= 0 && WORD_CHARS.test(text[i])) {
       i--;
     }
     return i + 1; // Return first character of word
@@ -85,10 +118,10 @@ const findPrevWordStart = (text: string, currentOffset: number): number => {
     // We're in punctuation, move to its beginning
     while (
       i >= 0 &&
-      !/\w/.test(text[i]) &&
+      !WORD_CHARS.test(text[i]) &&
       text[i] !== ' ' &&
       text[i] !== '\t' &&
-      text[i] !== '\n'
+      text[i] !== LINE_SEPARATOR
     ) {
       i--;
     }
@@ -100,20 +133,28 @@ const findWordEnd = (text: string, currentOffset: number): number => {
   let i = currentOffset;
 
   // If we're not on a word character, find the next word
-  if (!/\w/.test(text[i])) {
-    while (i < text.length && !/\w/.test(text[i])) {
+  if (!WORD_CHARS.test(text[i])) {
+    while (i < text.length && !WORD_CHARS.test(text[i])) {
       i++;
     }
   }
 
   // Move to end of current word
-  while (i < text.length && /\w/.test(text[i])) {
+  while (i < text.length && WORD_CHARS.test(text[i])) {
     i++;
   }
 
   // Move back one to be on the last character of the word
   return Math.max(currentOffset, i - 1);
 };
+
+// Helper function to clear pending state
+const createClearPendingState = () => ({
+  count: 0,
+  pendingG: false,
+  pendingD: false,
+  pendingC: false,
+});
 
 // State and action types for useReducer
 type VimState = {
@@ -138,7 +179,6 @@ type VimAction =
       command: { type: string; count: number } | null;
     }
   | { type: 'CLEAR_PENDING_STATES' }
-  | { type: 'ESCAPE_IN_NORMAL' }
   | { type: 'ESCAPE_TO_NORMAL' };
 
 const initialVimState: VimState = {
@@ -160,7 +200,7 @@ const vimReducer = (state: VimState, action: VimAction): VimState => {
       return { ...state, count: action.count };
 
     case 'INCREMENT_COUNT':
-      return { ...state, count: state.count * 10 + action.digit };
+      return { ...state, count: state.count * DIGIT_MULTIPLIER + action.digit };
 
     case 'CLEAR_COUNT':
       return { ...state, count: 0 };
@@ -180,30 +220,15 @@ const vimReducer = (state: VimState, action: VimAction): VimState => {
     case 'CLEAR_PENDING_STATES':
       return {
         ...state,
-        count: 0,
-        pendingG: false,
-        pendingD: false,
-        pendingC: false,
-      };
-
-    case 'ESCAPE_IN_NORMAL':
-      return {
-        ...state,
-        count: 0,
-        pendingG: false,
-        pendingD: false,
-        pendingC: false,
+        ...createClearPendingState(),
       };
 
     case 'ESCAPE_TO_NORMAL':
-      // Handle escape from INSERT mode - just return state changes
+      // Handle escape - switch to NORMAL mode and clear all pending states
       return {
         ...state,
+        ...createClearPendingState(),
         mode: 'NORMAL',
-        count: 0,
-        pendingG: false,
-        pendingD: false,
-        pendingC: false,
       };
 
     default:
@@ -238,7 +263,10 @@ export function useVim(
   >(null);
 
   // Helper functions using the reducer state
-  const getCurrentCount = useCallback(() => state.count || 1, [state.count]);
+  const getCurrentCount = useCallback(
+    () => state.count || DEFAULT_COUNT,
+    [state.count],
+  );
 
   const getCurrentOffset = useCallback(() => {
     const lines = buffer.lines;
@@ -372,9 +400,16 @@ export function useVim(
       }
 
       dispatch({ type: 'SET_MODE', mode: 'INSERT' });
+      const cmdTypeMap = {
+        h: CMD_TYPES.CHANGE_MOVEMENT.LEFT,
+        j: CMD_TYPES.CHANGE_MOVEMENT.DOWN,
+        k: CMD_TYPES.CHANGE_MOVEMENT.UP,
+        l: CMD_TYPES.CHANGE_MOVEMENT.RIGHT,
+      } as const;
+
       dispatch({
         type: 'SET_LAST_COMMAND',
-        command: { type: `c${movementType}`, count },
+        command: { type: cmdTypeMap[movementType], count },
       });
       dispatch({ type: 'SET_PENDING_C', pending: false });
     },
@@ -405,17 +440,17 @@ export function useVim(
   const executeCommand = useCallback(
     (cmdType: string, count: number) => {
       switch (cmdType) {
-        case 'dw': {
+        case CMD_TYPES.DELETE_WORD_FORWARD: {
           buffer.vimDeleteWordForward(count);
           break;
         }
 
-        case 'db': {
+        case CMD_TYPES.DELETE_WORD_BACKWARD: {
           buffer.vimDeleteWordBackward(count);
           break;
         }
 
-        case 'de': {
+        case CMD_TYPES.DELETE_WORD_END: {
           const text = buffer.text;
           const currentOffset = getCurrentOffset();
           let endOffset = currentOffset;
@@ -441,7 +476,7 @@ export function useVim(
           break;
         }
 
-        case 'cw': {
+        case CMD_TYPES.CHANGE_WORD_FORWARD: {
           const text = buffer.text;
           const currentOffset = getCurrentOffset();
           let endOffset = currentOffset;
@@ -470,7 +505,7 @@ export function useVim(
           break;
         }
 
-        case 'cb': {
+        case CMD_TYPES.CHANGE_WORD_BACKWARD: {
           const text = buffer.text;
           const currentOffset = getCurrentOffset();
           let endOffset = currentOffset;
@@ -497,7 +532,7 @@ export function useVim(
           break;
         }
 
-        case 'ce': {
+        case CMD_TYPES.CHANGE_WORD_END: {
           const text = buffer.text;
           const currentOffset = getCurrentOffset();
           let endOffset = currentOffset;
@@ -523,7 +558,7 @@ export function useVim(
           break;
         }
 
-        case 'x': {
+        case CMD_TYPES.DELETE_CHAR: {
           for (let i = 0; i < count; i++) {
             const currentRow = buffer.cursor[0];
             const currentCol = buffer.cursor[1];
@@ -541,7 +576,7 @@ export function useVim(
           break;
         }
 
-        case 'dd': {
+        case CMD_TYPES.DELETE_LINE: {
           const startRow = buffer.cursor[0];
           const totalLines = buffer.lines.length;
 
@@ -558,7 +593,7 @@ export function useVim(
           break;
         }
 
-        case 'cc': {
+        case CMD_TYPES.CHANGE_LINE: {
           const startRow = buffer.cursor[0];
           const totalLines = buffer.lines.length;
 
@@ -576,21 +611,21 @@ export function useVim(
           break;
         }
 
-        case 'ch':
-        case 'cj':
-        case 'ck':
-        case 'cl': {
+        case CMD_TYPES.CHANGE_MOVEMENT.LEFT:
+        case CMD_TYPES.CHANGE_MOVEMENT.DOWN:
+        case CMD_TYPES.CHANGE_MOVEMENT.UP:
+        case CMD_TYPES.CHANGE_MOVEMENT.RIGHT: {
           const movementType = cmdType[1] as 'h' | 'j' | 'k' | 'l';
           handleChangeMovement(movementType, count);
           break;
         }
 
-        case 'D': {
+        case CMD_TYPES.DELETE_TO_EOL: {
           handleEndOfLineOperation(false);
           break;
         }
 
-        case 'C': {
+        case CMD_TYPES.CHANGE_TO_EOL: {
           handleEndOfLineOperation(true);
           break;
         }
@@ -704,13 +739,13 @@ export function useVim(
       if (state.mode === 'NORMAL') {
         // Handle Escape key in NORMAL mode - clear all pending states
         if (normalizedKey.name === 'escape') {
-          dispatch({ type: 'ESCAPE_IN_NORMAL' });
+          dispatch({ type: 'CLEAR_PENDING_STATES' });
           return true; // Handled by vim
         }
 
         // Handle count input (numbers 1-9, and 0 if count > 0)
         if (
-          /^[1-9]$/.test(normalizedKey.sequence) ||
+          DIGIT_1_TO_9.test(normalizedKey.sequence) ||
           (normalizedKey.sequence === '0' && state.count > 0)
         ) {
           dispatch({
@@ -823,7 +858,10 @@ export function useVim(
               // Record this command for repeat
               dispatch({
                 type: 'SET_LAST_COMMAND',
-                command: { type: 'dw', count: repeatCount },
+                command: {
+                  type: CMD_TYPES.DELETE_WORD_FORWARD,
+                  count: repeatCount,
+                },
               });
               dispatch({ type: 'SET_PENDING_D', pending: false });
               return true;
@@ -839,7 +877,10 @@ export function useVim(
               // Record this command for repeat
               dispatch({
                 type: 'SET_LAST_COMMAND',
-                command: { type: 'cw', count: repeatCount },
+                command: {
+                  type: CMD_TYPES.CHANGE_WORD_FORWARD,
+                  count: repeatCount,
+                },
               });
               dispatch({ type: 'SET_PENDING_C', pending: false });
               dispatch({ type: 'SET_MODE', mode: 'INSERT' });
@@ -895,7 +936,10 @@ export function useVim(
               // Record this command for repeat
               dispatch({
                 type: 'SET_LAST_COMMAND',
-                command: { type: 'db', count: repeatCount },
+                command: {
+                  type: CMD_TYPES.DELETE_WORD_BACKWARD,
+                  count: repeatCount,
+                },
               });
               dispatch({ type: 'SET_PENDING_D', pending: false });
               return true;
@@ -933,7 +977,10 @@ export function useVim(
               // Record this command for repeat and switch to INSERT mode
               dispatch({
                 type: 'SET_LAST_COMMAND',
-                command: { type: 'cb', count: repeatCount },
+                command: {
+                  type: CMD_TYPES.CHANGE_WORD_BACKWARD,
+                  count: repeatCount,
+                },
               });
               dispatch({ type: 'SET_PENDING_C', pending: false });
               dispatch({ type: 'SET_MODE', mode: 'INSERT' });
@@ -984,7 +1031,10 @@ export function useVim(
               // Record this command for repeat
               dispatch({
                 type: 'SET_LAST_COMMAND',
-                command: { type: 'de', count: repeatCount },
+                command: {
+                  type: CMD_TYPES.DELETE_WORD_END,
+                  count: repeatCount,
+                },
               });
               dispatch({ type: 'SET_PENDING_D', pending: false });
               return true;
@@ -1030,7 +1080,10 @@ export function useVim(
               // Record this command for repeat
               dispatch({
                 type: 'SET_LAST_COMMAND',
-                command: { type: 'ce', count: repeatCount },
+                command: {
+                  type: CMD_TYPES.CHANGE_WORD_END,
+                  count: repeatCount,
+                },
               });
               dispatch({ type: 'SET_PENDING_C', pending: false });
               dispatch({ type: 'SET_MODE', mode: 'INSERT' });
@@ -1069,7 +1122,7 @@ export function useVim(
             // Record this command for repeat
             dispatch({
               type: 'SET_LAST_COMMAND',
-              command: { type: 'x', count: repeatCount },
+              command: { type: CMD_TYPES.DELETE_CHAR, count: repeatCount },
             });
             dispatch({ type: 'CLEAR_COUNT' });
             return true;
@@ -1134,7 +1187,10 @@ export function useVim(
             const currentRow = buffer.cursor[0];
             const currentLine = buffer.lines[currentRow] || '';
             let col = 0;
-            while (col < currentLine.length && /\s/.test(currentLine[col])) {
+            while (
+              col < currentLine.length &&
+              WHITESPACE_CHARS.test(currentLine[col])
+            ) {
               col++;
             }
             const offset = getOffsetFromPosition(currentRow, col);
@@ -1180,7 +1236,10 @@ export function useVim(
             const currentRow = buffer.cursor[0];
             const currentLine = buffer.lines[currentRow] || '';
             let col = 0;
-            while (col < currentLine.length && /\s/.test(currentLine[col])) {
+            while (
+              col < currentLine.length &&
+              WHITESPACE_CHARS.test(currentLine[col])
+            ) {
               col++;
             }
             const offset = getOffsetFromPosition(currentRow, col);
@@ -1223,7 +1282,7 @@ export function useVim(
               // Record this command for repeat
               dispatch({
                 type: 'SET_LAST_COMMAND',
-                command: { type: 'dd', count: repeatCount },
+                command: { type: CMD_TYPES.DELETE_LINE, count: repeatCount },
               });
               dispatch({ type: 'SET_PENDING_D', pending: false });
             } else {
@@ -1280,7 +1339,7 @@ export function useVim(
               // Record this command for repeat
               dispatch({
                 type: 'SET_LAST_COMMAND',
-                command: { type: 'cc', count: repeatCount },
+                command: { type: CMD_TYPES.CHANGE_LINE, count: repeatCount },
               });
               dispatch({ type: 'SET_PENDING_C', pending: false });
             } else {
@@ -1295,7 +1354,7 @@ export function useVim(
             handleEndOfLineOperation(false);
             dispatch({
               type: 'SET_LAST_COMMAND',
-              command: { type: 'D', count: 1 },
+              command: { type: CMD_TYPES.DELETE_TO_EOL, count: 1 },
             });
             dispatch({ type: 'CLEAR_COUNT' });
             return true;
@@ -1306,7 +1365,7 @@ export function useVim(
             handleEndOfLineOperation(true);
             dispatch({
               type: 'SET_LAST_COMMAND',
-              command: { type: 'C', count: 1 },
+              command: { type: CMD_TYPES.CHANGE_TO_EOL, count: 1 },
             });
             dispatch({ type: 'CLEAR_COUNT' });
             return true;
