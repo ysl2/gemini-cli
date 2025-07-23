@@ -226,7 +226,7 @@ export async function main() {
     );
 
     checkForUpdates().then((info) => {
-      handleAutoUpdate(info, settings);
+      handleAutoUpdate(info, settings, config.getProjectRoot());
     });
 
     registerCleanup(() => instance.unmount());
@@ -333,12 +333,13 @@ async function loadNonInteractiveConfig(
   );
 }
 
-function handleAutoUpdate(info: UpdateInfo | null, settings: LoadedSettings) {
+function handleAutoUpdate(info: UpdateInfo | null, settings: LoadedSettings, projectRoot: string) {
   if (!info) {
     return;
   }
 
   const installationInfo = getInstallationInfo(
+    projectRoot,
     settings.merged.disableAutoUpdate ?? false,
   );
 

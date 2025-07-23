@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { isGitRepository } from '@google/gemini-cli-core/src/utils/gitUtils.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -24,22 +25,8 @@ export interface InstallationInfo {
   updateMessage?: string;
 }
 
-function findProjectRoot(startDir: string): {
-  root: string | null;
-  isGit: boolean;
-} {
-  let dir = startDir;
-  while (dir !== path.parse(dir).root) {
-    if (fs.existsSync(path.join(dir, 'package.json'))) {
-      const isGit = fs.existsSync(path.join(dir, '.git'));
-      return { root: dir, isGit };
-    }
-    dir = path.dirname(dir);
-  }
-  return { root: null, isGit: false };
-}
-
 export function getInstallationInfo(
+  projectRoot: string,
   isAutoUpdateDisabled: boolean,
 ): InstallationInfo {
   const cliPath = process.argv[1];
@@ -49,7 +36,7 @@ export function getInstallationInfo(
 
   try {
     const realPath = fs.realpathSync(cliPath);
-    const { root: projectRoot, isGit } = findProjectRoot(process.cwd());
+    const isGit = isGitRepository(process.cwd());
 
     // Check for local git clone first
     if (
