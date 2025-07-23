@@ -9,9 +9,9 @@ import { getInstallationInfo, PackageManager } from './installationInfo.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as childProcess from 'child_process';
+import { isGitRepository } from '@google/gemini-cli-core';
 
-// Mock the dependencies
-vi.mock('@google/gemini-cli-core/src/utils/gitUtils.js', () => ({
+vi.mock('@google/gemini-cli-core', () => ({
   isGitRepository: vi.fn(),
 }));
 
@@ -32,10 +32,7 @@ vi.mock('child_process', async (importOriginal) => {
   };
 });
 
-const mockedIsGitRepository = vi.mocked(
-  (await import('@google/gemini-cli-core/src/utils/gitUtils.js'))
-    .isGitRepository,
-);
+const mockedIsGitRepository = vi.mocked(isGitRepository);
 const mockedRealPathSync = vi.mocked(fs.realpathSync);
 const mockedExistsSync = vi.mocked(fs.existsSync);
 const mockedExecSync = vi.mocked(childProcess.execSync);
