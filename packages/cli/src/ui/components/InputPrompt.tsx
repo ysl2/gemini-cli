@@ -501,11 +501,7 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
         >
           {shellModeActive ? '! ' : '> '}
         </Text>
-        <Box
-          flexGrow={1}
-          flexDirection="column"
-          height={buffer.allVisualLines.length || 1}
-        >
+        <Box flexGrow={1} flexDirection="column">
           {buffer.text.length === 0 && placeholder ? (
             focus ? (
               <Text>
