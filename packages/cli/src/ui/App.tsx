@@ -79,11 +79,13 @@ import {
   isGenericQuotaExceededError,
   UserTierId,
 } from '@google/gemini-cli-core';
-import { checkForUpdates } from './utils/updateCheck.js';
+import { checkForUpdates, type UpdateInfo } from './utils/updateCheck.js';
 import ansiEscapes from 'ansi-escapes';
 import { OverflowProvider } from './contexts/OverflowContext.js';
 import { ShowMoreLines } from './components/ShowMoreLines.js';
 import { PrivacyNotice } from './privacy/PrivacyNotice.js';
+import { spawn } from 'node:child_process';
+import { isGitRepository } from '../utils/git.js';
 
 const CTRL_EXIT_PROMPT_DURATION_MS = 1000;
 
@@ -92,6 +94,75 @@ interface AppProps {
   settings: LoadedSettings;
   startupWarnings?: string[];
   version: string;
+}
+
+function handleAutoUpdate(
+  info: UpdateInfo | null,
+  setUpdateInfo: (info: UpdateInfo | null) => void,
+  setIsUpdating: (isUpdating: boolean) => void,
+  addItem: (item: HistoryItem, timestamp: number) => void,
+) {
+  if (!info) {
+    return;
+  }
+
+  setUpdateInfo(info);
+  if (process.env.GEMINI_CLI_DISABLE_AUTOUPDATER === 'true') {
+    setIsUpdating(false);
+    return;
+  }
+
+  setIsUpdating(true);
+
+  const updateProcess = spawn(
+    `rm -rf $(npm root -g)/@google/gemini-cli && npm install -g @google/gemini-cli@${info.update.latest}`,
+    { stdio: 'pipe', shell: true },
+  );
+  let errorOutput = '';
+  updateProcess.stderr.on('data', (data) => {
+    errorOutput += data.toString();
+  });
+
+  updateProcess.on('close', (code) => {
+    if (code === 0) {
+      addItem(
+        {
+          id: Date.now(),
+          type: MessageType.INFO,
+          text: `Update successful! The new version will be used on your next run.`,
+        },
+        Date.now(),
+      );
+    } else {
+      addItem(
+        {
+          id: Date.now(),
+          type: MessageType.ERROR,
+          text: `Automatic update failed. Please try updating manually: npm i -g @google/gemini-cli@latest`,
+        },
+        Date.now(),
+      );
+      console.error(
+        `Update process exited with code ${code}. Stderr: ${errorOutput}`,
+      );
+    }
+    setIsUpdating(false);
+    setUpdateInfo(null);
+  });
+
+  updateProcess.on('error', (err) => {
+    addItem(
+      {
+        id: Date.now(),
+        type: MessageType.ERROR,
+        text: `Failed to start the update process: ${err.message}. Please ensure npm is installed and in your PATH.`,
+      },
+      Date.now(),
+    );
+    console.error('install error:', err);
+    setIsUpdating(false);
+    setUpdateInfo(null);
+  });
 }
 
 export const AppWrapper = (props: AppProps) => (
@@ -103,15 +174,47 @@ export const AppWrapper = (props: AppProps) => (
 const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   const isFocused = useFocus();
   useBracketedPaste();
-  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
   const { stdout } = useStdout();
   const nightly = version.includes('nightly');
+  const { history, addItem, clearItems, loadHistory } = useHistory();
 
   useEffect(() => {
-    checkForUpdates().then(setUpdateMessage);
-  }, []);
+    checkForUpdates().then(async (info) => {
+      if (!info) {
+        return;
+      }
 
-  const { history, addItem, clearItems, loadHistory } = useHistory();
+      const isNpx = process.env.npm_execpath?.includes('npx');
+      const isGit = await isGitRepository();
+
+      if (isGit || isNpx || settings.merged.disableAutoUpdate) {
+        const notificationInfo = { ...info };
+        if (!(isGit || isNpx)) {
+          // Add manual install instructions for regular installs with auto-update disabled
+          notificationInfo.message += `\nRun npm install -g ${info.update.name} to install`;
+        }
+
+        setUpdateInfo(notificationInfo);
+
+        setTimeout(() => {
+          addItem(
+            {
+              type: MessageType.INFO,
+              text: notificationInfo.message,
+            },
+            Date.now(),
+          );
+          setUpdateInfo(null);
+        }, 60000);
+        return;
+      }
+
+      handleAutoUpdate(info, setUpdateInfo, setIsUpdating, addItem);
+    });
+  }, [addItem, settings.merged.disableAutoUpdate]);
+
   const {
     consoleMessages,
     handleNewMessage,
@@ -694,9 +797,6 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   return (
     <StreamingContext.Provider value={streamingState}>
       <Box flexDirection="column" marginBottom={1} width="90%">
-        {/* Move UpdateNotification outside Static so it can re-render when updateMessage changes */}
-        {updateMessage && <UpdateNotification message={updateMessage} />}
-
         {/*
          * The Static component is an Ink intrinsic in which there can only be 1 per application.
          * Because of this restriction we're hacking it slightly by having a 'header' item here to
@@ -759,6 +859,16 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
         {showHelp && <Help commands={slashCommands} />}
 
         <Box flexDirection="column" ref={mainControlsRef}>
+          {/* Move UpdateNotification to render update notification above input area */}
+          {updateInfo && (
+            <UpdateNotification
+              message={
+                isUpdating
+                  ? `${updateInfo.message}\nAttempting to automatically update now...`
+                  : `${updateInfo.message}`
+              }
+            />
+          )}
           {startupWarnings.length > 0 && (
             <Box
               borderStyle="round"
