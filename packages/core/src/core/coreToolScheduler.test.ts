@@ -16,8 +16,8 @@ import type {
   ToolConfirmationPayload,
   ToolResult,
   Config,
-  Icon,
 } from '../index.js';
+import { Icon } from '../index.js';
 import { BaseTool, ToolConfirmationOutcome } from '../index.js';
 import type { Part, PartListUnion } from '@google/genai';
 

@@ -14,8 +14,8 @@ import type {
   FileDiff,
   ToolEditConfirmationDetails,
   ToolCallConfirmationDetails,
-  Icon,
 } from './tools.js';
+import { Icon } from './tools.js';
 import { BaseTool, ToolConfirmationOutcome } from './tools.js';
 import { Type } from '@google/genai';
 import { SchemaValidator } from '../utils/schemaValidator.js';

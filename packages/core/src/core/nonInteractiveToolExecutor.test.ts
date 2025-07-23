@@ -13,8 +13,8 @@ import type {
   Tool,
   ToolCallConfirmationDetails,
   Config,
-  Icon,
 } from '../index.js';
+import { Icon } from '../index.js';
 import type { Part } from '@google/genai';
 import { Type } from '@google/genai';
 

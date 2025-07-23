@@ -8,9 +8,9 @@ import type {
   SlashCommand,
   SlashCommandActionReturn,
   CommandContext,
-  CommandKind,
   MessageActionReturn,
 } from './types.js';
+import { CommandKind } from './types.js';
 import {
   DiscoveredMCPTool,
   getMCPDiscoveryState,
