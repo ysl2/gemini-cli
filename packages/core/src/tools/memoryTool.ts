@@ -6,7 +6,7 @@
 
 import type { ToolResult } from './tools.js';
 import { BaseTool, Icon } from './tools.js';
-import type { FunctionDeclaration} from '@google/genai';
+import type { FunctionDeclaration } from '@google/genai';
 import { Type } from '@google/genai';
 import * as fs from 'fs/promises';
 import * as path from 'path';

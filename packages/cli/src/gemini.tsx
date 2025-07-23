@@ -16,10 +16,7 @@ import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { start_sandbox } from './utils/sandbox.js';
 import type { LoadedSettings } from './config/settings.js';
-import {
-  loadSettings,
-  SettingScope,
-} from './config/settings.js';
+import { loadSettings, SettingScope } from './config/settings.js';
 import { themeManager } from './ui/themes/theme-manager.js';
 import { getStartupWarnings } from './utils/startupWarnings.js';
 import { getUserStartupWarnings } from './utils/userStartupWarnings.js';

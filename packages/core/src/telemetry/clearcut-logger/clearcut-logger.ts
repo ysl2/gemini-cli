@@ -17,10 +17,9 @@ import type {
   ApiErrorEvent,
   FlashFallbackEvent,
   LoopDetectedEvent,
-  FlashDecidedToContinueEvent} from '../types.js';
-import {
-  EndSessionEvent
+  FlashDecidedToContinueEvent,
 } from '../types.js';
+import { EndSessionEvent } from '../types.js';
 import { EventMetadataKey } from './event-metadata-key.js';
 import type { Config } from '../../config/config.js';
 import { getInstallationId } from '../../utils/user_id.js';

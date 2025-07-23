@@ -21,7 +21,7 @@ vi.mock('@google/gemini-cli-core', async () => {
   };
 });
 
-import type { GeminiClient} from '@google/gemini-cli-core';
+import type { GeminiClient } from '@google/gemini-cli-core';
 import { uiTelemetryService } from '@google/gemini-cli-core';
 
 describe('clearCommand', () => {

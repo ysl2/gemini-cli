@@ -17,9 +17,9 @@ import {
   DEFAULT_ENCODING,
   getSpecificMimeType,
 } from '../utils/fileUtils.js';
-import type { PartListUnion, Schema} from '@google/genai';
+import type { PartListUnion, Schema } from '@google/genai';
 import { Type } from '@google/genai';
-import type { Config} from '../config/config.js';
+import type { Config } from '../config/config.js';
 import { DEFAULT_FILE_FILTERING_OPTIONS } from '../config/config.js';
 import {
   recordFileOperationMetric,

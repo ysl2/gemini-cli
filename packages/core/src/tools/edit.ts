@@ -12,17 +12,14 @@ import type {
   ToolEditConfirmationDetails,
   ToolLocation,
   ToolResult,
-  ToolResultDisplay} from './tools.js';
-import {
-  BaseTool,
-  Icon,
-  ToolConfirmationOutcome
+  ToolResultDisplay,
 } from './tools.js';
+import { BaseTool, Icon, ToolConfirmationOutcome } from './tools.js';
 import { Type } from '@google/genai';
 import { SchemaValidator } from '../utils/schemaValidator.js';
 import { makeRelative, shortenPath } from '../utils/paths.js';
 import { isNodeError } from '../utils/errors.js';
-import type { Config} from '../config/config.js';
+import type { Config } from '../config/config.js';
 import { ApprovalMode } from '../config/config.js';
 import { ensureCorrectEdit } from '../utils/editCorrector.js';
 import { DEFAULT_DIFF_OPTIONS } from './diffOptions.js';

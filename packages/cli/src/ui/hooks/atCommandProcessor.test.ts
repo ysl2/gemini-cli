@@ -7,8 +7,7 @@
 import type { Mock } from 'vitest';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { handleAtCommand } from './atCommandProcessor.js';
-import type {
-  Config} from '@google/gemini-cli-core';
+import type { Config } from '@google/gemini-cli-core';
 import {
   FileDiscoveryService,
   GlobTool,

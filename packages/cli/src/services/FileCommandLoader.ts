@@ -9,8 +9,7 @@ import path from 'path';
 import toml from '@iarna/toml';
 import { glob } from 'glob';
 import { z } from 'zod';
-import type {
-  Config} from '@google/gemini-cli-core';
+import type { Config } from '@google/gemini-cli-core';
 import {
   getProjectCommandsDir,
   getUserCommandsDir,

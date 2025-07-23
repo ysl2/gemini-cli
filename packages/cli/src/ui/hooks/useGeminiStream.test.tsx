@@ -14,26 +14,18 @@ import type {
   TrackedToolCall,
   TrackedCompletedToolCall,
   TrackedExecutingToolCall,
-  TrackedCancelledToolCall} from './useReactToolScheduler.js';
-import {
-  useReactToolScheduler
+  TrackedCancelledToolCall,
 } from './useReactToolScheduler.js';
-import type {
-  Config,
-  EditorType} from '@google/gemini-cli-core';
+import { useReactToolScheduler } from './useReactToolScheduler.js';
+import type { Config, EditorType } from '@google/gemini-cli-core';
 import {
   AuthType,
   GeminiEventType as ServerGeminiEventType,
 } from '@google/gemini-cli-core';
 import type { Part, PartListUnion } from '@google/genai';
 import type { UseHistoryManagerReturn } from './useHistoryManager.js';
-import type {
-  HistoryItem,
-  SlashCommandProcessorResult} from '../types.js';
-import {
-  MessageType,
-  StreamingState,
-} from '../types.js';
+import type { HistoryItem, SlashCommandProcessorResult } from '../types.js';
+import { MessageType, StreamingState } from '../types.js';
 import type { Dispatch, SetStateAction } from 'react';
 import type { LoadedSettings } from '../../config/settings.js';
 

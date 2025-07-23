@@ -5,7 +5,7 @@
  */
 
 import type { Content } from '@google/genai';
-import type { HistoryItemWithoutId , HistoryItem } from '../types.js';
+import type { HistoryItemWithoutId, HistoryItem } from '../types.js';
 import type { Config, GitService, Logger } from '@google/gemini-cli-core';
 import type { LoadedSettings } from '../../config/settings.js';
 import type { UseHistoryManagerReturn } from '../hooks/useHistoryManager.js';

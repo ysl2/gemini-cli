@@ -10,10 +10,9 @@ import type { GeminiClient } from '../core/client.js';
 import type {
   ServerGeminiContentEvent,
   ServerGeminiStreamEvent,
-  ServerGeminiToolCallRequestEvent} from '../core/turn.js';
-import {
-  GeminiEventType
+  ServerGeminiToolCallRequestEvent,
 } from '../core/turn.js';
+import { GeminiEventType } from '../core/turn.js';
 import * as loggers from '../telemetry/loggers.js';
 import { LoopType } from '../telemetry/types.js';
 import { LoopDetectionService } from './loopDetectionService.js';

@@ -11,7 +11,7 @@ import { BaseTool, Icon } from './tools.js';
 import { Type } from '@google/genai';
 import { SchemaValidator } from '../utils/schemaValidator.js';
 import { makeRelative, shortenPath } from '../utils/paths.js';
-import type { Config} from '../config/config.js';
+import type { Config } from '../config/config.js';
 import { DEFAULT_FILE_FILTERING_OPTIONS } from '../config/config.js';
 import { isWithinRoot } from '../utils/fileUtils.js';
 

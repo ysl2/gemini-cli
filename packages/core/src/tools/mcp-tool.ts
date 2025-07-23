@@ -7,20 +7,16 @@
 import type {
   ToolResult,
   ToolCallConfirmationDetails,
-  ToolMcpConfirmationDetails} from './tools.js';
-import {
-  BaseTool,
-  ToolConfirmationOutcome,
-  Icon,
+  ToolMcpConfirmationDetails,
 } from './tools.js';
+import { BaseTool, ToolConfirmationOutcome, Icon } from './tools.js';
 import type {
   CallableTool,
   Part,
   FunctionCall,
-  FunctionDeclaration} from '@google/genai';
-import {
-  Type,
+  FunctionDeclaration,
 } from '@google/genai';
+import { Type } from '@google/genai';
 
 type ToolParams = Record<string, unknown>;
 

@@ -8,12 +8,11 @@ import * as fsPromises from 'fs/promises';
 import type {
   CommandContext,
   SlashCommand,
-  MessageActionReturn} from './types.js';
-import {
-  CommandKind,
+  MessageActionReturn,
 } from './types.js';
+import { CommandKind } from './types.js';
 import path from 'path';
-import type { HistoryItemWithoutId} from '../types.js';
+import type { HistoryItemWithoutId } from '../types.js';
 import { MessageType } from '../types.js';
 
 interface ChatDetail {

@@ -11,10 +11,9 @@ import open from 'open';
 import type {
   MCPOAuthConfig,
   OAuthTokenResponse,
-  OAuthClientRegistrationResponse} from './oauth-provider.js';
-import {
-  MCPOAuthProvider
+  OAuthClientRegistrationResponse,
 } from './oauth-provider.js';
+import { MCPOAuthProvider } from './oauth-provider.js';
 import type { MCPOAuthToken } from './oauth-token-storage.js';
 import { MCPOAuthTokenStorage } from './oauth-token-storage.js';
 

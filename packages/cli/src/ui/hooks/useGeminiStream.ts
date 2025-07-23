@@ -16,7 +16,8 @@ import type {
   ServerGeminiFinishedEvent,
   ToolCallRequestInfo,
   EditorType,
-  ThoughtSummary} from '@google/gemini-cli-core';
+  ThoughtSummary,
+} from '@google/gemini-cli-core';
 import {
   GeminiEventType as ServerGeminiEventType,
   getErrorMessage,
@@ -33,12 +34,9 @@ import type {
   HistoryItem,
   HistoryItemWithoutId,
   HistoryItemToolGroup,
-  SlashCommandProcessorResult} from '../types.js';
-import {
-  StreamingState,
-  MessageType,
-  ToolCallStatus,
+  SlashCommandProcessorResult,
 } from '../types.js';
+import { StreamingState, MessageType, ToolCallStatus } from '../types.js';
 import { isAtCommand } from '../utils/commandUtils.js';
 import { parseAndFormatApiError } from '../utils/errorParsing.js';
 import { useShellCommandProcessor } from './shellCommandProcessor.js';
@@ -52,10 +50,11 @@ import path from 'path';
 import type {
   TrackedToolCall,
   TrackedCompletedToolCall,
-  TrackedCancelledToolCall} from './useReactToolScheduler.js';
+  TrackedCancelledToolCall,
+} from './useReactToolScheduler.js';
 import {
   useReactToolScheduler,
-  mapToDisplay as mapTrackedToolCallsToDisplay
+  mapToDisplay as mapTrackedToolCallsToDisplay,
 } from './useReactToolScheduler.js';
 import { useSessionStats } from '../contexts/SessionContext.js';
 

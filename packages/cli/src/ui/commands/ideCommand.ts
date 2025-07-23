@@ -5,8 +5,7 @@
  */
 
 import { fileURLToPath } from 'url';
-import type {
-  Config} from '@google/gemini-cli-core';
+import type { Config } from '@google/gemini-cli-core';
 import {
   getMCPDiscoveryState,
   getMCPServerStatus,
@@ -17,10 +16,9 @@ import {
 import type {
   CommandContext,
   SlashCommand,
-  SlashCommandActionReturn} from './types.js';
-import {
-  CommandKind,
+  SlashCommandActionReturn,
 } from './types.js';
+import { CommandKind } from './types.js';
 import * as child_process from 'child_process';
 import * as process from 'process';
 import { glob } from 'glob';

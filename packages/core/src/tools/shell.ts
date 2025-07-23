@@ -12,12 +12,9 @@ import type { Config } from '../config/config.js';
 import type {
   ToolResult,
   ToolCallConfirmationDetails,
-  ToolExecuteConfirmationDetails} from './tools.js';
-import {
-  BaseTool,
-  ToolConfirmationOutcome,
-  Icon,
+  ToolExecuteConfirmationDetails,
 } from './tools.js';
+import { BaseTool, ToolConfirmationOutcome, Icon } from './tools.js';
 import { Type } from '@google/genai';
 import { SchemaValidator } from '../utils/schemaValidator.js';
 import { getErrorMessage } from '../utils/errors.js';

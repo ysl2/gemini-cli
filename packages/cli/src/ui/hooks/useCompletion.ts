@@ -8,9 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { glob } from 'glob';
-import type {
-  Config,
-  FileDiscoveryService} from '@google/gemini-cli-core';
+import type { Config, FileDiscoveryService } from '@google/gemini-cli-core';
 import {
   isNodeError,
   escapePath,
@@ -18,11 +16,8 @@ import {
   getErrorMessage,
   DEFAULT_FILE_FILTERING_OPTIONS,
 } from '@google/gemini-cli-core';
-import type {
-  Suggestion} from '../components/SuggestionsDisplay.js';
-import {
-  MAX_SUGGESTIONS_TO_SHOW
-} from '../components/SuggestionsDisplay.js';
+import type { Suggestion } from '../components/SuggestionsDisplay.js';
+import { MAX_SUGGESTIONS_TO_SHOW } from '../components/SuggestionsDisplay.js';
 import type { CommandContext, SlashCommand } from '../commands/types.js';
 
 export interface UseCompletionReturn {

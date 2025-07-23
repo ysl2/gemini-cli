@@ -9,17 +9,16 @@ import { type PartListUnion } from '@google/genai';
 import process from 'node:process';
 import type { UseHistoryManagerReturn } from './useHistoryManager.js';
 import { useStateAndRef } from './useStateAndRef.js';
-import type { Config} from '@google/gemini-cli-core';
+import type { Config } from '@google/gemini-cli-core';
 import { GitService, Logger } from '@google/gemini-cli-core';
 import { useSessionStats } from '../contexts/SessionContext.js';
 import type {
   Message,
   HistoryItemWithoutId,
   HistoryItem,
-  SlashCommandProcessorResult} from '../types.js';
-import {
-  MessageType
+  SlashCommandProcessorResult,
 } from '../types.js';
+import { MessageType } from '../types.js';
 import type { LoadedSettings } from '../../config/settings.js';
 import { type CommandContext, type SlashCommand } from '../commands/types.js';
 import { CommandService } from '../../services/CommandService.js';

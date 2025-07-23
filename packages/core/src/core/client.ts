@@ -15,13 +15,8 @@ import type {
   GenerateContentResponse,
 } from '@google/genai';
 import { getFolderStructure } from '../utils/getFolderStructure.js';
-import type {
-  ServerGeminiStreamEvent,
-  ChatCompressionInfo} from './turn.js';
-import {
-  Turn,
-  GeminiEventType
-} from './turn.js';
+import type { ServerGeminiStreamEvent, ChatCompressionInfo } from './turn.js';
+import { Turn, GeminiEventType } from './turn.js';
 import type { Config } from '../config/config.js';
 import type { UserTierId } from '../code_assist/types.js';
 import { getCoreSystemPrompt, getCompressionPrompt } from './prompts.js';
@@ -36,11 +31,9 @@ import { isFunctionResponse } from '../utils/messageInspectors.js';
 import { tokenLimit } from './tokenLimits.js';
 import type {
   ContentGenerator,
-  ContentGeneratorConfig} from './contentGenerator.js';
-import {
-  AuthType,
-  createContentGenerator,
+  ContentGeneratorConfig,
 } from './contentGenerator.js';
+import { AuthType, createContentGenerator } from './contentGenerator.js';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { DEFAULT_GEMINI_FLASH_MODEL } from '../config/models.js';
 import { LoopDetectionService } from '../services/loopDetectionService.js';

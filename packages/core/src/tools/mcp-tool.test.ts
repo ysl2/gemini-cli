@@ -5,18 +5,10 @@
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type {
-  Mocked} from 'vitest';
-import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
-  afterEach
-} from 'vitest';
+import type { Mocked } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { DiscoveredMCPTool, generateValidName } from './mcp-tool.js'; // Added getStringifiedResultForDisplay
-import type { ToolResult} from './tools.js';
+import type { ToolResult } from './tools.js';
 import { ToolConfirmationOutcome } from './tools.js'; // Added ToolConfirmationOutcome
 import type { CallableTool, Part } from '@google/genai';
 

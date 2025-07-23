@@ -22,18 +22,15 @@ import type {
   ToolCallConfirmationDetails,
   ToolCallResponseInfo,
   ToolCall, // Import from core
-  Status as ToolCallStatusType} from '@google/gemini-cli-core';
+  Status as ToolCallStatusType,
+} from '@google/gemini-cli-core';
 import {
   ToolConfirmationOutcome,
   ApprovalMode,
   Icon,
 } from '@google/gemini-cli-core';
-import type {
-  HistoryItemWithoutId,
-  HistoryItemToolGroup} from '../types.js';
-import {
-  ToolCallStatus
-} from '../types.js';
+import type { HistoryItemWithoutId, HistoryItemToolGroup } from '../types.js';
+import { ToolCallStatus } from '../types.js';
 
 // Mocks
 vi.mock('@google/gemini-cli-core', async () => {

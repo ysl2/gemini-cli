@@ -5,17 +5,11 @@
  */
 
 import { SchemaValidator } from '../utils/schemaValidator.js';
-import type {
-  ToolResult,
-  ToolCallConfirmationDetails} from './tools.js';
-import {
-  BaseTool,
-  ToolConfirmationOutcome,
-  Icon,
-} from './tools.js';
+import type { ToolResult, ToolCallConfirmationDetails } from './tools.js';
+import { BaseTool, ToolConfirmationOutcome, Icon } from './tools.js';
 import { Type } from '@google/genai';
 import { getErrorMessage } from '../utils/errors.js';
-import type { Config} from '../config/config.js';
+import type { Config } from '../config/config.js';
 import { ApprovalMode } from '../config/config.js';
 import { getResponseText } from '../utils/generateContentResponseUtilities.js';
 import { fetchWithTimeout, isPrivateIp } from '../utils/fetch.js';

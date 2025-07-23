@@ -11,7 +11,8 @@ import type {
   GeminiChat,
   ToolRegistry,
   ToolResult,
-  ToolCallConfirmationDetails} from '@google/gemini-cli-core';
+  ToolCallConfirmationDetails,
+} from '@google/gemini-cli-core';
 import {
   AuthType,
   logToolCall,
@@ -27,7 +28,7 @@ import * as acp from './acp.js';
 import type { Agent } from './acp.js';
 import { Readable, Writable } from 'node:stream';
 import type { Content, Part, FunctionCall, PartListUnion } from '@google/genai';
-import type { LoadedSettings} from '../config/settings.js';
+import type { LoadedSettings } from '../config/settings.js';
 import { SettingScope } from '../config/settings.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';

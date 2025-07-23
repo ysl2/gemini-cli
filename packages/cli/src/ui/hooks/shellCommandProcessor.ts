@@ -8,17 +8,12 @@ import { spawn } from 'child_process';
 import { TextDecoder } from 'util';
 import type {
   HistoryItemWithoutId,
-  IndividualToolCallDisplay} from '../types.js';
-import {
-  ToolCallStatus,
+  IndividualToolCallDisplay,
 } from '../types.js';
+import { ToolCallStatus } from '../types.js';
 import { useCallback } from 'react';
-import type {
-  Config,
-  GeminiClient} from '@google/gemini-cli-core';
-import {
-  getCachedEncodingForBuffer,
-} from '@google/gemini-cli-core';
+import type { Config, GeminiClient } from '@google/gemini-cli-core';
+import { getCachedEncodingForBuffer } from '@google/gemini-cli-core';
 import { type PartListUnion } from '@google/genai';
 import { formatMemoryUsage } from '../utils/formatters.js';
 import { isBinary } from '../utils/textUtils.js';

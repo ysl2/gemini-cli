@@ -7,7 +7,7 @@
 import type React from 'react';
 import { useMemo } from 'react';
 import { Box } from 'ink';
-import type { IndividualToolCallDisplay} from '../../types.js';
+import type { IndividualToolCallDisplay } from '../../types.js';
 import { ToolCallStatus } from '../../types.js';
 import { ToolMessage } from './ToolMessage.js';
 import { ToolConfirmationMessage } from './ToolConfirmationMessage.js';
