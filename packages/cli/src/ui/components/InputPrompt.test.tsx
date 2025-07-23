@@ -1027,4 +1027,48 @@ describe('InputPrompt', () => {
       unmount();
     });
   });
+
+  describe('vim mode', () => {
+    it('should not call buffer.handleInput when vim mode is enabled and vim handles the input', async () => {
+      props.vimModeEnabled = true;
+      props.vimHandleInput = vi.fn().mockReturnValue(true); // Mock that vim handled it.
+      const { stdin, unmount } = render(<InputPrompt {...props} />);
+      await wait();
+
+      stdin.write('i');
+      await wait();
+
+      expect(props.vimHandleInput).toHaveBeenCalled();
+      expect(mockBuffer.handleInput).not.toHaveBeenCalled();
+      unmount();
+    });
+
+    it('should call buffer.handleInput when vim mode is enabled but vim does not handle the input', async () => {
+      props.vimModeEnabled = true;
+      props.vimHandleInput = vi.fn().mockReturnValue(false); // Mock that vim did NOT handle it.
+      const { stdin, unmount } = render(<InputPrompt {...props} />);
+      await wait();
+
+      stdin.write('i');
+      await wait();
+
+      expect(props.vimHandleInput).toHaveBeenCalled();
+      expect(mockBuffer.handleInput).toHaveBeenCalled();
+      unmount();
+    });
+
+    it('should call handleInput when vim mode is disabled', async () => {
+      props.vimModeEnabled = false;
+      props.vimHandleInput = vi.fn();
+      const { stdin, unmount } = render(<InputPrompt {...props} />);
+      await wait();
+
+      stdin.write('i');
+      await wait();
+
+      expect(props.vimHandleInput).not.toHaveBeenCalled();
+      expect(mockBuffer.handleInput).toHaveBeenCalled();
+      unmount();
+    });
+  });
 });
