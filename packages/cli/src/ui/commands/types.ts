@@ -49,8 +49,13 @@ export interface CommandContext {
     loadHistory: UseHistoryManagerReturn['loadHistory'];
     /** Toggles a special display mode. */
     toggleCorgiMode: () => void;
-    /** Toggles vim mode on/off. */
-    toggleVimMode: () => void;
+    /** Updates a setting in the application configuration. */
+    updateSetting: <
+      K extends keyof import('../../config/settings.js').Settings,
+    >(
+      key: K,
+      value: import('../../config/settings.js').Settings[K],
+    ) => Promise<void>;
   };
   // Session-specific data
   session: {

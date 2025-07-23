@@ -98,7 +98,7 @@ describe('useSlashCommandProcessor', () => {
         mockOpenAuthDialog,
         vi.fn(), // openEditorDialog
         vi.fn(), // toggleCorgiMode
-        vi.fn(), // toggleVimMode
+        vi.fn(), // updateSetting
         mockSetQuittingMessages,
         vi.fn(), // openPrivacyNotice
       ),

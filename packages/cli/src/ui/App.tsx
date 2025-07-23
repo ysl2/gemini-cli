@@ -39,7 +39,11 @@ import { EditorSettingsDialog } from './components/EditorSettingsDialog.js';
 import { Colors } from './colors.js';
 import { Help } from './components/Help.js';
 import { loadHierarchicalGeminiMemory } from '../config/config.js';
-import { LoadedSettings } from '../config/settings.js';
+import {
+  LoadedSettings,
+  SettingScope,
+  type Settings,
+} from '../config/settings.js';
 import { Tips } from './components/Tips.js';
 import { ConsolePatcher } from './utils/ConsolePatcher.js';
 import { registerCleanup } from '../utils/cleanup.js';
@@ -224,6 +228,13 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     setCorgiMode((prev) => !prev);
   }, []);
 
+  const updateSetting = useCallback(
+    async <K extends keyof Settings>(key: K, value: Settings[K]) => {
+      settings.setValue(SettingScope.User, key, value);
+    },
+    [settings],
+  );
+
   const performMemoryRefresh = useCallback(async () => {
     addItem(
       {
@@ -389,7 +400,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     openAuthDialog,
     openEditorDialog,
     toggleCorgiMode,
-    () => toggleVimModeRef.current?.(), // Wrapper function that calls the ref
+    updateSetting,
     setQuittingMessages,
     openPrivacyNotice,
   );
@@ -536,19 +547,12 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     [submitQuery],
   );
 
-  // Create a ref for vim toggle function to avoid circular dependency
-  const toggleVimModeRef = useRef<(() => void) | null>(null);
-
   // Initialize vim mode
   const {
     mode: vimMode,
     vimModeEnabled,
-    toggleVimMode,
     handleInput: vimHandleInput,
   } = useVim(buffer, settings, handleFinalSubmit);
-
-  // Store the toggle function in the ref
-  toggleVimModeRef.current = toggleVimMode;
 
   const logger = useLogger();
   const [userMessages, setUserMessages] = useState<string[]>([]);
