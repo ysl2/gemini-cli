@@ -40,3 +40,28 @@ The `gemini-extension.json` file contains the configuration for the extension. T
 - `excludeTools`: An array of tool names to exclude from the model. You can also specify command-specific restrictions for tools that support it, like the `run_shell_command` tool. For example, `"excludeTools": ["run_shell_command(rm -rf)"]` will block the `rm -rf` command.
 
 When Gemini CLI starts, it loads all the extensions and merges their configurations. If there are any conflicts, the workspace configuration takes precedence.
+
+## Extension Commands
+
+Extensions can provide [custom commands](./cli/commands.md#custom-commands) by placing TOML files in a `commands/` subdirectory within the extension directory. These commands follow the same format as user and project custom commands but are automatically prefixed with `ext:` to prevent naming conflicts.
+
+### Example
+
+An extension named `aws-tools` with the following structure:
+
+```
+.gemini/extensions/aws-tools/
+├── gemini-extension.json
+└── commands/
+    ├── deploy.toml
+    └── s3/
+        └── sync.toml
+```
+
+Would provide these commands:
+- `/ext:aws-tools:deploy`
+- `/ext:aws-tools:s3:sync`
+
+### Precedence
+
+Extension commands have the lowest precedence and can be overridden by user or project commands with the same base name.
