@@ -14,8 +14,8 @@ import type {
   AccessibilitySettings,
   SandboxConfig,
   GeminiClient,
-  ideContext,
 } from '@google/gemini-cli-core';
+import { ideContext } from '@google/gemini-cli-core';
 import { Config as ServerConfig, ApprovalMode } from '@google/gemini-cli-core';
 import type { SettingsFile, Settings } from '../config/settings.js';
 import { LoadedSettings } from '../config/settings.js';
