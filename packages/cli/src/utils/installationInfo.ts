@@ -7,6 +7,7 @@
 import { isGitRepository } from '@google/gemini-cli-core/src/utils/gitUtils.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as childProcess from 'child_process';
 
 export enum PackageManager {
   NPM = 'npm',
@@ -80,13 +81,20 @@ export function getInstallationInfo(
     }
 
     // Check for Homebrew
-    if (realPath.includes(path.join('Homebrew', 'Cellar'))) {
+    try {
+      // The package name in homebrew is gemini-cli
+      childProcess.execSync('brew list -1 | grep -q "^gemini-cli$"', {
+        stdio: 'ignore',
+      });
       return {
         packageManager: PackageManager.HOMEBREW,
         isGlobal: true,
         updateMessage:
           'Installed via Homebrew. Please update with "brew upgrade".',
       };
+    } catch (_error) {
+      // Brew is not installed or gemini-cli is not installed via brew.
+      // Continue to the next check.
     }
 
     // Check for pnpm
@@ -129,17 +137,16 @@ export function getInstallationInfo(
     }
 
     // Check for local install
-    const { root: localProjectRoot } = findProjectRoot(process.cwd());
     if (
-      localProjectRoot &&
-      realPath.startsWith(path.join(localProjectRoot, 'node_modules'))
+      projectRoot &&
+      realPath.startsWith(path.join(projectRoot, 'node_modules'))
     ) {
       let pm = PackageManager.NPM;
-      if (fs.existsSync(path.join(localProjectRoot, 'yarn.lock'))) {
+      if (fs.existsSync(path.join(projectRoot, 'yarn.lock'))) {
         pm = PackageManager.YARN;
-      } else if (fs.existsSync(path.join(localProjectRoot, 'pnpm-lock.yaml'))) {
+      } else if (fs.existsSync(path.join(projectRoot, 'pnpm-lock.yaml'))) {
         pm = PackageManager.PNPM;
-      } else if (fs.existsSync(path.join(localProjectRoot, 'bun.lockb'))) {
+      } else if (fs.existsSync(path.join(projectRoot, 'bun.lockb'))) {
         pm = PackageManager.BUN;
       }
       return {

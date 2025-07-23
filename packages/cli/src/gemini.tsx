@@ -333,7 +333,11 @@ async function loadNonInteractiveConfig(
   );
 }
 
-function handleAutoUpdate(info: UpdateInfo | null, settings: LoadedSettings, projectRoot: string) {
+function handleAutoUpdate(
+  info: UpdateInfo | null,
+  settings: LoadedSettings,
+  projectRoot: string,
+) {
   if (!info) {
     return;
   }

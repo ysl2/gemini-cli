@@ -164,6 +164,7 @@ vi.mock('@google/gemini-cli-core', async (importOriginal) => {
     MCPServerConfig: actualCore.MCPServerConfig,
     getAllGeminiMdFilenames: vi.fn(() => ['GEMINI.md']),
     ideContext: ideContextMock,
+    isGitRepository: vi.fn(),
   };
 });
 
@@ -216,15 +217,13 @@ vi.mock('./components/Header.js', () => ({
 vi.mock('./utils/updateCheck.js', () => ({
   checkForUpdates: vi.fn(),
 }));
-vi.mock('../utils/git.js');
 
 const mockedCheckForUpdates = vi.mocked(checkForUpdates);
+const { isGitRepository: mockedIsGitRepository } = vi.mocked(
+  await import('@google/gemini-cli-core'),
+);
 
 vi.mock('node:child_process');
-
-import { isGitRepository } from '../utils/git.js';
-
-const mockedIsGitRepository = vi.mocked(isGitRepository);
 
 describe('App UI', () => {
   let mockConfig: MockServerConfig;
