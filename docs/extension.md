@@ -47,10 +47,10 @@ Extensions can provide [custom commands](./cli/commands.md#custom-commands) by p
 
 ### Example
 
-An extension named `gcp-tools` with the following structure:
+An extension named `gcp` with the following structure:
 
 ```
-.gemini/extensions/gcp-tools/
+.gemini/extensions/gcp/
 ├── gemini-extension.json
 └── commands/
     ├── deploy.toml
@@ -59,8 +59,9 @@ An extension named `gcp-tools` with the following structure:
 ```
 
 Would provide these commands:
-- `/ext:gcp-tools:deploy`
-- `/ext:gcp-tools:gcs:sync`
+
+- `/ext:gcp:deploy`
+- `/ext:gcp:gcs:sync`
 
 ### Precedence
 
