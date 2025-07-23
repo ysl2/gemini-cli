@@ -10,15 +10,19 @@ import * as Diff from 'diff';
 import type {
   ToolCallConfirmationDetails,
   ToolEditConfirmationDetails,
+  ToolLocation,
   ToolResult,
-  ToolResultDisplay,
+  ToolResultDisplay} from './tools.js';
+import {
+  BaseTool,
+  Icon,
+  ToolConfirmationOutcome
 } from './tools.js';
-import { BaseTool, ToolConfirmationOutcome } from './tools.js';
 import { Type } from '@google/genai';
 import { SchemaValidator } from '../utils/schemaValidator.js';
 import { makeRelative, shortenPath } from '../utils/paths.js';
 import { isNodeError } from '../utils/errors.js';
-import type { Config } from '../config/config.js';
+import type { Config} from '../config/config.js';
 import { ApprovalMode } from '../config/config.js';
 import { ensureCorrectEdit } from '../utils/editCorrector.js';
 import { DEFAULT_DIFF_OPTIONS } from './diffOptions.js';
@@ -89,6 +93,7 @@ Expectation for required parameters:
 4. NEVER escape \`old_string\` or \`new_string\`, that would break the exact literal text requirement.
 **Important:** If ANY of the above are not satisfied, the tool will fail. CRITICAL for \`old_string\`: Must uniquely identify the single instance to change. Include at least 3 lines of context BEFORE and AFTER the target text, matching whitespace and indentation precisely. If this string matches multiple locations, or does not match exactly, the tool will fail.
 **Multiple replacements:** Set \`expected_replacements\` to the number of occurrences you want to replace. The tool will replace ALL occurrences that match \`old_string\` exactly. Ensure the number of replacements matches your expectation.`,
+      Icon.Pencil,
       {
         properties: {
           file_path: {
@@ -139,6 +144,15 @@ Expectation for required parameters:
     }
 
     return null;
+  }
+
+  /**
+   * Determines any file locations affected by the tool execution
+   * @param params Parameters for the tool execution
+   * @returns A list of such paths
+   */
+  toolLocations(params: EditToolParams): ToolLocation[] {
+    return [{ path: params.file_path }];
   }
 
   private _applyReplacement(
@@ -197,7 +211,7 @@ Expectation for required parameters:
       // Creating a new file
       isNewFile = true;
     } else if (!fileExists) {
-      // Trying to edit a non-existent file (and old_string is not empty)
+      // Trying to edit a nonexistent file (and old_string is not empty)
       error = {
         display: `File not found. Cannot apply edit. Use an empty old_string to create a new file.`,
         raw: `File not found: ${params.file_path}`,
@@ -227,12 +241,17 @@ Expectation for required parameters:
           raw: `Failed to edit, 0 occurrences found for old_string in ${params.file_path}. No edits made. The exact text in old_string was not found. Ensure you're not escaping content incorrectly and check whitespace, indentation, and context. Use ${ReadFileTool.Name} tool to verify.`,
         };
       } else if (occurrences !== expectedReplacements) {
-        const occurenceTerm =
+        const occurrenceTerm =
           expectedReplacements === 1 ? 'occurrence' : 'occurrences';
 
         error = {
-          display: `Failed to edit, expected ${expectedReplacements} ${occurenceTerm} but found ${occurrences}.`,
-          raw: `Failed to edit, Expected ${expectedReplacements} ${occurenceTerm} but found ${occurrences} for old_string in file: ${params.file_path}`,
+          display: `Failed to edit, expected ${expectedReplacements} ${occurrenceTerm} but found ${occurrences}.`,
+          raw: `Failed to edit, Expected ${expectedReplacements} ${occurrenceTerm} but found ${occurrences} for old_string in file: ${params.file_path}`,
+        };
+      } else if (finalOldString === finalNewString) {
+        error = {
+          display: `No changes to apply. The old_string and new_string are identical.`,
+          raw: `No changes to apply. The old_string and new_string are identical in file: ${params.file_path}`,
         };
       }
     } else {
@@ -306,6 +325,8 @@ Expectation for required parameters:
       title: `Confirm Edit: ${shortenPath(makeRelative(params.file_path, this.config.getTargetDir()))}`,
       fileName,
       fileDiff,
+      originalContent: editData.currentContent,
+      newContent: editData.newContent,
       onConfirm: async (outcome: ToolConfirmationOutcome) => {
         if (outcome === ToolConfirmationOutcome.ProceedAlways) {
           this.config.setApprovalMode(ApprovalMode.AUTO_EDIT);
@@ -394,7 +415,12 @@ Expectation for required parameters:
           'Proposed',
           DEFAULT_DIFF_OPTIONS,
         );
-        displayResult = { fileDiff, fileName };
+        displayResult = {
+          fileDiff,
+          fileName,
+          originalContent: editData.currentContent,
+          newContent: editData.newContent,
+        };
       }
 
       const llmSuccessMessageParts = [

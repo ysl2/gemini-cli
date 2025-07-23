@@ -5,15 +5,22 @@
  */
 
 import { SchemaValidator } from '../utils/schemaValidator.js';
-import type { ToolResult, ToolCallConfirmationDetails } from './tools.js';
-import { BaseTool, ToolConfirmationOutcome } from './tools.js';
+import type {
+  ToolResult,
+  ToolCallConfirmationDetails} from './tools.js';
+import {
+  BaseTool,
+  ToolConfirmationOutcome,
+  Icon,
+} from './tools.js';
 import { Type } from '@google/genai';
 import { getErrorMessage } from '../utils/errors.js';
-import type { Config } from '../config/config.js';
+import type { Config} from '../config/config.js';
 import { ApprovalMode } from '../config/config.js';
 import { getResponseText } from '../utils/generateContentResponseUtilities.js';
 import { fetchWithTimeout, isPrivateIp } from '../utils/fetch.js';
 import { convert } from 'html-to-text';
+import { ProxyAgent, setGlobalDispatcher } from 'undici';
 
 const URL_FETCH_TIMEOUT_MS = 10000;
 const MAX_CONTENT_LENGTH = 100000;
@@ -66,6 +73,7 @@ export class WebFetchTool extends BaseTool<WebFetchToolParams, ToolResult> {
       WebFetchTool.Name,
       'WebFetch',
       "Processes content from URL(s), including local and private network addresses (e.g., localhost), embedded in a prompt. Include up to 20 URLs and instructions (e.g., summarize, extract specific data) directly in the 'prompt' parameter.",
+      Icon.Globe,
       {
         properties: {
           prompt: {
@@ -78,6 +86,10 @@ export class WebFetchTool extends BaseTool<WebFetchToolParams, ToolResult> {
         type: Type.OBJECT,
       },
     );
+    const proxy = config.getProxy();
+    if (proxy) {
+      setGlobalDispatcher(new ProxyAgent(proxy as string));
+    }
   }
 
   private async executeFallback(

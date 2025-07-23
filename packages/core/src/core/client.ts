@@ -15,9 +15,15 @@ import type {
   GenerateContentResponse,
 } from '@google/genai';
 import { getFolderStructure } from '../utils/getFolderStructure.js';
-import type { ServerGeminiStreamEvent, ChatCompressionInfo } from './turn.js';
-import { Turn, GeminiEventType } from './turn.js';
+import type {
+  ServerGeminiStreamEvent,
+  ChatCompressionInfo} from './turn.js';
+import {
+  Turn,
+  GeminiEventType
+} from './turn.js';
 import type { Config } from '../config/config.js';
+import type { UserTierId } from '../code_assist/types.js';
 import { getCoreSystemPrompt, getCompressionPrompt } from './prompts.js';
 import type { ReadManyFilesTool } from '../tools/read-many-files.js';
 import { getResponseText } from '../utils/generateContentResponseUtilities.js';
@@ -30,12 +36,17 @@ import { isFunctionResponse } from '../utils/messageInspectors.js';
 import { tokenLimit } from './tokenLimits.js';
 import type {
   ContentGenerator,
-  ContentGeneratorConfig,
+  ContentGeneratorConfig} from './contentGenerator.js';
+import {
+  AuthType,
+  createContentGenerator,
 } from './contentGenerator.js';
-import { AuthType, createContentGenerator } from './contentGenerator.js';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { DEFAULT_GEMINI_FLASH_MODEL } from '../config/models.js';
 import { LoopDetectionService } from '../services/loopDetectionService.js';
+import { ideContext } from '../services/ideContext.js';
+import { logFlashDecidedToContinue } from '../telemetry/loggers.js';
+import { FlashDecidedToContinueEvent } from '../telemetry/types.js';
 
 function isThinkingSupported(model: string) {
   if (model.startsWith('gemini-2.5')) return true;
@@ -124,6 +135,10 @@ export class GeminiClient {
     return this.contentGenerator;
   }
 
+  getUserTier(): UserTierId | undefined {
+    return this.contentGenerator?.userTier;
+  }
+
   async addHistory(content: Content) {
     this.getChat().addHistory(content);
   }
@@ -145,6 +160,13 @@ export class GeminiClient {
 
   setHistory(history: Content[]) {
     this.getChat().setHistory(history);
+  }
+
+  async setTools(): Promise<void> {
+    const toolRegistry = await this.config.getToolRegistry();
+    const toolDeclarations = toolRegistry.getFunctionDeclarations();
+    const tools: Tool[] = [{ functionDeclarations: toolDeclarations }];
+    this.getChat().setTools(tools);
   }
 
   async resetChat(): Promise<void> {
@@ -215,7 +237,7 @@ export class GeminiClient {
     return initialParts;
   }
 
-  private async startChat(extraHistory?: Content[]): Promise<GeminiChat> {
+  async startChat(extraHistory?: Content[]): Promise<GeminiChat> {
     const envParts = await this.getEnvironment();
     const toolRegistry = await this.config.getToolRegistry();
     const toolDeclarations = toolRegistry.getFunctionDeclarations();
@@ -233,7 +255,7 @@ export class GeminiClient {
     ];
     try {
       const userMemory = this.config.getUserMemory();
-      const systemInstruction = getCoreSystemPrompt(this.config, userMemory);
+      const systemInstruction = getCoreSystemPrompt(userMemory);
       const generateContentConfigWithThinking = isThinkingSupported(
         this.config.getModel(),
       )
@@ -298,7 +320,53 @@ export class GeminiClient {
     if (compressed) {
       yield { type: GeminiEventType.ChatCompressed, value: compressed };
     }
+
+    if (this.config.getIdeMode()) {
+      const openFiles = ideContext.getOpenFilesContext();
+      if (openFiles) {
+        const contextParts: string[] = [];
+        if (openFiles.activeFile) {
+          contextParts.push(
+            `This is the file that the user was most recently looking at:\n- Path: ${openFiles.activeFile}`,
+          );
+          if (openFiles.cursor) {
+            contextParts.push(
+              `This is the cursor position in the file:\n- Cursor Position: Line ${openFiles.cursor.line}, Character ${openFiles.cursor.character}`,
+            );
+          }
+          if (openFiles.selectedText) {
+            contextParts.push(
+              `This is the selected text in the active file:\n- ${openFiles.selectedText}`,
+            );
+          }
+        }
+
+        if (openFiles.recentOpenFiles && openFiles.recentOpenFiles.length > 0) {
+          const recentFiles = openFiles.recentOpenFiles
+            .map((file) => `- ${file.filePath}`)
+            .join('\n');
+          contextParts.push(
+            `Here are files the user has recently opened, with the most recent at the top:\n${recentFiles}`,
+          );
+        }
+
+        if (contextParts.length > 0) {
+          request = [
+            { text: contextParts.join('\n') },
+            ...(Array.isArray(request) ? request : [request]),
+          ];
+        }
+      }
+    }
+
     const turn = new Turn(this.getChat(), prompt_id);
+
+    const loopDetected = await this.loopDetector.turnStarted(signal);
+    if (loopDetected) {
+      yield { type: GeminiEventType.LoopDetected };
+      return turn;
+    }
+
     const resultStream = turn.run(request, signal);
     for await (const event of resultStream) {
       if (this.loopDetector.addAndCheck(event)) {
@@ -322,6 +390,10 @@ export class GeminiClient {
         signal,
       );
       if (nextSpeakerCheck?.next_speaker === 'model') {
+        logFlashDecidedToContinue(
+          this.config,
+          new FlashDecidedToContinueEvent(prompt_id),
+        );
         const nextRequest = [{ text: 'Please continue.' }];
         // This recursive call's events will be yielded out, but the final
         // turn object will be from the top-level call.
@@ -349,7 +421,7 @@ export class GeminiClient {
       model || this.config.getModel() || DEFAULT_GEMINI_FLASH_MODEL;
     try {
       const userMemory = this.config.getUserMemory();
-      const systemInstruction = getCoreSystemPrompt(this.config, userMemory);
+      const systemInstruction = getCoreSystemPrompt(userMemory);
       const requestConfig = {
         abortSignal,
         ...this.generateContentConfig,
@@ -442,7 +514,7 @@ export class GeminiClient {
 
     try {
       const userMemory = this.config.getUserMemory();
-      const systemInstruction = getCoreSystemPrompt(this.config, userMemory);
+      const systemInstruction = getCoreSystemPrompt(userMemory);
 
       const requestConfig = {
         abortSignal,
@@ -608,8 +680,8 @@ export class GeminiClient {
   }
 
   /**
-   * Handles fallback to Flash model when persistent 429 errors occur for OAuth users.
-   * Uses a fallback handler if provided by the config, otherwise returns null.
+   * Handles falling back to Flash model when persistent 429 errors occur for OAuth users.
+   * Uses a fallback handler if provided by the config; otherwise, returns null.
    */
   private async handleFlashFallback(
     authType?: string,

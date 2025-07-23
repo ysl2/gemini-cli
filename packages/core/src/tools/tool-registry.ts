@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { FunctionDeclaration, Schema } from '@google/genai';
+import type { FunctionDeclaration, Schema} from '@google/genai';
 import { Type } from '@google/genai';
-import type { Tool, ToolResult } from './tools.js';
-import { BaseTool } from './tools.js';
+import type { Tool, ToolResult} from './tools.js';
+import { BaseTool, Icon } from './tools.js';
 import type { Config } from '../config/config.js';
 import { spawn } from 'node:child_process';
 import { StringDecoder } from 'node:string_decoder';
@@ -20,7 +20,7 @@ type ToolParams = Record<string, unknown>;
 export class DiscoveredTool extends BaseTool<ToolParams, ToolResult> {
   constructor(
     private readonly config: Config,
-    readonly name: string,
+    name: string,
     readonly description: string,
     readonly parameterSchema: Record<string, unknown>,
   ) {
@@ -46,6 +46,7 @@ Signal: Signal number or \`(none)\` if no signal was received.
       name,
       name,
       description,
+      Icon.Hammer,
       parameterSchema,
       false, // isOutputMarkdown
       false, // canUpdateOutput
@@ -139,10 +140,14 @@ export class ToolRegistry {
    */
   registerTool(tool: Tool): void {
     if (this.tools.has(tool.name)) {
-      // Decide on behavior: throw error, log warning, or allow overwrite
-      console.warn(
-        `Tool with name "${tool.name}" is already registered. Overwriting.`,
-      );
+      if (tool instanceof DiscoveredMCPTool) {
+        tool = tool.asFullyQualifiedTool();
+      } else {
+        // Decide on behavior: throw error, log warning, or allow overwrite
+        console.warn(
+          `Tool with name "${tool.name}" is already registered. Overwriting.`,
+        );
+      }
     }
     this.tools.set(tool.name, tool);
   }
@@ -168,6 +173,30 @@ export class ToolRegistry {
       this,
       this.config.getDebugMode(),
     );
+  }
+
+  /**
+   * Discover or re-discover tools for a single MCP server.
+   * @param serverName - The name of the server to discover tools from.
+   */
+  async discoverToolsForServer(serverName: string): Promise<void> {
+    // Remove any previously discovered tools from this server
+    for (const [name, tool] of this.tools.entries()) {
+      if (tool instanceof DiscoveredMCPTool && tool.serverName === serverName) {
+        this.tools.delete(name);
+      }
+    }
+
+    const mcpServers = this.config.getMcpServers() ?? {};
+    const serverConfig = mcpServers[serverName];
+    if (serverConfig) {
+      await discoverMcpTools(
+        { [serverName]: serverConfig },
+        undefined,
+        this,
+        this.config.getDebugMode(),
+      );
+    }
   }
 
   private async discoverAndRegisterToolsFromCommand(): Promise<void> {
@@ -383,6 +412,19 @@ function _sanitizeParameters(schema: Schema | undefined, visited: Set<Schema>) {
       }
     }
   }
+
+  // Handle enum values - Gemini API only allows enum for STRING type
+  if (schema.enum && Array.isArray(schema.enum)) {
+    if (schema.type !== Type.STRING) {
+      // If enum is present but type is not STRING, convert type to STRING
+      schema.type = Type.STRING;
+    }
+    // Filter out null and undefined values, then convert remaining values to strings for Gemini API compatibility
+    schema.enum = schema.enum
+      .filter((value: unknown) => value !== null && value !== undefined)
+      .map((value: unknown) => String(value));
+  }
+
   // Vertex AI only supports 'enum' and 'date-time' for STRING format.
   if (schema.type === Type.STRING) {
     if (

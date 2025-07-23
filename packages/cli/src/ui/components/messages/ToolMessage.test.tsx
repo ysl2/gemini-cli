@@ -153,6 +153,8 @@ describe('<ToolMessage />', () => {
     const diffResult = {
       fileDiff: '--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-old\n+new',
       fileName: 'file.txt',
+      originalContent: 'old',
+      newContent: 'new',
     };
     const { lastFrame } = renderWithContext(
       <ToolMessage {...baseProps} resultDisplay={diffResult} />,

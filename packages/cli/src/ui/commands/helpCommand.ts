@@ -5,11 +5,13 @@
  */
 
 import type { OpenDialogActionReturn, SlashCommand } from './types.js';
+import { CommandKind } from './types.js';
 
 export const helpCommand: SlashCommand = {
   name: 'help',
-  altName: '?',
+  altNames: ['?'],
   description: 'for help on gemini-cli',
+  kind: CommandKind.BUILT_IN,
   action: (_context, _args): OpenDialogActionReturn => {
     console.debug('Opening help UI ...');
     return {

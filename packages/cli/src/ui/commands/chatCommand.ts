@@ -8,10 +8,12 @@ import * as fsPromises from 'fs/promises';
 import type {
   CommandContext,
   SlashCommand,
-  MessageActionReturn,
+  MessageActionReturn} from './types.js';
+import {
+  CommandKind,
 } from './types.js';
 import path from 'path';
-import type { HistoryItemWithoutId } from '../types.js';
+import type { HistoryItemWithoutId} from '../types.js';
 import { MessageType } from '../types.js';
 
 interface ChatDetail {
@@ -59,6 +61,7 @@ const getSavedChatTags = async (
 const listCommand: SlashCommand = {
   name: 'list',
   description: 'List saved conversation checkpoints',
+  kind: CommandKind.BUILT_IN,
   action: async (context): Promise<MessageActionReturn> => {
     const chatDetails = await getSavedChatTags(context, false);
     if (chatDetails.length === 0) {
@@ -86,6 +89,7 @@ const saveCommand: SlashCommand = {
   name: 'save',
   description:
     'Save the current conversation as a checkpoint. Usage: /chat save <tag>',
+  kind: CommandKind.BUILT_IN,
   action: async (context, args): Promise<MessageActionReturn> => {
     const tag = args.trim();
     if (!tag) {
@@ -127,9 +131,10 @@ const saveCommand: SlashCommand = {
 
 const resumeCommand: SlashCommand = {
   name: 'resume',
-  altName: 'load',
+  altNames: ['load'],
   description:
     'Resume a conversation from a checkpoint. Usage: /chat resume <tag>',
+  kind: CommandKind.BUILT_IN,
   action: async (context, args) => {
     const tag = args.trim();
     if (!tag) {
@@ -198,5 +203,6 @@ const resumeCommand: SlashCommand = {
 export const chatCommand: SlashCommand = {
   name: 'chat',
   description: 'Manage conversation history.',
+  kind: CommandKind.BUILT_IN,
   subCommands: [listCommand, saveCommand, resumeCommand],
 };

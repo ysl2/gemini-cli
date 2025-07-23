@@ -5,7 +5,7 @@
  */
 
 import type { Content } from '@google/genai';
-import type { HistoryItemWithoutId } from '../types.js';
+import type { HistoryItemWithoutId , HistoryItem } from '../types.js';
 import type { Config, GitService, Logger } from '@google/gemini-cli-core';
 import type { LoadedSettings } from '../../config/settings.js';
 import type { UseHistoryManagerReturn } from '../hooks/useHistoryManager.js';
@@ -40,6 +40,14 @@ export interface CommandContext {
      * @param item The history item to display as pending, or `null` to clear.
      */
     setPendingItem: (item: HistoryItemWithoutId | null) => void;
+    /**
+     * Loads a new set of history items, replacing the current history.
+     *
+     * @param history The array of history items to load.
+     */
+    loadHistory: UseHistoryManagerReturn['loadHistory'];
+    /** Toggles a special display mode. */
+    toggleCorgiMode: () => void;
   };
   // Session-specific data
   session: {
@@ -54,6 +62,12 @@ export interface ToolActionReturn {
   type: 'tool';
   toolName: string;
   toolArgs: Record<string, unknown>;
+}
+
+/** The return type for a command action that results in the app quitting. */
+export interface QuitActionReturn {
+  type: 'quit';
+  messages: HistoryItem[];
 }
 
 /**
@@ -71,8 +85,7 @@ export interface MessageActionReturn {
  */
 export interface OpenDialogActionReturn {
   type: 'dialog';
-  // TODO: Add 'theme' | 'auth' | 'editor' | 'privacy' as migration happens.
-  dialog: 'help' | 'auth' | 'theme' | 'privacy';
+  dialog: 'help' | 'auth' | 'theme' | 'editor' | 'privacy';
 }
 
 /**
@@ -85,16 +98,35 @@ export interface LoadHistoryActionReturn {
   clientHistory: Content[]; // The history for the generative client
 }
 
+/**
+ * The return type for a command action that should immediately submit
+ * content as a prompt to the Gemini model.
+ */
+export interface SubmitPromptActionReturn {
+  type: 'submit_prompt';
+  content: string;
+}
+
 export type SlashCommandActionReturn =
   | ToolActionReturn
   | MessageActionReturn
+  | QuitActionReturn
   | OpenDialogActionReturn
-  | LoadHistoryActionReturn;
+  | LoadHistoryActionReturn
+  | SubmitPromptActionReturn;
+
+export enum CommandKind {
+  BUILT_IN = 'built-in',
+  FILE = 'file',
+}
+
 // The standardized contract for any command in the system.
 export interface SlashCommand {
   name: string;
-  altName?: string;
-  description?: string;
+  altNames?: string[];
+  description: string;
+
+  kind: CommandKind;
 
   // The action to run. Optional for parent commands that only group sub-commands.
   action?: (

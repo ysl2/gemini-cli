@@ -13,10 +13,10 @@ import type {
   ServerGeminiContentEvent as ContentEvent,
   ServerGeminiErrorEvent as ErrorEvent,
   ServerGeminiChatCompressedEvent,
+  ServerGeminiFinishedEvent,
   ToolCallRequestInfo,
   EditorType,
-  ThoughtSummary,
-} from '@google/gemini-cli-core';
+  ThoughtSummary} from '@google/gemini-cli-core';
 import {
   GeminiEventType as ServerGeminiEventType,
   getErrorMessage,
@@ -28,14 +28,17 @@ import {
   UserPromptEvent,
   DEFAULT_GEMINI_FLASH_MODEL,
 } from '@google/gemini-cli-core';
-import { type Part, type PartListUnion } from '@google/genai';
+import { type Part, type PartListUnion, FinishReason } from '@google/genai';
 import type {
   HistoryItem,
   HistoryItemWithoutId,
   HistoryItemToolGroup,
-  SlashCommandProcessorResult,
+  SlashCommandProcessorResult} from '../types.js';
+import {
+  StreamingState,
+  MessageType,
+  ToolCallStatus,
 } from '../types.js';
-import { StreamingState, MessageType, ToolCallStatus } from '../types.js';
 import { isAtCommand } from '../utils/commandUtils.js';
 import { parseAndFormatApiError } from '../utils/errorParsing.js';
 import { useShellCommandProcessor } from './shellCommandProcessor.js';
@@ -49,11 +52,10 @@ import path from 'path';
 import type {
   TrackedToolCall,
   TrackedCompletedToolCall,
-  TrackedCancelledToolCall,
-} from './useReactToolScheduler.js';
+  TrackedCancelledToolCall} from './useReactToolScheduler.js';
 import {
   useReactToolScheduler,
-  mapToDisplay as mapTrackedToolCallsToDisplay,
+  mapToDisplay as mapTrackedToolCallsToDisplay
 } from './useReactToolScheduler.js';
 import { useSessionStats } from '../contexts/SessionContext.js';
 
@@ -241,19 +243,37 @@ export const useGeminiStream = (
         const slashCommandResult = await handleSlashCommand(trimmedQuery);
 
         if (slashCommandResult) {
-          if (slashCommandResult.type === 'schedule_tool') {
-            const { toolName, toolArgs } = slashCommandResult;
-            const toolCallRequest: ToolCallRequestInfo = {
-              callId: `${toolName}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-              name: toolName,
-              args: toolArgs,
-              isClientInitiated: true,
-              prompt_id,
-            };
-            scheduleToolCalls([toolCallRequest], abortSignal);
-          }
+          switch (slashCommandResult.type) {
+            case 'schedule_tool': {
+              const { toolName, toolArgs } = slashCommandResult;
+              const toolCallRequest: ToolCallRequestInfo = {
+                callId: `${toolName}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                name: toolName,
+                args: toolArgs,
+                isClientInitiated: true,
+                prompt_id,
+              };
+              scheduleToolCalls([toolCallRequest], abortSignal);
+              return { queryToSend: null, shouldProceed: false };
+            }
+            case 'submit_prompt': {
+              localQueryToSendToGemini = slashCommandResult.content;
 
-          return { queryToSend: null, shouldProceed: false };
+              return {
+                queryToSend: localQueryToSendToGemini,
+                shouldProceed: true,
+              };
+            }
+            case 'handled': {
+              return { queryToSend: null, shouldProceed: false };
+            }
+            default: {
+              const unreachable: never = slashCommandResult;
+              throw new Error(
+                `Unhandled slash command result type: ${unreachable}`,
+              );
+            }
+          }
         }
 
         if (shellModeActive && handleShellCommand(trimmedQuery, abortSignal)) {
@@ -424,6 +444,46 @@ export const useGeminiStream = (
     [addItem, pendingHistoryItemRef, setPendingHistoryItem, config],
   );
 
+  const handleFinishedEvent = useCallback(
+    (event: ServerGeminiFinishedEvent, userMessageTimestamp: number) => {
+      const finishReason = event.value;
+
+      const finishReasonMessages: Record<FinishReason, string | undefined> = {
+        [FinishReason.FINISH_REASON_UNSPECIFIED]: undefined,
+        [FinishReason.STOP]: undefined,
+        [FinishReason.MAX_TOKENS]: 'Response truncated due to token limits.',
+        [FinishReason.SAFETY]: 'Response stopped due to safety reasons.',
+        [FinishReason.RECITATION]: 'Response stopped due to recitation policy.',
+        [FinishReason.LANGUAGE]:
+          'Response stopped due to unsupported language.',
+        [FinishReason.BLOCKLIST]: 'Response stopped due to forbidden terms.',
+        [FinishReason.PROHIBITED_CONTENT]:
+          'Response stopped due to prohibited content.',
+        [FinishReason.SPII]:
+          'Response stopped due to sensitive personally identifiable information.',
+        [FinishReason.OTHER]: 'Response stopped for other reasons.',
+        [FinishReason.MALFORMED_FUNCTION_CALL]:
+          'Response stopped due to malformed function call.',
+        [FinishReason.IMAGE_SAFETY]:
+          'Response stopped due to image safety violations.',
+        [FinishReason.UNEXPECTED_TOOL_CALL]:
+          'Response stopped due to unexpected tool call.',
+      };
+
+      const message = finishReasonMessages[finishReason];
+      if (message) {
+        addItem(
+          {
+            type: 'info',
+            text: `⚠️  ${message}`,
+          },
+          userMessageTimestamp,
+        );
+      }
+    },
+    [addItem],
+  );
+
   const handleChatCompressionEvent = useCallback(
     (eventValue: ServerGeminiChatCompressedEvent['value']) =>
       addItem(
@@ -503,6 +563,12 @@ export const useGeminiStream = (
           case ServerGeminiEventType.MaxSessionTurns:
             handleMaxSessionTurnsEvent();
             break;
+          case ServerGeminiEventType.Finished:
+            handleFinishedEvent(
+              event as ServerGeminiFinishedEvent,
+              userMessageTimestamp,
+            );
+            break;
           case ServerGeminiEventType.LoopDetected:
             // handle later because we want to move pending history to history
             // before we add loop detected message to history
@@ -526,6 +592,7 @@ export const useGeminiStream = (
       handleErrorEvent,
       scheduleToolCalls,
       handleChatCompressionEvent,
+      handleFinishedEvent,
       handleMaxSessionTurnsEvent,
     ],
   );

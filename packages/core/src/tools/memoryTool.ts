@@ -5,8 +5,8 @@
  */
 
 import type { ToolResult } from './tools.js';
-import { BaseTool } from './tools.js';
-import type { FunctionDeclaration } from '@google/genai';
+import { BaseTool, Icon } from './tools.js';
+import type { FunctionDeclaration} from '@google/genai';
 import { Type } from '@google/genai';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -107,6 +107,7 @@ export class MemoryTool extends BaseTool<SaveMemoryParams, ToolResult> {
       MemoryTool.Name,
       'Save Memory',
       memoryToolDescription,
+      Icon.LightBulb,
       memoryToolSchemaData.parameters as Record<string, unknown>,
     );
   }

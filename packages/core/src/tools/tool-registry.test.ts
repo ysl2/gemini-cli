@@ -5,17 +5,35 @@
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { Mocked } from 'vitest';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { DiscoveredTool } from './tool-registry.js';
-import { ToolRegistry, sanitizeParameters } from './tool-registry.js';
-import { DiscoveredMCPTool } from './mcp-tool.js';
-import type { ConfigParameters } from '../config/config.js';
+import type {
+  Mocked} from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach
+} from 'vitest';
+import type { ConfigParameters} from '../config/config.js';
 import { Config, ApprovalMode } from '../config/config.js';
+import type {
+  DiscoveredTool} from './tool-registry.js';
+import {
+  ToolRegistry,
+  sanitizeParameters,
+} from './tool-registry.js';
+import { DiscoveredMCPTool } from './mcp-tool.js';
 import type { ToolResult } from './tools.js';
-import { BaseTool } from './tools.js';
-import type { FunctionDeclaration, CallableTool, Schema } from '@google/genai';
-import { mcpToTool, Type } from '@google/genai';
+import { BaseTool, Icon } from './tools.js';
+import type {
+  FunctionDeclaration,
+  CallableTool,
+  Schema} from '@google/genai';
+import {
+  mcpToTool,
+  Type
+} from '@google/genai';
 import { spawn } from 'node:child_process';
 
 // Use vi.hoisted to define the mock function so it can be used in the vi.mock factory
@@ -96,7 +114,7 @@ class MockTool extends BaseTool<{ param: string }, ToolResult> {
     displayName = 'A mock tool',
     description = 'A mock tool description',
   ) {
-    super(name, displayName, description, {
+    super(name, displayName, description, Icon.Hammer, {
       type: Type.OBJECT,
       properties: {
         param: { type: Type.STRING },
@@ -197,35 +215,31 @@ describe('ToolRegistry', () => {
       const mcpTool1_c = new DiscoveredMCPTool(
         mockCallable,
         server1Name,
-        `${server1Name}__zebra-tool`,
+        'zebra-tool',
         'd1',
         {},
-        'zebra-tool',
       );
       const mcpTool1_a = new DiscoveredMCPTool(
         mockCallable,
         server1Name,
-        `${server1Name}__apple-tool`,
+        'apple-tool',
         'd2',
         {},
-        'apple-tool',
       );
       const mcpTool1_b = new DiscoveredMCPTool(
         mockCallable,
         server1Name,
-        `${server1Name}__banana-tool`,
+        'banana-tool',
         'd3',
         {},
-        'banana-tool',
       );
 
       const mcpTool2 = new DiscoveredMCPTool(
         mockCallable,
         server2Name,
-        'server2Name__tool-on-server2',
+        'tool-on-server2',
         'd4',
         {},
-        'tool-on-server2',
       );
       const nonMcpTool = new MockTool('regular-tool');
 
@@ -240,11 +254,7 @@ describe('ToolRegistry', () => {
 
       // Assert that the array has the correct tools and is sorted by name
       expect(toolsFromServer1).toHaveLength(3);
-      expect(toolNames).toEqual([
-        `${server1Name}__apple-tool`,
-        `${server1Name}__banana-tool`,
-        `${server1Name}__zebra-tool`,
-      ]);
+      expect(toolNames).toEqual(['apple-tool', 'banana-tool', 'zebra-tool']);
 
       // Assert that all returned tools are indeed from the correct server
       for (const tool of toolsFromServer1) {

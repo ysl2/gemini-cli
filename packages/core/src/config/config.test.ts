@@ -333,6 +333,7 @@ describe('Server Config (config.ts)', () => {
         config.getDebugMode(),
         config.getFileService(),
         config.getExtensionContextFilePaths(),
+        config.getFileFilteringOptions(),
       );
 
       expect(config.getUserMemory()).toBe(mockMemoryData.memoryContent);
