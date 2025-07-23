@@ -103,7 +103,7 @@ Slash commands provide meta-level control over the CLI itself.
     - **Editing commands:** Delete with `x`, change with `c`, insert with `i`, `a`, `o`, `O`; complex operations like `dd`, `cc`, `dw`, `cw`
     - **Count support:** Prefix commands with numbers (e.g., `3h`, `5w`, `10G`)
     - **Repeat last command:** Use `.` to repeat the last editing operation
-    - **Persistent setting:** Vim mode preference is saved and restored between sessions
+    - **Persistent setting:** Vim mode preference is saved to `~/.gemini/settings.json` and restored between sessions
   - **Status indicator:** When enabled, shows `[NORMAL]` or `[INSERT]` in the footer
 
 ### Custom Commands
