@@ -268,7 +268,7 @@ describe('FileCommandLoader', () => {
       const mockConfig = {
         getProjectRoot: vi.fn(() => process.cwd()),
         getExtensions: vi.fn(() => [
-          { name: 'test-ext', version: '1.0.0', isActive: true },
+          { name: 'test-ext', version: '1.0.0', isActive: true, path: extensionDir },
         ]),
       } as Config;
       const loader = new FileCommandLoader(mockConfig);
@@ -308,7 +308,7 @@ describe('FileCommandLoader', () => {
       const mockConfig = {
         getProjectRoot: vi.fn(() => process.cwd()),
         getExtensions: vi.fn(() => [
-          { name: 'test-ext', version: '1.0.0', isActive: true },
+          { name: 'test-ext', version: '1.0.0', isActive: true, path: extensionDir },
         ]),
       } as Config;
       const loader = new FileCommandLoader(mockConfig);
@@ -376,8 +376,8 @@ describe('FileCommandLoader', () => {
       const mockConfig = {
         getProjectRoot: vi.fn(() => process.cwd()),
         getExtensions: vi.fn(() => [
-          { name: 'active-ext', version: '1.0.0', isActive: true },
-          { name: 'inactive-ext', version: '1.0.0', isActive: false },
+          { name: 'active-ext', version: '1.0.0', isActive: true, path: extensionDir1 },
+          { name: 'inactive-ext', version: '1.0.0', isActive: false, path: extensionDir2 },
         ]),
       } as Config;
       const loader = new FileCommandLoader(mockConfig);
@@ -406,7 +406,7 @@ describe('FileCommandLoader', () => {
       const mockConfig = {
         getProjectRoot: vi.fn(() => process.cwd()),
         getExtensions: vi.fn(() => [
-          { name: 'no-commands', version: '1.0.0', isActive: true },
+          { name: 'no-commands', version: '1.0.0', isActive: true, path: extensionDir },
         ]),
       } as Config;
       const loader = new FileCommandLoader(mockConfig);
@@ -440,7 +440,7 @@ describe('FileCommandLoader', () => {
       const mockConfig = {
         getProjectRoot: vi.fn(() => process.cwd()),
         getExtensions: vi.fn(() => [
-          { name: 'a', version: '1.0.0', isActive: true },
+          { name: 'a', version: '1.0.0', isActive: true, path: extensionDir },
         ]),
       } as Config;
       const loader = new FileCommandLoader(mockConfig);

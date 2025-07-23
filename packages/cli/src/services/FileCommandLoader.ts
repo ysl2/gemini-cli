@@ -14,7 +14,6 @@ import {
   getProjectCommandsDir,
   getUserCommandsDir,
 } from '@google/gemini-cli-core';
-import { loadExtensions } from '../config/extension.js';
 import { ICommandLoader } from './types.js';
 import { CommandKind, SlashCommand } from '../ui/commands/types.js';
 
@@ -71,8 +70,6 @@ export class FileCommandLoader implements ICommandLoader {
     const commandDirs = this.getCommandDirectories();
     for (const dirInfo of commandDirs) {
       try {
-        await fs.access(dirInfo.path);
-
         const files = await glob('**/*.toml', {
           ...globOptions,
           cwd: dirInfo.path,
@@ -116,21 +113,13 @@ export class FileCommandLoader implements ICommandLoader {
 
     // 1. Extension commands (lowest precedence)
     if (this.config) {
-      const allExtensions = loadExtensions(this.projectRoot);
-      const activeExtensionNames = new Set(
-        this.config
-          .getExtensions()
-          .filter((ext) => ext.isActive)
-          .map((ext) => ext.name.toLowerCase()),
-      );
-
-      const activeExtensions = allExtensions.filter((ext) =>
-        activeExtensionNames.has(ext.config.name.toLowerCase()),
-      );
+      const activeExtensions = this.config
+        .getExtensions()
+        .filter((ext) => ext.isActive);
 
       const extensionCommandDirs = activeExtensions.map((ext) => ({
         path: path.join(ext.path, 'commands'),
-        extensionName: ext.config.name,
+        extensionName: ext.name,
       }));
 
       dirs.push(...extensionCommandDirs);
