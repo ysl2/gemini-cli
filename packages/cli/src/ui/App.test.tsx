@@ -15,8 +15,7 @@ import type {
   SandboxConfig,
   GeminiClient,
 } from '@google/gemini-cli-core';
-import { ideContext } from '@google/gemini-cli-core';
-import { Config as ServerConfig, ApprovalMode } from '@google/gemini-cli-core';
+import { ideContext, Config as ServerConfig, ApprovalMode } from '@google/gemini-cli-core';
 import type { SettingsFile, Settings } from '../config/settings.js';
 import { LoadedSettings } from '../config/settings.js';
 import process from 'node:process';
