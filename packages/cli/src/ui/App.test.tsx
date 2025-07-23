@@ -24,6 +24,7 @@ import { StreamingState } from './types.js';
 import { Tips } from './components/Tips.js';
 import { checkForUpdates, UpdateInfo } from './utils/updateCheck.js';
 import { EventEmitter } from 'events';
+import { updatEventEmitter } from '../utils/updateEventEmitter.js';
 
 // Define a more complete mock server config based on actual Config
 interface MockServerConfig {
@@ -356,12 +357,13 @@ describe('App UI', () => {
       );
       currentUnmount = unmount;
 
+      updatEventEmitter.emit('update-success', info);
+
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      spawnEmitter.emit('close', 0);
-      await new Promise((resolve) => setTimeout(resolve, 10));
-
-      expect(lastFrame()).toContain('Update successful!');
+      expect(lastFrame()).toContain(
+        'Update successful! The new version will be used on your next run.',
+      );
     });
 
     it('should show an error message when update fails', async () => {
@@ -385,12 +387,13 @@ describe('App UI', () => {
       );
       currentUnmount = unmount;
 
+      updatEventEmitter.emit('update-failed', info);
+
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      spawnEmitter.emit('close', 1);
-      await new Promise((resolve) => setTimeout(resolve, 10));
-
-      expect(lastFrame()).toContain('Automatic update failed.');
+      expect(lastFrame()).toContain(
+        'Automatic update failed. Please try updating manually',
+      );
     });
 
     it('should show an error message when spawn fails', async () => {
@@ -404,7 +407,6 @@ describe('App UI', () => {
         message: 'Update available',
       };
       mockedCheckForUpdates.mockResolvedValue(info);
-      const testError = new Error('NPM not found');
 
       const { lastFrame, unmount } = render(
         <App
@@ -415,13 +417,14 @@ describe('App UI', () => {
       );
       currentUnmount = unmount;
 
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      // We are testing the App's reaction to an `update-failed` event,
+      // which is what should be emitted when a spawn error occurs elsewhere.
+      updatEventEmitter.emit('update-failed', info);
 
-      spawnEmitter.emit('error', testError);
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(lastFrame()).toContain(
-        `Failed to start the update process: ${testError.message}`,
+        'Automatic update failed. Please try updating manually',
       );
     });
 

@@ -79,13 +79,12 @@ import {
   isGenericQuotaExceededError,
   UserTierId,
 } from '@google/gemini-cli-core';
-import { checkForUpdates, type UpdateInfo } from './utils/updateCheck.js';
+import { UpdateInfo } from './utils/updateCheck.js';
 import ansiEscapes from 'ansi-escapes';
 import { OverflowProvider } from './contexts/OverflowContext.js';
 import { ShowMoreLines } from './components/ShowMoreLines.js';
 import { PrivacyNotice } from './privacy/PrivacyNotice.js';
-import { spawn } from 'node:child_process';
-import { isGitRepository } from '../utils/git.js';
+import { updatEventEmitter } from '../utils/updateEventEmitter.js';
 
 const CTRL_EXIT_PROMPT_DURATION_MS = 1000;
 
@@ -94,75 +93,6 @@ interface AppProps {
   settings: LoadedSettings;
   startupWarnings?: string[];
   version: string;
-}
-
-function handleAutoUpdate(
-  info: UpdateInfo | null,
-  setUpdateInfo: (info: UpdateInfo | null) => void,
-  setIsUpdating: (isUpdating: boolean) => void,
-  addItem: (item: HistoryItem, timestamp: number) => void,
-) {
-  if (!info) {
-    return;
-  }
-
-  setUpdateInfo(info);
-  if (process.env.GEMINI_CLI_DISABLE_AUTOUPDATER === 'true') {
-    setIsUpdating(false);
-    return;
-  }
-
-  setIsUpdating(true);
-
-  const updateProcess = spawn(
-    `rm -rf $(npm root -g)/@google/gemini-cli && npm install -g @google/gemini-cli@${info.update.latest}`,
-    { stdio: 'pipe', shell: true },
-  );
-  let errorOutput = '';
-  updateProcess.stderr.on('data', (data) => {
-    errorOutput += data.toString();
-  });
-
-  updateProcess.on('close', (code) => {
-    if (code === 0) {
-      addItem(
-        {
-          id: Date.now(),
-          type: MessageType.INFO,
-          text: `Update successful! The new version will be used on your next run.`,
-        },
-        Date.now(),
-      );
-    } else {
-      addItem(
-        {
-          id: Date.now(),
-          type: MessageType.ERROR,
-          text: `Automatic update failed. Please try updating manually: npm i -g @google/gemini-cli@latest`,
-        },
-        Date.now(),
-      );
-      console.error(
-        `Update process exited with code ${code}. Stderr: ${errorOutput}`,
-      );
-    }
-    setIsUpdating(false);
-    setUpdateInfo(null);
-  });
-
-  updateProcess.on('error', (err) => {
-    addItem(
-      {
-        id: Date.now(),
-        type: MessageType.ERROR,
-        text: `Failed to start the update process: ${err.message}. Please ensure npm is installed and in your PATH.`,
-      },
-      Date.now(),
-    );
-    console.error('install error:', err);
-    setIsUpdating(false);
-    setUpdateInfo(null);
-  });
 }
 
 export const AppWrapper = (props: AppProps) => (
@@ -175,45 +105,74 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   const isFocused = useFocus();
   useBracketedPaste();
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
-  const [isUpdating, setIsUpdating] = useState(false);
   const { stdout } = useStdout();
   const nightly = version.includes('nightly');
   const { history, addItem, clearItems, loadHistory } = useHistory();
 
   useEffect(() => {
-    checkForUpdates().then(async (info) => {
-      if (!info) {
-        return;
-      }
-
-      const isNpx = process.env.npm_execpath?.includes('npx');
-      const isGit = await isGitRepository();
-
-      if (isGit || isNpx || settings.merged.disableAutoUpdate) {
-        const notificationInfo = { ...info };
-        if (!(isGit || isNpx)) {
-          // Add manual install instructions for regular installs with auto-update disabled
-          notificationInfo.message += `\nRun npm install -g ${info.update.name} to install`;
-        }
-
-        setUpdateInfo(notificationInfo);
-
-        setTimeout(() => {
+    let successfullyInstalled = false;
+    const handleUpdateRecieved = (info: UpdateInfo) => {
+      setUpdateInfo(info);
+      const savedMessage = info.message;
+      setTimeout((_: UpdateInfo) => {
+        if (!successfullyInstalled) {
           addItem(
             {
               type: MessageType.INFO,
-              text: notificationInfo.message,
+              text: savedMessage,
             },
             Date.now(),
           );
-          setUpdateInfo(null);
-        }, 60000);
-        return;
-      }
+        }
+        setUpdateInfo(null);
+      }, 60000);
+    };
 
-      handleAutoUpdate(info, setUpdateInfo, setIsUpdating, addItem);
-    });
-  }, [addItem, settings.merged.disableAutoUpdate]);
+    const handleUpdateFailed = (_: UpdateInfo) => {
+      setUpdateInfo(null);
+      addItem(
+        {
+          type: MessageType.ERROR,
+          text: `Automatic update failed. Please try updating manually`,
+        },
+        Date.now(),
+      );
+    };
+
+    const handleUpdateSuccess = (_: UpdateInfo) => {
+      successfullyInstalled = true;
+      setUpdateInfo(null);
+      addItem(
+        {
+          type: MessageType.INFO,
+          text: `Update successful! The new version will be used on your next run.`,
+        },
+        Date.now(),
+      );
+    };
+
+    const handleUpdateInfo = (data: { message: string }) => {
+      addItem(
+        {
+          type: MessageType.INFO,
+          text: data.message,
+        },
+        Date.now(),
+      );
+    };
+
+    updatEventEmitter.on('update-received', handleUpdateRecieved);
+    updatEventEmitter.on('update-failed', handleUpdateFailed);
+    updatEventEmitter.on('update-success', handleUpdateSuccess);
+    updatEventEmitter.on('update-info', handleUpdateInfo);
+
+    return () => {
+      updatEventEmitter.off('update-received', handleUpdateRecieved);
+      updatEventEmitter.off('update-failed', handleUpdateFailed);
+      updatEventEmitter.off('update-success', handleUpdateSuccess);
+      updatEventEmitter.off('update-info', handleUpdateInfo);
+    };
+  }, [addItem]);
 
   const {
     consoleMessages,
@@ -861,13 +820,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
         <Box flexDirection="column" ref={mainControlsRef}>
           {/* Move UpdateNotification to render update notification above input area */}
           {updateInfo && (
-            <UpdateNotification
-              message={
-                isUpdating
-                  ? `${updateInfo.message}\nAttempting to automatically update now...`
-                  : `${updateInfo.message}`
-              }
-            />
+            <UpdateNotification message={`${updateInfo.message}`} />
           )}
           {startupWarnings.length > 0 && (
             <Box

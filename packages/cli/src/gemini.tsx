@@ -40,6 +40,9 @@ import {
 import { validateAuthMethod } from './config/auth.js';
 import { setMaxSizedBoxDebugging } from './ui/components/shared/MaxSizedBox.js';
 import { validateNonInteractiveAuth } from './validateNonInterActiveAuth.js';
+import { checkForUpdates, UpdateInfo } from './ui/utils/updateCheck.js';
+import { updatEventEmitter } from './utils/updateEventEmitter.js';
+import { getInstallationInfo } from './utils/installationInfo.js';
 
 function getNodeMemoryArgs(config: Config): string[] {
   const totalMemoryMB = os.totalmem() / (1024 * 1024);
@@ -222,6 +225,10 @@ export async function main() {
       { exitOnCtrlC: false },
     );
 
+    checkForUpdates().then((info) => {
+      handleAutoUpdate(info, settings);
+    });
+
     registerCleanup(() => instance.unmount());
     return;
   }
@@ -324,4 +331,57 @@ async function loadNonInteractiveConfig(
     settings.merged.selectedAuthType,
     finalConfig,
   );
+}
+
+function handleAutoUpdate(info: UpdateInfo | null, settings: LoadedSettings) {
+  if (!info) {
+    return;
+  }
+
+  const installationInfo = getInstallationInfo(
+    settings.merged.disableAutoUpdate ?? false,
+  );
+
+  let combinedMessage = info.message;
+  if (installationInfo.updateMessage) {
+    combinedMessage += `\n${installationInfo.updateMessage}`;
+  }
+
+  updatEventEmitter.emit('update-received', {
+    message: combinedMessage,
+  });
+
+  if (!installationInfo.updateCommand || settings.merged.disableAutoUpdate) {
+    return;
+  }
+
+  const updateCommand = installationInfo.updateCommand.replace(
+    '@latest',
+    `@${info.update.latest}`,
+  );
+
+  const updateProcess = spawn(updateCommand, { stdio: 'pipe', shell: true });
+  let errorOutput = '';
+  updateProcess.stderr.on('data', (data) => {
+    errorOutput += data.toString();
+  });
+
+  updateProcess.on('close', (code) => {
+    if (code === 0) {
+      updatEventEmitter.emit('update-success', {
+        message:
+          'Update successful! The new version will be used on your next run.',
+      });
+    } else {
+      updatEventEmitter.emit('update-failed', {
+        message: `Automatic update failed. Please try updating manually. (command: ${updateCommand}, stderr: ${errorOutput.trim()})`,
+      });
+    }
+  });
+
+  updateProcess.on('error', (err) => {
+    updatEventEmitter.emit('update-failed', {
+      message: `Automatic update failed. Please try updating manually. (error: ${err.message})`,
+    });
+  });
 }
