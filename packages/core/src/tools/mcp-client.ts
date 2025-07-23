@@ -23,12 +23,8 @@ import { ToolRegistry } from './tool-registry.js';
 import { MCPOAuthProvider } from '../mcp/oauth-provider.js';
 import { OAuthUtils } from '../mcp/oauth-utils.js';
 import { MCPOAuthTokenStorage } from '../mcp/oauth-token-storage.js';
-import {
-  OpenFilesNotificationSchema,
-  IDE_SERVER_NAME,
-  ideContext,
-} from '../services/ideContext.js';
 import { getErrorMessage } from '../utils/errors.js';
+import { ideModeManager } from '../ide/ide-mode-manager.js';
 
 export const MCP_DEFAULT_TIMEOUT_MSEC = 10 * 60 * 1000; // default to 10 minutes
 
@@ -378,23 +374,12 @@ export async function connectAndDiscover(
     );
     try {
       updateMCPServerStatus(mcpServerName, MCPServerStatus.CONNECTED);
+      ideModeManager.client?.listTools();
 
       mcpClient.onerror = (error) => {
         console.error(`MCP ERROR (${mcpServerName}):`, error.toString());
         updateMCPServerStatus(mcpServerName, MCPServerStatus.DISCONNECTED);
-        if (mcpServerName === IDE_SERVER_NAME) {
-          ideContext.clearOpenFilesContext();
-        }
       };
-
-      if (mcpServerName === IDE_SERVER_NAME) {
-        mcpClient.setNotificationHandler(
-          OpenFilesNotificationSchema,
-          (notification) => {
-            ideContext.setOpenFilesContext(notification.params);
-          },
-        );
-      }
 
       const tools = await discoverTools(
         mcpServerName,
