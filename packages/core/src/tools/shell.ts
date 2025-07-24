@@ -313,7 +313,7 @@ Process Group PGID: Process group started or \`(none)\``,
   async execute(
     params: ShellToolParams,
     signal: AbortSignal,
-    updateOutput: (output: string) => void,
+    updateOutput?: (output: string) => void,
   ): Promise<ToolResult> {
     const strippedCommand = this.stripShellWrapper(params.command);
     const validationError = this.validateToolParams({
