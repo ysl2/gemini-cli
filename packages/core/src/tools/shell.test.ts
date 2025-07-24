@@ -410,9 +410,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed(
-      'gh issue list || rm -rf /',
-    );
+    const result = await shellTool.isCommandAllowed('gh issue list || rm -rf /');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       "Command 'rm -rf /' is not in the allowed commands list",
@@ -581,9 +579,7 @@ describe('getCommandRoots', () => {
 
   it('should handle multiple commands with ;', async () => {
     const shellTool = new ShellTool({} as Config);
-    const result = await shellTool.getCommandRoots(
-      'echo "hello"; echo "world"',
-    );
+    const result = await shellTool.getCommandRoots('echo "hello"; echo "world"');
     expect(result).toEqual(['echo', 'echo']);
   });
 
@@ -597,9 +593,7 @@ describe('getCommandRoots', () => {
 
   it('should handle commands with paths', async () => {
     const shellTool = new ShellTool({} as Config);
-    const result = await shellTool.getCommandRoots(
-      '/usr/local/bin/node script.js',
-    );
+    const result = await shellTool.getCommandRoots('/usr/local/bin/node script.js');
     expect(result).toEqual(['node']);
   });
 
@@ -663,9 +657,7 @@ describe('getCommandRoots', () => {
 
   it('should handle multiple commands with &', async () => {
     const shellTool = new ShellTool({} as Config);
-    const result = await shellTool.getCommandRoots(
-      'echo "hello" & echo "world"',
-    );
+    const result = await shellTool.getCommandRoots('echo "hello" & echo "world"');
     expect(result).toEqual(['echo', 'echo']);
   });
 });
