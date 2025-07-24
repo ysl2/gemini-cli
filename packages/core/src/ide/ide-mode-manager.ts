@@ -17,32 +17,29 @@ const logger = {
     console.debug('[DEBUG] [ImportProcessor]', ...args),
 };
 
+export enum IDEConnectionStatus {
+  Connected = 'connected',
+  Disconnected = 'disconnected',
+  Connecting = 'connecting',
+}
+
 /**
  * Manages the connection to and interaction with the IDE server.
  */
 export class IdeModeManager {
   client: Client | undefined = undefined;
+  connectionStatus: IDEConnectionStatus = IDEConnectionStatus.Disconnected;
 
   constructor() {
     this.connectToMcpServer().catch(() => {});
   }
 
-  getServerStatus() {
-    if (!this.client) {
-      return {
-        type: 'message',
-        messageType: 'error',
-        content: `🔴 Disconnected`,
-      } as const;
-    }
-    return {
-      type: 'message',
-      messageType: 'info',
-      content: `🟢 Connected`,
-    } as const;
+  getConnectionStatus(): IDEConnectionStatus {
+    return this.connectionStatus;
   }
 
   async connectToMcpServer(): Promise<void> {
+    this.connectionStatus = IDEConnectionStatus.Connecting;
     this.client = new Client({
       name: 'streamable-http-client',
       version: '1.0.0',
@@ -52,18 +49,26 @@ export class IdeModeManager {
       logger.debug(
         `Unable to connect to IDE mode MCP server. Expected to connect to port ${process.env['GEMINI_CLI_IDE_SERVER_PORT']}`,
       );
+      this.connectionStatus = IDEConnectionStatus.Disconnected;
+      return;
     }
 
-    const transport = new StreamableHTTPClientTransport(
-      new URL(`http://localhost:${idePort}/mcp`),
-    );
-    await this.client.connect(transport);
-    this.client.setNotificationHandler(
-      OpenFilesNotificationSchema,
-      (notification) => {
-        ideContext.setOpenFilesContext(notification.params);
-      },
-    );
+    try {
+      const transport = new StreamableHTTPClientTransport(
+        new URL(`http://localhost:${idePort}/mcp`),
+      );
+      await this.client.connect(transport);
+      this.client.setNotificationHandler(
+        OpenFilesNotificationSchema,
+        (notification) => {
+          ideContext.setOpenFilesContext(notification.params);
+        },
+      );
+      this.connectionStatus = IDEConnectionStatus.Connected;
+    } catch (error) {
+      this.connectionStatus = IDEConnectionStatus.Disconnected;
+      logger.debug('Failed to connect to MCP server:', error);
+    }
   }
 }
 
