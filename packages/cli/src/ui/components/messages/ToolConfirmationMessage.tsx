@@ -133,7 +133,7 @@ export const ToolConfirmationMessage: React.FC<
       confirmationDetails as ToolExecuteConfirmationDetails;
 
     const isMultiCommand = executionProps.rootCommand.includes(',');
-    question = `Allow single execution of ${
+    question = `Allow execution of ${
       isMultiCommand ? 'these commands' : 'this command'
     }?`;
     options.push({
