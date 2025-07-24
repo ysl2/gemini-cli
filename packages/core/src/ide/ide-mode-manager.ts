@@ -31,29 +31,30 @@ export class IdeModeManager {
   connectionStatus: IDEConnectionStatus = IDEConnectionStatus.Disconnected;
 
   constructor() {
-    this.connectToMcpServer().catch(() => {});
+    this.connectToMcpServer().catch((err) => {
+      logger.debug('Failed to initialize IdeModeManager:', err);
+    });
   }
-
   getConnectionStatus(): IDEConnectionStatus {
     return this.connectionStatus;
   }
 
   async connectToMcpServer(): Promise<void> {
     this.connectionStatus = IDEConnectionStatus.Connecting;
-    this.client = new Client({
-      name: 'streamable-http-client',
-      version: '1.0.0',
-    });
     const idePort = process.env['GEMINI_CLI_IDE_SERVER_PORT'];
     if (!idePort) {
       logger.debug(
-        `Unable to connect to IDE mode MCP server. Expected to connect to port ${process.env['GEMINI_CLI_IDE_SERVER_PORT']}`,
+        'Unable to connect to IDE mode MCP server. GEMINI_CLI_IDE_SERVER_PORT environment variable is not set.',
       );
       this.connectionStatus = IDEConnectionStatus.Disconnected;
       return;
     }
 
     try {
+      this.client = new Client({
+        name: 'streamable-http-client',
+        version: '1.0.0',
+      });
       const transport = new StreamableHTTPClientTransport(
         new URL(`http://localhost:${idePort}/mcp`),
       );
