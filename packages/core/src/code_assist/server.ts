@@ -5,7 +5,6 @@
  */
 
 import { OAuth2Client } from 'google-auth-library';
-import { Readable } from 'stream';
 import {
   CodeAssistGlobalUserSettingResponse,
   LoadCodeAssistRequest,
@@ -130,22 +129,6 @@ export class CodeAssistServer implements ContentGenerator {
     req: object,
     signal?: AbortSignal,
   ): Promise<T> {
-    if (
-      process.env.GOOGLE_GENAI_USE_GCP &&
-      process.env.GOOGLE_CLOUD_ACCESS_TOKEN
-    ) {
-      const res = await fetch(this.getMethodUrl(method), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.GOOGLE_CLOUD_ACCESS_TOKEN}`,
-          ...this.httpOptions.headers,
-        },
-        body: JSON.stringify(req),
-        signal,
-      });
-      return res.json() as T;
-    }
     const res = await this.client.request({
       url: this.getMethodUrl(method),
       method: 'POST',
@@ -161,21 +144,6 @@ export class CodeAssistServer implements ContentGenerator {
   }
 
   async requestGet<T>(method: string, signal?: AbortSignal): Promise<T> {
-    if (
-      process.env.GOOGLE_GENAI_USE_GCP &&
-      process.env.GOOGLE_CLOUD_ACCESS_TOKEN
-    ) {
-      const res = await fetch(this.getMethodUrl(method), {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.GOOGLE_CLOUD_ACCESS_TOKEN}`,
-          ...this.httpOptions.headers,
-        },
-        signal,
-      });
-      return res.json() as T;
-    }
     const res = await this.client.request({
       url: this.getMethodUrl(method),
       method: 'GET',
@@ -194,11 +162,24 @@ export class CodeAssistServer implements ContentGenerator {
     req: object,
     signal?: AbortSignal,
   ): Promise<AsyncGenerator<T>> {
-    const streamParser = async function* (
-      stream: NodeJS.ReadableStream,
-    ): AsyncGenerator<T> {
+    const res = await this.client.request({
+      url: this.getMethodUrl(method),
+      method: 'POST',
+      params: {
+        alt: 'sse',
+      },
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.httpOptions.headers,
+      },
+      responseType: 'stream',
+      body: JSON.stringify(req),
+      signal,
+    });
+
+    return (async function* (): AsyncGenerator<T> {
       const rl = readline.createInterface({
-        input: stream,
+        input: res.data as NodeJS.ReadableStream,
         crlfDelay: Infinity, // Recognizes '\r\n' and '\n' as line breaks
       });
 
@@ -217,45 +198,7 @@ export class CodeAssistServer implements ContentGenerator {
           throw new Error(`Unexpected line format in response: ${line}`);
         }
       }
-    };
-
-    if (
-      process.env.GOOGLE_GENAI_USE_GCP &&
-      process.env.GOOGLE_CLOUD_ACCESS_TOKEN
-    ) {
-      const res = await fetch(this.getMethodUrl(method) + '?alt=sse', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.GOOGLE_CLOUD_ACCESS_TOKEN}`,
-          ...this.httpOptions.headers,
-        },
-        body: JSON.stringify(req),
-        signal,
-      });
-      if (!res.body) {
-        throw new Error('Response body is null');
-      }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return streamParser(Readable.fromWeb(res.body as any));
-    }
-
-    const res = await this.client.request({
-      url: this.getMethodUrl(method),
-      method: 'POST',
-      params: {
-        alt: 'sse',
-      },
-      headers: {
-        'Content-Type': 'application/json',
-        ...this.httpOptions.headers,
-      },
-      responseType: 'stream',
-      body: JSON.stringify(req),
-      signal,
-    });
-
-    return streamParser(res.data as NodeJS.ReadableStream);
+    })();
   }
 
   getMethodUrl(method: string): string {
