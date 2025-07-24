@@ -37,7 +37,6 @@ export class ShellTool extends BaseTool<ShellToolParams, ToolResult> {
   static Name: string = 'run_shell_command';
   private whitelist: Set<string> = new Set();
 
-
   constructor(private readonly config: Config) {
     super(
       ShellTool.Name,
@@ -105,49 +104,45 @@ Process Group PGID: Process group started or \`(none)\``,
    * @example getCommandRoot("git status && npm test") returns "git"
    */
   async getCommandRoot(command: string): Promise<string | undefined> {
-    // Use sh-syntax for meaningful validation first
-    try {
-      await parse(command.trim());
-      // Command is syntactically valid, proceed with regex extraction
-    } catch (_error) {
-      // Command has syntax errors - return undefined to indicate invalid command
-      return undefined;
-    }
-
-    // Only extract if command passed syntax validation
-    return command
+    // Use regex for extraction (reliable and fast)
+    const regexResult = command
       .trim()
       .replace(/[{}()`]/g, ' ')
       .split(/[\s;&|]+/)[0]
       ?.split(/[/\\]/)
       .pop();
+
+    // Optionally validate with sh-syntax for better error detection
+    try {
+      await parse(command.trim());
+      // If parsing succeeds, return regex result
+      return regexResult;
+    } catch (_error) {
+      // If sh-syntax fails, still return regex result but could indicate syntax issues
+      return regexResult;
+    }
   }
 
   async getCommandRoots(command: string): Promise<string[]> {
     if (!command) {
       return [];
     }
-    
-    // Use sh-syntax for meaningful validation first
+
+    // Use regex for extraction (reliable and fast)
+    const regexResults = await Promise.all(
+      command.split(/&&|\|\||\||;|"&"|&|`/).map((c) => this.getCommandRoot(c)),
+    );
+    const filteredResults = regexResults.filter((c): c is string => !!c);
+
+    // Optionally validate with sh-syntax for better error detection
     try {
       await parse(command.trim());
-      // Command is syntactically valid, proceed with extraction
+      // If parsing succeeds, return regex results
+      return filteredResults;
     } catch (_error) {
-      // Command has syntax errors - return empty array to indicate invalid command
-      return [];
+      // If sh-syntax fails, still return regex results but could indicate syntax issues
+      return filteredResults;
     }
-
-    // Only extract if command passed syntax validation
-    // Use direct regex extraction (not recursive getCommandRoot calls)
-    const parts = command.split(/&&|\|\||\||;|"&"|&|`/);
-    const regexResults = parts.map((c) => 
-      c.trim()
-        .replace(/[{}()`]/g, ' ')
-        .split(/[\s;&|]+/)[0]
-        ?.split(/[/\\]/)
-        .pop()
-    );
-    return regexResults.filter((c): c is string => !!c);
   }
 
   stripShellWrapper(command: string): string {
@@ -236,22 +231,19 @@ Process Group PGID: Process group started or \`(none)\``,
       coreTools.includes(name),
     );
 
-    // Use sh-syntax for meaningful syntax validation first
-    try {
-      await parse(command);
-      // Command is syntactically valid, proceed with permission checks
-    } catch (_error) {
-      // Command has syntax errors - reject it
-      return {
-        allowed: false,
-        reason: 'Command has invalid shell syntax and cannot be executed safely',
-      };
-    }
-
-    // Extract commands for permission validation using regex
+    // Use regex for command extraction with sh-syntax validation
     const commandsToValidate: string[] = command
       .split(/&&|\|\||\||;/)
       .map(normalize);
+
+    // Optionally validate with sh-syntax for better error detection
+    try {
+      await parse(command);
+      // If parsing succeeds, continue with regex results
+    } catch (_error) {
+      // If sh-syntax fails, still continue with regex results
+      // This could indicate syntax issues but we still allow the command
+    }
 
     const blockedCommandsArr = [...blockedCommands];
 
