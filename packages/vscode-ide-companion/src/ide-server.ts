@@ -224,7 +224,7 @@ const createMcpServer = () => {
     { capabilities: { logging: {} } },
   );
   server.registerTool(
-    'getOpenFiles',
+    'getActiveFile',
     {
       description:
         '(IDE Tool) Get the path of the file currently active in VS Code.',

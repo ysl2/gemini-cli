@@ -4,23 +4,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// import {
-//   OpenFilesNotificationSchema,
-//   IDE_SERVER_NAME,
-//   ideContext,
-// } from '../services/ideContext.js';
-
 import {
-  // IDE_SERVER_NAME,
   ideContext,
-  // OpenFiles,
   OpenFilesNotificationSchema,
 } from '../services/ideContext.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
+const logger = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  debug: (...args: any[]) =>
+    console.debug('[DEBUG] [ImportProcessor]', ...args),
+};
+
 /**
- * Manages the connection and interaction with the IDE MCP server.
+ * Manages the connection to and interaction with the IDE server.
  */
 export class IdeModeManager {
   client: Client | undefined = undefined;
@@ -51,11 +49,14 @@ export class IdeModeManager {
     });
     const idePort = process.env['GEMINI_CLI_IDE_SERVER_PORT'];
     if (!idePort) {
-      console.log('unable to connect');
+      logger.debug(
+        `Unable to connect to IDE mode MCP server. Expected to connect to port ${process.env['GEMINI_CLI_IDE_SERVER_PORT']}`,
+      );
     }
-    const url = `http://localhost:${idePort}/mcp`;
 
-    const transport = new StreamableHTTPClientTransport(new URL(url));
+    const transport = new StreamableHTTPClientTransport(
+      new URL(`http://localhost:${idePort}/mcp`),
+    );
     await this.client.connect(transport);
     this.client.setNotificationHandler(
       OpenFilesNotificationSchema,

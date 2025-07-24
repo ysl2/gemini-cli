@@ -92,7 +92,6 @@ describe('ideCommand', () => {
       });
     });
 
-
     it('should show disconnected status', () => {
       getServerStatusSpy.mockReturnValue({
         type: 'message',
