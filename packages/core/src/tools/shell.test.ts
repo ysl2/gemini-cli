@@ -551,6 +551,7 @@ describe('ShellTool Bug Reproduction', () => {
     const result = await shellTool.execute(
       { command: 'echo "$GEMINI_CLI"' },
       abortSignal,
+      () => {},
     );
 
     expect(result.returnDisplay).toBe('1\n');
