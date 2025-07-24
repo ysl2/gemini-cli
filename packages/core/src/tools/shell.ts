@@ -82,6 +82,62 @@ export class ShellTool extends BaseTool<ShellToolParams, ToolResult> {
   }
 
   /**
+   * Splits a shell command into a list of individual commands, respecting quotes.
+   * This is used to separate chained commands (e.g., using &&, ||, ;).
+   * @param command The shell command string to parse
+   * @returns An array of individual command strings
+   */
+  private splitCommands(command: string): string[] {
+    const commands: string[] = [];
+    let currentCommand = '';
+    let inSingleQuotes = false;
+    let inDoubleQuotes = false;
+    let i = 0;
+
+    while (i < command.length) {
+      const char = command[i];
+      const nextChar = command[i + 1];
+
+      if (char === '\\' && i < command.length - 1) {
+        currentCommand += char + command[i + 1];
+        i += 2;
+        continue;
+      }
+
+      if (char === "'" && !inDoubleQuotes) {
+        inSingleQuotes = !inSingleQuotes;
+      } else if (char === '"' && !inSingleQuotes) {
+        inDoubleQuotes = !inDoubleQuotes;
+      }
+
+      if (!inSingleQuotes && !inDoubleQuotes) {
+        if (
+          (char === '&' && nextChar === '&') ||
+          (char === '|' && nextChar === '|')
+        ) {
+          commands.push(currentCommand.trim());
+          currentCommand = '';
+          i++; // Skip the next character
+        } else if (char === ';' || char === '&' || char === '|') {
+          commands.push(currentCommand.trim());
+          currentCommand = '';
+        } else {
+          currentCommand += char;
+        }
+      } else {
+        currentCommand += char;
+      }
+      i++;
+    }
+
+    if (currentCommand.trim()) {
+      commands.push(currentCommand.trim());
+    }
+
+    return commands.filter(Boolean); // Filter out any empty strings
+  }
+
+  /**
    * Extracts the root command from a given shell command string.
    * This is used to identify the base command for permission checks.
    * @param command The shell command string to parse
@@ -90,20 +146,34 @@ export class ShellTool extends BaseTool<ShellToolParams, ToolResult> {
    * @example getCommandRoot("git status && npm test") returns "git"
    */
   getCommandRoot(command: string): string | undefined {
-    return command
-      .trim() // remove leading and trailing whitespace
-      .replace(/[{}()`]/g, ' ') // remove all grouping operators
-      .split(/[\s;&|]+/)[0] // split on any whitespace or separator or chaining operators and take first part
-      ?.split(/[\\/\\]/) // split on any path separators (or return undefined if previous line was undefined)
-      .pop(); // take last part and return command root (or undefined if previous line was empty)
+    const trimmedCommand = command.trim();
+    if (!trimmedCommand) {
+      return undefined;
+    }
+
+    // This regex is designed to find the first "word" of a command,
+    // while respecting quotes. It looks for a sequence of non-whitespace
+    // characters that are not inside quotes.
+    const match = trimmedCommand.match(/^"([^"]+)"|^'([^']+)'|^(\S+)/);
+    if (match) {
+      // The first element in the match array is the full match.
+      // The subsequent elements are the capture groups.
+      // We prefer a captured group because it will be unquoted.
+      const commandRoot = match[1] || match[2] || match[3];
+      if (commandRoot) {
+        // If the command is a path, return the last component.
+        return commandRoot.split(/[\\/]/).pop();
+      }
+    }
+
+    return undefined;
   }
 
   getCommandRoots(command: string): string[] {
     if (!command) {
       return [];
     }
-    return command
-      .split(/&&|\|\||\||;|"&"|&|`/) // Corrected: Escaped pipe characters
+    return this.splitCommands(command)
       .map((c) => this.getCommandRoot(c))
       .filter((c): c is string => !!c);
   }

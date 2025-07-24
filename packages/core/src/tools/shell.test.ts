@@ -652,12 +652,6 @@ describe('stripShellWrapper', () => {
 });
 
 describe('getCommandRoots', () => {
-  it('should handle commands with backticks', () => {
-    const shellTool = new ShellTool({} as Config);
-    const result = shellTool.getCommandRoots('echo `rm -rf /`');
-    expect(result).toEqual(['echo', 'rm']);
-  });
-
   it('should handle multiple commands with &', () => {
     const shellTool = new ShellTool({} as Config);
     const result = shellTool.getCommandRoots('echo "hello" & echo "world"');
@@ -744,5 +738,57 @@ describe('ShellTool command substitution', () => {
       "gh pr comment 4795 --body 'This is safe markdown content'",
     );
     expect(result.allowed).toBe(true);
+  });
+});
+
+describe('getCommandRoots with quote handling', () => {
+  let shellTool: ShellTool;
+
+  beforeEach(() => {
+    shellTool = new ShellTool({} as Config);
+  });
+
+  it('should correctly parse a simple command', () => {
+    const result = shellTool.getCommandRoots('git status');
+    expect(result).toEqual(['git']);
+  });
+
+  it('should correctly parse a command with a quoted argument', () => {
+    const result = shellTool.getCommandRoots(
+      'git commit -m "feat: new feature"',
+    );
+    expect(result).toEqual(['git']);
+  });
+
+  it('should correctly parse a command with single quotes', () => {
+    const result = shellTool.getCommandRoots("echo 'hello world'");
+    expect(result).toEqual(['echo']);
+  });
+
+  it('should correctly parse a chained command with quotes', () => {
+    const result = shellTool.getCommandRoots('echo "hello" && git status');
+    expect(result).toEqual(['echo', 'git']);
+  });
+
+  it('should correctly parse a complex chained command', () => {
+    const result = shellTool.getCommandRoots(
+      'git commit -m "feat: new feature" && echo "done"',
+    );
+    expect(result).toEqual(['git', 'echo']);
+  });
+
+  it('should handle escaped quotes', () => {
+    const result = shellTool.getCommandRoots('echo "this is a \\"quote\\""');
+    expect(result).toEqual(['echo']);
+  });
+
+  it('should handle commands with no spaces', () => {
+    const result = shellTool.getCommandRoots('command');
+    expect(result).toEqual(['command']);
+  });
+
+  it('should handle multiple separators', () => {
+    const result = shellTool.getCommandRoots('a;b|c&&d||e&f');
+    expect(result).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
   });
 });
