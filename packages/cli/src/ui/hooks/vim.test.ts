@@ -9,6 +9,7 @@ import { renderHook, act } from '@testing-library/react';
 import React from 'react';
 import { useVim } from './vim.js';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
+import { textBufferReducer } from '../components/shared/text-buffer.js';
 import type { LoadedSettings } from '../../config/settings.js';
 
 // Mock the VimModeContext
@@ -185,7 +186,7 @@ describe('useVim hook', () => {
         result.current.handleInput({ sequence: 'h' });
       });
 
-      expect(mockBuffer.move).toHaveBeenCalled();
+      expect(mockBuffer.move).toHaveBeenCalledWith('left');
     });
 
     it('should handle l (right movement)', () => {
@@ -195,7 +196,7 @@ describe('useVim hook', () => {
         result.current.handleInput({ sequence: 'l' });
       });
 
-      expect(mockBuffer.move).toHaveBeenCalled();
+      expect(mockBuffer.move).toHaveBeenCalledWith('right');
     });
 
     it('should handle j (down movement)', () => {
@@ -339,7 +340,7 @@ describe('useVim hook', () => {
         expect(handled).toBe(true);
       });
 
-      expect(mockBuffer.move).toHaveBeenCalled();
+      expect(mockBuffer.move).toHaveBeenCalledWith('left');
     });
 
     it('should only delete 1 character with x command when no count is specified', () => {
@@ -387,7 +388,8 @@ describe('useVim hook', () => {
         result.current.handleInput({ sequence: 'w' });
       });
 
-      expect(testBuffer.moveToOffset).toHaveBeenCalled();
+      // From position 5 ('hello world test'), w should move to offset 6 (start of 'world')
+      expect(testBuffer.moveToOffset).toHaveBeenCalledWith(6);
     });
 
     it('should handle b (previous word)', () => {
@@ -398,7 +400,8 @@ describe('useVim hook', () => {
         result.current.handleInput({ sequence: 'b' });
       });
 
-      expect(testBuffer.moveToOffset).toHaveBeenCalled();
+      // From position 6 ('hello world test'), b should move to offset 0 (start of 'hello')
+      expect(testBuffer.moveToOffset).toHaveBeenCalledWith(0);
     });
 
     it('should handle e (end of word)', () => {
@@ -409,7 +412,8 @@ describe('useVim hook', () => {
         result.current.handleInput({ sequence: 'e' });
       });
 
-      expect(testBuffer.moveToOffset).toHaveBeenCalled();
+      // From position 5 ('hello world test'), e should move to offset 10 (end of 'world')
+      expect(testBuffer.moveToOffset).toHaveBeenCalledWith(10);
     });
 
     it('should handle w when cursor is on the last word', () => {
@@ -505,6 +509,7 @@ describe('useVim hook', () => {
       act(() => {
         result.current.handleInput({ sequence: 'd' });
       });
+      expect(testBuffer.vimDeleteLine).toHaveBeenCalledTimes(1);
 
       testBuffer.cursor = [0, 0];
 
@@ -512,7 +517,7 @@ describe('useVim hook', () => {
         result.current.handleInput({ sequence: '.' });
       });
 
-      expect(result.current.handleInput).toBeDefined();
+      expect(testBuffer.vimDeleteLine).toHaveBeenCalledTimes(2);
     });
 
     it('should repeat ce command from current position', () => {
@@ -525,6 +530,12 @@ describe('useVim hook', () => {
       act(() => {
         result.current.handleInput({ sequence: 'e' });
       });
+      expect(testBuffer.vimChangeWordEnd).toHaveBeenCalledTimes(1);
+
+      // Exit INSERT mode to complete the command
+      act(() => {
+        result.current.handleInput({ sequence: '\u001b', name: 'escape' });
+      });
 
       testBuffer.cursor = [0, 2];
 
@@ -532,7 +543,7 @@ describe('useVim hook', () => {
         result.current.handleInput({ sequence: '.' });
       });
 
-      expect(result.current.handleInput).toBeDefined();
+      expect(testBuffer.vimChangeWordEnd).toHaveBeenCalledTimes(2);
     });
 
     it('should repeat cc command from current position', () => {
@@ -545,6 +556,12 @@ describe('useVim hook', () => {
       act(() => {
         result.current.handleInput({ sequence: 'c' });
       });
+      expect(testBuffer.vimChangeLine).toHaveBeenCalledTimes(1);
+
+      // Exit INSERT mode to complete the command
+      act(() => {
+        result.current.handleInput({ sequence: '\u001b', name: 'escape' });
+      });
 
       testBuffer.cursor = [0, 1];
 
@@ -552,7 +569,7 @@ describe('useVim hook', () => {
         result.current.handleInput({ sequence: '.' });
       });
 
-      expect(result.current.handleInput).toBeDefined();
+      expect(testBuffer.vimChangeLine).toHaveBeenCalledTimes(2);
     });
 
     it('should repeat cw command from current position', () => {
@@ -565,6 +582,12 @@ describe('useVim hook', () => {
       act(() => {
         result.current.handleInput({ sequence: 'w' });
       });
+      expect(testBuffer.vimChangeWordForward).toHaveBeenCalledTimes(1);
+
+      // Exit INSERT mode to complete the command
+      act(() => {
+        result.current.handleInput({ sequence: '\u001b', name: 'escape' });
+      });
 
       testBuffer.cursor = [0, 0];
 
@@ -572,7 +595,7 @@ describe('useVim hook', () => {
         result.current.handleInput({ sequence: '.' });
       });
 
-      expect(result.current.handleInput).toBeDefined();
+      expect(testBuffer.vimChangeWordForward).toHaveBeenCalledTimes(2);
     });
 
     it('should repeat D command from current position', () => {
@@ -582,6 +605,7 @@ describe('useVim hook', () => {
       act(() => {
         result.current.handleInput({ sequence: 'D' });
       });
+      expect(testBuffer.vimDeleteToEndOfLine).toHaveBeenCalledTimes(1);
 
       testBuffer.cursor = [0, 2];
 
@@ -589,7 +613,7 @@ describe('useVim hook', () => {
         result.current.handleInput({ sequence: '.' });
       });
 
-      expect(result.current.handleInput).toBeDefined();
+      expect(testBuffer.vimDeleteToEndOfLine).toHaveBeenCalledTimes(2);
     });
 
     it('should repeat C command from current position', () => {
@@ -599,6 +623,12 @@ describe('useVim hook', () => {
       act(() => {
         result.current.handleInput({ sequence: 'C' });
       });
+      expect(testBuffer.vimChangeToEndOfLine).toHaveBeenCalledTimes(1);
+
+      // Exit INSERT mode to complete the command
+      act(() => {
+        result.current.handleInput({ sequence: '\u001b', name: 'escape' });
+      });
 
       testBuffer.cursor = [0, 2];
 
@@ -606,7 +636,7 @@ describe('useVim hook', () => {
         result.current.handleInput({ sequence: '.' });
       });
 
-      expect(result.current.handleInput).toBeDefined();
+      expect(testBuffer.vimChangeToEndOfLine).toHaveBeenCalledTimes(2);
     });
 
     it('should repeat command after cursor movement', () => {
@@ -664,7 +694,8 @@ describe('useVim hook', () => {
         result.current.handleInput({ sequence: 'G' });
       });
 
-      expect(testBuffer.moveToOffset).toHaveBeenCalled();
+      // Should move to start of last line: 'line1\nline2\nline3' = offset 12
+      expect(testBuffer.moveToOffset).toHaveBeenCalledWith(12);
     });
 
     it('should handle gg (go to first line)', () => {
@@ -693,7 +724,890 @@ describe('useVim hook', () => {
         result.current.handleInput(TEST_SEQUENCES.WORD_FORWARD);
       });
 
-      expect(testBuffer.moveToOffset).toHaveBeenCalled();
+      // 3w from start should move to position after 'world ' at offset 6 (single w movement)
+      expect(testBuffer.moveToOffset).toHaveBeenCalledWith(6);
+    });
+  });
+
+  describe('Vim word operations', () => {
+    describe('dw (delete word forward)', () => {
+      it('should delete from cursor to start of next word', () => {
+        const testBuffer = createMockBuffer('hello world test', [0, 0]);
+        const { result } = renderVimHook(testBuffer);
+
+        act(() => {
+          result.current.handleInput({ sequence: 'd' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'w' });
+        });
+
+        expect(testBuffer.vimDeleteWordForward).toHaveBeenCalledWith(1);
+      });
+
+      it('should actually delete the complete word including trailing space', () => {
+        // This test uses the real text-buffer reducer instead of mocks
+        const initialState = {
+          lines: ['hello world test'],
+          cursorRow: 0,
+          cursorCol: 0,
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_delete_word_forward',
+          payload: { count: 1 }
+        });
+
+        // Should delete "hello " (word + space), leaving "world test"
+        expect(result.lines).toEqual(['world test']);
+        expect(result.cursorRow).toBe(0);
+        expect(result.cursorCol).toBe(0);
+      });
+
+      it('should delete word from middle of word correctly', () => {
+        const initialState = {
+          lines: ['hello world test'],
+          cursorRow: 0,
+          cursorCol: 2, // cursor on 'l' in "hello"
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_delete_word_forward',
+          payload: { count: 1 }
+        });
+
+        // Should delete "llo " (rest of word + space), leaving "he world test"
+        expect(result.lines).toEqual(['heworld test']);
+        expect(result.cursorRow).toBe(0);
+        expect(result.cursorCol).toBe(2);
+      });
+
+      it('should handle dw at end of line', () => {
+        const initialState = {
+          lines: ['hello world'],
+          cursorRow: 0,
+          cursorCol: 6, // cursor on 'w' in "world"
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_delete_word_forward',
+          payload: { count: 1 }
+        });
+
+        // Should delete "world" (no trailing space at end), leaving "hello "
+        expect(result.lines).toEqual(['hello ']);
+        expect(result.cursorRow).toBe(0);
+        expect(result.cursorCol).toBe(6);
+      });
+
+
+      it('should delete multiple words with count', () => {
+        const testBuffer = createMockBuffer('one two three four', [0, 0]);
+        const { result } = renderVimHook(testBuffer);
+
+        act(() => {
+          result.current.handleInput({ sequence: '2' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'd' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'w' });
+        });
+
+        expect(testBuffer.vimDeleteWordForward).toHaveBeenCalledWith(2);
+      });
+
+      it('should record command for repeat with dot', () => {
+        const testBuffer = createMockBuffer('hello world test', [0, 0]);
+        const { result } = renderVimHook(testBuffer);
+
+        // Execute dw
+        act(() => {
+          result.current.handleInput({ sequence: 'd' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'w' });
+        });
+
+        vi.clearAllMocks();
+
+        // Execute dot repeat
+        act(() => {
+          result.current.handleInput({ sequence: '.' });
+        });
+
+        expect(testBuffer.vimDeleteWordForward).toHaveBeenCalledWith(1);
+      });
+    });
+
+    describe('de (delete word end)', () => {
+      it('should delete from cursor to end of current word', () => {
+        const testBuffer = createMockBuffer('hello world test', [0, 1]);
+        const { result } = renderVimHook(testBuffer);
+
+        act(() => {
+          result.current.handleInput({ sequence: 'd' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'e' });
+        });
+
+        expect(testBuffer.vimDeleteWordEnd).toHaveBeenCalledWith(1);
+      });
+
+      it('should handle count with de', () => {
+        const testBuffer = createMockBuffer('one two three four', [0, 0]);
+        const { result } = renderVimHook(testBuffer);
+
+        act(() => {
+          result.current.handleInput({ sequence: '3' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'd' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'e' });
+        });
+
+        expect(testBuffer.vimDeleteWordEnd).toHaveBeenCalledWith(3);
+      });
+    });
+
+    describe('cw (change word forward)', () => {
+      it('should change from cursor to start of next word and enter INSERT mode', () => {
+        const testBuffer = createMockBuffer('hello world test', [0, 0]);
+        const { result } = renderVimHook(testBuffer);
+
+        act(() => {
+          result.current.handleInput({ sequence: 'c' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'w' });
+        });
+
+        expect(testBuffer.vimChangeWordForward).toHaveBeenCalledWith(1);
+        expect(result.current.mode).toBe('INSERT');
+        expect(mockVimContext.setVimMode).toHaveBeenCalledWith('INSERT');
+      });
+
+      it('should handle count with cw', () => {
+        const testBuffer = createMockBuffer('one two three four', [0, 0]);
+        const { result } = renderVimHook(testBuffer);
+
+        act(() => {
+          result.current.handleInput({ sequence: '2' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'c' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'w' });
+        });
+
+        expect(testBuffer.vimChangeWordForward).toHaveBeenCalledWith(2);
+        expect(result.current.mode).toBe('INSERT');
+      });
+
+      it('should be repeatable with dot', () => {
+        const testBuffer = createMockBuffer('hello world test more', [0, 0]);
+        const { result } = renderVimHook(testBuffer);
+
+        // Execute cw
+        act(() => {
+          result.current.handleInput({ sequence: 'c' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'w' });
+        });
+
+        // Exit INSERT mode
+        act(() => {
+          result.current.handleInput({ sequence: '\u001b', name: 'escape' });
+        });
+
+        vi.clearAllMocks();
+        mockVimContext.setVimMode.mockClear();
+
+        // Execute dot repeat
+        act(() => {
+          result.current.handleInput({ sequence: '.' });
+        });
+
+        expect(testBuffer.vimChangeWordForward).toHaveBeenCalledWith(1);
+        expect(result.current.mode).toBe('INSERT');
+      });
+    });
+
+    describe('ce (change word end)', () => {
+      it('should change from cursor to end of word and enter INSERT mode', () => {
+        const testBuffer = createMockBuffer('hello world test', [0, 1]);
+        const { result } = renderVimHook(testBuffer);
+
+        act(() => {
+          result.current.handleInput({ sequence: 'c' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'e' });
+        });
+
+        expect(testBuffer.vimChangeWordEnd).toHaveBeenCalledWith(1);
+        expect(result.current.mode).toBe('INSERT');
+      });
+
+      it('should handle count with ce', () => {
+        const testBuffer = createMockBuffer('one two three four', [0, 0]);
+        const { result } = renderVimHook(testBuffer);
+
+        act(() => {
+          result.current.handleInput({ sequence: '2' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'c' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'e' });
+        });
+
+        expect(testBuffer.vimChangeWordEnd).toHaveBeenCalledWith(2);
+        expect(result.current.mode).toBe('INSERT');
+      });
+    });
+
+    describe('cc (change line)', () => {
+      it('should change entire line and enter INSERT mode', () => {
+        const testBuffer = createMockBuffer('hello world\nsecond line', [0, 5]);
+        const { result } = renderVimHook(testBuffer);
+
+        act(() => {
+          result.current.handleInput({ sequence: 'c' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'c' });
+        });
+
+        expect(testBuffer.vimChangeLine).toHaveBeenCalledWith(1);
+        expect(result.current.mode).toBe('INSERT');
+      });
+
+      it('should change multiple lines with count', () => {
+        const testBuffer = createMockBuffer('line1\nline2\nline3\nline4', [1, 0]);
+        const { result } = renderVimHook(testBuffer);
+
+        act(() => {
+          result.current.handleInput({ sequence: '3' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'c' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'c' });
+        });
+
+        expect(testBuffer.vimChangeLine).toHaveBeenCalledWith(3);
+        expect(result.current.mode).toBe('INSERT');
+      });
+
+      it('should be repeatable with dot', () => {
+        const testBuffer = createMockBuffer('line1\nline2\nline3', [0, 0]);
+        const { result } = renderVimHook(testBuffer);
+
+        // Execute cc
+        act(() => {
+          result.current.handleInput({ sequence: 'c' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'c' });
+        });
+
+        // Exit INSERT mode
+        act(() => {
+          result.current.handleInput({ sequence: '\u001b', name: 'escape' });
+        });
+
+        vi.clearAllMocks();
+        mockVimContext.setVimMode.mockClear();
+
+        // Execute dot repeat
+        act(() => {
+          result.current.handleInput({ sequence: '.' });
+        });
+
+        expect(testBuffer.vimChangeLine).toHaveBeenCalledWith(1);
+        expect(result.current.mode).toBe('INSERT');
+      });
+    });
+
+    describe('db (delete word backward)', () => {
+      it('should delete from cursor to start of previous word', () => {
+        const testBuffer = createMockBuffer('hello world test', [0, 11]);
+        const { result } = renderVimHook(testBuffer);
+
+        act(() => {
+          result.current.handleInput({ sequence: 'd' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'b' });
+        });
+
+        expect(testBuffer.vimDeleteWordBackward).toHaveBeenCalledWith(1);
+      });
+
+      it('should handle count with db', () => {
+        const testBuffer = createMockBuffer('one two three four', [0, 18]);
+        const { result } = renderVimHook(testBuffer);
+
+        act(() => {
+          result.current.handleInput({ sequence: '2' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'd' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'b' });
+        });
+
+        expect(testBuffer.vimDeleteWordBackward).toHaveBeenCalledWith(2);
+      });
+    });
+
+    describe('cb (change word backward)', () => {
+      it('should change from cursor to start of previous word and enter INSERT mode', () => {
+        const testBuffer = createMockBuffer('hello world test', [0, 11]);
+        const { result } = renderVimHook(testBuffer);
+
+        act(() => {
+          result.current.handleInput({ sequence: 'c' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'b' });
+        });
+
+        expect(testBuffer.vimChangeWordBackward).toHaveBeenCalledWith(1);
+        expect(result.current.mode).toBe('INSERT');
+      });
+
+      it('should handle count with cb', () => {
+        const testBuffer = createMockBuffer('one two three four', [0, 18]);
+        const { result } = renderVimHook(testBuffer);
+
+        act(() => {
+          result.current.handleInput({ sequence: '3' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'c' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'b' });
+        });
+
+        expect(testBuffer.vimChangeWordBackward).toHaveBeenCalledWith(3);
+        expect(result.current.mode).toBe('INSERT');
+      });
+    });
+
+    describe('Pending state handling', () => {
+      it('should clear pending delete state after dw', () => {
+        const testBuffer = createMockBuffer('hello world', [0, 0]);
+        const { result } = renderVimHook(testBuffer);
+
+        // Press 'd' to enter pending delete state
+        act(() => {
+          result.current.handleInput({ sequence: 'd' });
+        });
+
+        // Complete with 'w'
+        act(() => {
+          result.current.handleInput({ sequence: 'w' });
+        });
+
+        // Next 'd' should start a new pending state, not continue the previous one
+        act(() => {
+          result.current.handleInput({ sequence: 'd' });
+        });
+
+        // This should trigger dd (delete line), not an error
+        act(() => {
+          result.current.handleInput({ sequence: 'd' });
+        });
+
+        expect(testBuffer.vimDeleteLine).toHaveBeenCalledWith(1);
+      });
+
+      it('should clear pending change state after cw', () => {
+        const testBuffer = createMockBuffer('hello world', [0, 0]);
+        const { result } = renderVimHook(testBuffer);
+
+        // Execute cw
+        act(() => {
+          result.current.handleInput({ sequence: 'c' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'w' });
+        });
+
+        // Exit INSERT mode
+        act(() => {
+          result.current.handleInput({ sequence: '\u001b', name: 'escape' });
+        });
+
+        // Next 'c' should start a new pending state
+        act(() => {
+          result.current.handleInput({ sequence: 'c' });
+        });
+        act(() => {
+          result.current.handleInput({ sequence: 'c' });
+        });
+
+        expect(testBuffer.vimChangeLine).toHaveBeenCalledWith(1);
+      });
+
+      it('should clear pending state with escape', () => {
+        const testBuffer = createMockBuffer('hello world', [0, 0]);
+        const { result } = renderVimHook(testBuffer);
+
+        // Enter pending delete state
+        act(() => {
+          result.current.handleInput({ sequence: 'd' });
+        });
+
+        // Press escape to clear pending state
+        act(() => {
+          result.current.handleInput({ sequence: '\u001b', name: 'escape' });
+        });
+
+        // Now 'w' should just move cursor, not delete
+        act(() => {
+          result.current.handleInput({ sequence: 'w' });
+        });
+
+        expect(testBuffer.vimDeleteWordForward).not.toHaveBeenCalled();
+        // w should move to next word after clearing pending state
+        expect(testBuffer.moveToOffset).toHaveBeenCalled();
+      });
+    });
+  });
+
+  // Line operations (dd, cc) are tested in text-buffer.test.ts
+
+  describe('Reducer-based integration tests', () => {
+    describe('de (delete word end)', () => {
+      it('should delete from cursor to end of current word', () => {
+        const initialState = {
+          lines: ['hello world test'],
+          cursorRow: 0,
+          cursorCol: 1, // cursor on 'e' in "hello"
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_delete_word_end',
+          payload: { count: 1 }
+        });
+
+        // Should delete "ello" (from cursor to end of word), leaving "h world test"
+        expect(result.lines).toEqual(['h world test']);
+        expect(result.cursorRow).toBe(0);
+        expect(result.cursorCol).toBe(1);
+      });
+
+      it('should delete multiple word ends with count', () => {
+        const initialState = {
+          lines: ['hello world test more'],
+          cursorRow: 0,
+          cursorCol: 1, // cursor on 'e' in "hello"
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_delete_word_end',
+          payload: { count: 2 }
+        });
+
+        // Should delete "ello world" (to end of second word), leaving "h test more"
+        expect(result.lines).toEqual(['h test more']);
+        expect(result.cursorRow).toBe(0);
+        expect(result.cursorCol).toBe(1);
+      });
+    });
+
+    describe('db (delete word backward)', () => {
+      it('should delete from cursor to start of previous word', () => {
+        const initialState = {
+          lines: ['hello world test'],
+          cursorRow: 0,
+          cursorCol: 11, // cursor on 't' in "test"
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_delete_word_backward',
+          payload: { count: 1 }
+        });
+
+        // Should delete "world" (previous word only), leaving "hello  test"
+        expect(result.lines).toEqual(['hello  test']);
+        expect(result.cursorRow).toBe(0);
+        expect(result.cursorCol).toBe(6);
+      });
+
+      it('should delete multiple words backward with count', () => {
+        const initialState = {
+          lines: ['hello world test more'],
+          cursorRow: 0,
+          cursorCol: 17, // cursor on 'm' in "more"
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_delete_word_backward',
+          payload: { count: 2 }
+        });
+
+        // Should delete "world test " (two words backward), leaving "hello more"
+        expect(result.lines).toEqual(['hello more']);
+        expect(result.cursorRow).toBe(0);
+        expect(result.cursorCol).toBe(6);
+      });
+    });
+
+    describe('cw (change word forward)', () => {
+      it('should delete from cursor to start of next word', () => {
+        const initialState = {
+          lines: ['hello world test'],
+          cursorRow: 0,
+          cursorCol: 0, // cursor on 'h' in "hello"
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_change_word_forward',
+          payload: { count: 1 }
+        });
+
+        // Should delete "hello " (word + space), leaving "world test"
+        expect(result.lines).toEqual(['world test']);
+        expect(result.cursorRow).toBe(0);
+        expect(result.cursorCol).toBe(0);
+      });
+
+      it('should change multiple words with count', () => {
+        const initialState = {
+          lines: ['hello world test more'],
+          cursorRow: 0,
+          cursorCol: 0,
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_change_word_forward',
+          payload: { count: 2 }
+        });
+
+        // Should delete "hello world " (two words), leaving "test more"
+        expect(result.lines).toEqual(['test more']);
+        expect(result.cursorRow).toBe(0);
+        expect(result.cursorCol).toBe(0);
+      });
+    });
+
+    describe('ce (change word end)', () => {
+      it('should change from cursor to end of current word', () => {
+        const initialState = {
+          lines: ['hello world test'],
+          cursorRow: 0,
+          cursorCol: 1, // cursor on 'e' in "hello"
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_change_word_end',
+          payload: { count: 1 }
+        });
+
+        // Should delete "ello" (from cursor to end of word), leaving "h world test"
+        expect(result.lines).toEqual(['h world test']);
+        expect(result.cursorRow).toBe(0);
+        expect(result.cursorCol).toBe(1);
+      });
+
+      it('should change multiple word ends with count', () => {
+        const initialState = {
+          lines: ['hello world test'],
+          cursorRow: 0,
+          cursorCol: 1, // cursor on 'e' in "hello"
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_change_word_end',
+          payload: { count: 2 }
+        });
+
+        // Should delete "ello world" (to end of second word), leaving "h test"
+        expect(result.lines).toEqual(['h test']);
+        expect(result.cursorRow).toBe(0);
+        expect(result.cursorCol).toBe(1);
+      });
+    });
+
+    describe('cb (change word backward)', () => {
+      it('should change from cursor to start of previous word', () => {
+        const initialState = {
+          lines: ['hello world test'],
+          cursorRow: 0,
+          cursorCol: 11, // cursor on 't' in "test"
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_change_word_backward',
+          payload: { count: 1 }
+        });
+
+        // Should delete "world" (previous word only), leaving "hello  test"
+        expect(result.lines).toEqual(['hello  test']);
+        expect(result.cursorRow).toBe(0);
+        expect(result.cursorCol).toBe(6);
+      });
+    });
+
+    describe('cc (change line)', () => {
+      it('should clear the line and place cursor at the start', () => {
+        const initialState = {
+          lines: ['  hello world'],
+          cursorRow: 0,
+          cursorCol: 5, // cursor on 'o'
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_change_line',
+          payload: { count: 1 }
+        });
+
+        expect(result.lines).toEqual(['']);
+        expect(result.cursorRow).toBe(0);
+        expect(result.cursorCol).toBe(0);
+      });
+
+    });
+
+    describe('dd (delete line)', () => {
+      it('should delete the current line', () => {
+        const initialState = {
+          lines: ['line1', 'line2', 'line3'],
+          cursorRow: 1,
+          cursorCol: 2,
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_delete_line',
+          payload: { count: 1 }
+        });
+
+        expect(result.lines).toEqual(['line1', 'line3']);
+        expect(result.cursorRow).toBe(1);
+        expect(result.cursorCol).toBe(0);
+      });
+
+      it('should delete multiple lines with count', () => {
+        const initialState = {
+          lines: ['line1', 'line2', 'line3', 'line4'],
+          cursorRow: 1,
+          cursorCol: 2,
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_delete_line',
+          payload: { count: 2 }
+        });
+
+        // Should delete lines 1 and 2
+        expect(result.lines).toEqual(['line1', 'line4']);
+        expect(result.cursorRow).toBe(1);
+        expect(result.cursorCol).toBe(0);
+      });
+
+      it('should handle deleting last line', () => {
+        const initialState = {
+          lines: ['only line'],
+          cursorRow: 0,
+          cursorCol: 3,
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_delete_line',
+          payload: { count: 1 }
+        });
+
+        // Should leave an empty line when deleting the only line
+        expect(result.lines).toEqual(['']);
+        expect(result.cursorRow).toBe(0);
+        expect(result.cursorCol).toBe(0);
+      });
+    });
+
+    describe('D (delete to end of line)', () => {
+      it('should delete from cursor to end of line', () => {
+        const initialState = {
+          lines: ['hello world test'],
+          cursorRow: 0,
+          cursorCol: 6, // cursor on 'w' in "world"
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_delete_to_end_of_line'
+        });
+
+        // Should delete "world test", leaving "hello "
+        expect(result.lines).toEqual(['hello ']);
+        expect(result.cursorRow).toBe(0);
+        expect(result.cursorCol).toBe(6);
+      });
+
+      it('should handle D at end of line', () => {
+        const initialState = {
+          lines: ['hello world'],
+          cursorRow: 0,
+          cursorCol: 11, // cursor at end
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_delete_to_end_of_line'
+        });
+
+        // Should not change anything when at end of line
+        expect(result.lines).toEqual(['hello world']);
+        expect(result.cursorRow).toBe(0);
+        expect(result.cursorCol).toBe(11);
+      });
+    });
+
+    describe('C (change to end of line)', () => {
+      it('should change from cursor to end of line', () => {
+        const initialState = {
+          lines: ['hello world test'],
+          cursorRow: 0,
+          cursorCol: 6, // cursor on 'w' in "world"
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_change_to_end_of_line'
+        });
+
+        // Should delete "world test", leaving "hello "
+        expect(result.lines).toEqual(['hello ']);
+        expect(result.cursorRow).toBe(0);
+        expect(result.cursorCol).toBe(6);
+      });
+
+      it('should handle C at beginning of line', () => {
+        const initialState = {
+          lines: ['hello world'],
+          cursorRow: 0,
+          cursorCol: 0,
+          preferredCol: null,
+          undoStack: [],
+          redoStack: [],
+          clipboard: null,
+          selectionAnchor: null,
+        };
+
+        const result = textBufferReducer(initialState, {
+          type: 'vim_change_to_end_of_line'
+        });
+
+        // Should delete entire line content
+        expect(result.lines).toEqual(['']);
+        expect(result.cursorRow).toBe(0);
+        expect(result.cursorCol).toBe(0);
+      });
     });
   });
 });

@@ -7,6 +7,7 @@
 import { useCallback, useReducer, useEffect } from 'react';
 import type { Key } from './useKeypress.js';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
+import { findNextWordStart, findPrevWordStart, findWordEnd, logicalPosToOffset } from '../components/shared/text-buffer.js';
 import { useVimMode } from '../contexts/VimModeContext.js';
 
 export type VimMode = 'NORMAL' | 'INSERT';
@@ -40,128 +41,19 @@ const CMD_TYPES = {
   },
 } as const;
 
-// Utility functions moved outside the hook to avoid unnecessary useCallback usage
-const findNextWordStart = (text: string, currentOffset: number): number => {
-  let i = currentOffset;
-
-  if (i >= text.length) return i;
-
-  const currentChar = text[i];
-
-  // Skip current word/sequence based on character type
-  if (WORD_CHARS.test(currentChar)) {
-    // Skip current word characters
-    while (i < text.length && WORD_CHARS.test(text[i])) {
-      i++;
-    }
-  } else if (!WHITESPACE_CHARS.test(currentChar)) {
-    // Skip current non-word, non-whitespace characters (like "/", ".", etc.)
-    while (
-      i < text.length &&
-      !WORD_CHARS.test(text[i]) &&
-      !WHITESPACE_CHARS.test(text[i])
-    ) {
-      i++;
-    }
-  }
-
-  // Skip whitespace
-  while (i < text.length && WHITESPACE_CHARS.test(text[i])) {
-    i++;
-  }
-
-  // If we reached the end of text and there's no next word,
-  // vim behavior for dw is to delete to the end of the current word
-  if (i >= text.length) {
-    // Go back to find the end of the last word
-    let endOfLastWord = text.length - 1;
-    while (endOfLastWord >= 0 && WHITESPACE_CHARS.test(text[endOfLastWord])) {
-      endOfLastWord--;
-    }
-    // For dw on last word, return position AFTER the last character to delete entire word
-    return Math.max(currentOffset + 1, endOfLastWord + 1);
-  }
-
-  return i;
-};
-
-const findPrevWordStart = (text: string, currentOffset: number): number => {
-  let i = currentOffset;
-
-  // If at beginning of text, return current position
-  if (i <= 0) {
-    return currentOffset;
-  }
-
-  // Move back one character to start searching
-  i--;
-
-  // Skip whitespace moving backwards
-  while (i >= 0 && (text[i] === ' ' || text[i] === '\t' || text[i] === '\n')) {
-    i--;
-  }
-
-  if (i < 0) {
-    return 0; // Reached beginning of text
-  }
-
-  const charAtI = text[i];
-
-  if (WORD_CHARS.test(charAtI)) {
-    // We're in a word, move to its beginning
-    while (i >= 0 && WORD_CHARS.test(text[i])) {
-      i--;
-    }
-    return i + 1; // Return first character of word
-  } else {
-    // We're in punctuation, move to its beginning
-    while (
-      i >= 0 &&
-      !WORD_CHARS.test(text[i]) &&
-      text[i] !== ' ' &&
-      text[i] !== '\t' &&
-      text[i] !== LINE_SEPARATOR
-    ) {
-      i--;
-    }
-    return i + 1; // Return first character of punctuation sequence
-  }
-};
-
-const findWordEnd = (text: string, currentOffset: number): number => {
-  let i = currentOffset;
-
-  // If we're not on a word character, find the next word
-  if (!WORD_CHARS.test(text[i])) {
-    while (i < text.length && !WORD_CHARS.test(text[i])) {
-      i++;
-    }
-  }
-
-  // Move to end of current word
-  while (i < text.length && WORD_CHARS.test(text[i])) {
-    i++;
-  }
-
-  // Move back one to be on the last character of the word
-  return Math.max(currentOffset, i - 1);
-};
+// Utility functions moved to text-buffer.ts to eliminate duplication and avoid stale state
 
 // Helper function to clear pending state
 const createClearPendingState = () => ({
   count: 0,
-  pendingG: false,
-  pendingD: false,
-  pendingC: false,
+  pendingOperator: null as 'g' | 'd' | 'c' | null,
 });
 
 // State and action types for useReducer
 type VimState = {
   mode: VimMode;
   count: number;
-  pendingG: boolean;
-  pendingD: boolean;
-  pendingC: boolean;
+  pendingOperator: 'g' | 'd' | 'c' | null;
   lastCommand: { type: string; count: number } | null;
 };
 
@@ -170,9 +62,7 @@ type VimAction =
   | { type: 'SET_COUNT'; count: number }
   | { type: 'INCREMENT_COUNT'; digit: number }
   | { type: 'CLEAR_COUNT' }
-  | { type: 'SET_PENDING_G'; pending: boolean }
-  | { type: 'SET_PENDING_D'; pending: boolean }
-  | { type: 'SET_PENDING_C'; pending: boolean }
+  | { type: 'SET_PENDING_OPERATOR'; operator: 'g' | 'd' | 'c' | null }
   | {
       type: 'SET_LAST_COMMAND';
       command: { type: string; count: number } | null;
@@ -183,9 +73,7 @@ type VimAction =
 const initialVimState: VimState = {
   mode: 'NORMAL',
   count: 0,
-  pendingG: false,
-  pendingD: false,
-  pendingC: false,
+  pendingOperator: null,
   lastCommand: null,
 };
 
@@ -204,14 +92,8 @@ const vimReducer = (state: VimState, action: VimAction): VimState => {
     case 'CLEAR_COUNT':
       return { ...state, count: 0 };
 
-    case 'SET_PENDING_G':
-      return { ...state, pendingG: action.pending };
-
-    case 'SET_PENDING_D':
-      return { ...state, pendingD: action.pending };
-
-    case 'SET_PENDING_C':
-      return { ...state, pendingC: action.pending };
+    case 'SET_PENDING_OPERATOR':
+      return { ...state, pendingOperator: action.operator };
 
     case 'SET_LAST_COMMAND':
       return { ...state, lastCommand: action.command };
@@ -273,173 +155,11 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
     [state.count],
   );
 
+  // Helper to get current cursor position as offset
   const getCurrentOffset = useCallback(() => {
-    const lines = buffer.lines;
     const [row, col] = buffer.cursor;
-    let offset = 0;
-
-    for (let i = 0; i < row; i++) {
-      offset += lines[i].length + 1; // +1 for newline
-    }
-    offset += col;
-
-    return offset;
+    return logicalPosToOffset(buffer.lines, row, col);
   }, [buffer.lines, buffer.cursor]);
-
-  const setOffsetPosition = useCallback(
-    (offset: number) => {
-      buffer.moveToOffset(offset);
-    },
-    [buffer],
-  );
-
-  /** Converts row/col position to absolute text offset */
-  const getOffsetFromPosition = useCallback(
-    (row: number, col: number) => {
-      let offset = 0;
-      for (let i = 0; i < row; i++) {
-        offset += buffer.lines[i].length + 1; // +1 for newline
-      }
-      offset += col;
-      return offset;
-    },
-    [buffer.lines],
-  );
-
-  /** Calculates start/end offsets for multi-line operations like dd, cc */
-  const getLineRangeOffsets = useCallback(
-    (startRow: number, lineCount: number) => {
-      const totalLines = buffer.lines.length;
-      const actualLineCount = Math.min(lineCount, totalLines - startRow);
-
-      let startOffset = 0;
-      for (let row = 0; row < startRow; row++) {
-        startOffset += buffer.lines[row].length + 1;
-      }
-
-      let endOffset = startOffset;
-      for (let i = 0; i < actualLineCount; i++) {
-        const lineIndex = startRow + i;
-        if (lineIndex < totalLines) {
-          endOffset += buffer.lines[lineIndex].length;
-          if (lineIndex < totalLines - 1) {
-            endOffset += 1; // +1 for newline, except for last line
-          } else if (startRow > 0) {
-            // Last line - include the newline before it
-            startOffset -= 1;
-          }
-        }
-      }
-
-      return { startOffset, endOffset, actualLineCount };
-    },
-    [buffer.lines],
-  );
-
-  /** Handles change operations for directional movement (ch, cj, ck, cl) */
-  const handleChangeMovement = useCallback(
-    (movementType: 'h' | 'j' | 'k' | 'l', count: number) => {
-      const currentRow = buffer.cursor[0];
-      const currentCol = buffer.cursor[1];
-
-      switch (movementType) {
-        case 'h': {
-          // Change N characters to the left
-          for (let i = 0; i < count; i++) {
-            if (currentCol > 0) {
-              buffer.move('left');
-              buffer.del();
-            }
-          }
-          break;
-        }
-
-        case 'j': {
-          // Change from current line down N lines
-          const totalLines = buffer.lines.length;
-          const linesToChange = Math.min(count + 1, totalLines - currentRow);
-
-          if (totalLines === 1) {
-            const currentLine = buffer.lines[0] || '';
-            buffer.replaceRangeByOffset(0, currentLine.length, '');
-          } else {
-            const { startOffset, endOffset } = getLineRangeOffsets(
-              currentRow,
-              linesToChange,
-            );
-            buffer.replaceRangeByOffset(startOffset, endOffset, '');
-          }
-          break;
-        }
-
-        case 'k': {
-          // Change from current line up N lines
-          const linesToChange = Math.min(count + 1, currentRow + 1);
-          const startRow = currentRow - count;
-
-          if (buffer.lines.length === 1) {
-            const currentLine = buffer.lines[0] || '';
-            buffer.replaceRangeByOffset(0, currentLine.length, '');
-          } else {
-            const { startOffset, endOffset } = getLineRangeOffsets(
-              Math.max(0, startRow),
-              linesToChange,
-            );
-            buffer.replaceRangeByOffset(startOffset, endOffset, '');
-            buffer.moveToOffset(startOffset);
-          }
-          break;
-        }
-
-        case 'l': {
-          // Change N characters to the right
-          for (let i = 0; i < count; i++) {
-            buffer.del();
-          }
-          break;
-        }
-
-        default:
-          // This should never happen due to type constraints
-          break;
-      }
-
-      updateMode('INSERT');
-      const cmdTypeMap = {
-        h: CMD_TYPES.CHANGE_MOVEMENT.LEFT,
-        j: CMD_TYPES.CHANGE_MOVEMENT.DOWN,
-        k: CMD_TYPES.CHANGE_MOVEMENT.UP,
-        l: CMD_TYPES.CHANGE_MOVEMENT.RIGHT,
-      } as const;
-
-      dispatch({
-        type: 'SET_LAST_COMMAND',
-        command: { type: cmdTypeMap[movementType], count },
-      });
-      dispatch({ type: 'SET_PENDING_C', pending: false });
-    },
-    [buffer, getLineRangeOffsets, dispatch, updateMode],
-  );
-
-  /** Handles end-of-line operations (D, C) */
-  const handleEndOfLineOperation = useCallback(
-    (shouldEnterInsertMode: boolean) => {
-      const currentRow = buffer.cursor[0];
-      const currentCol = buffer.cursor[1];
-      const currentLine = buffer.lines[currentRow] || '';
-
-      if (currentCol < currentLine.length) {
-        const startOffset = getOffsetFromPosition(currentRow, currentCol);
-        const endOffset = startOffset + (currentLine.length - currentCol);
-        buffer.replaceRangeByOffset(startOffset, endOffset, '');
-      }
-
-      if (shouldEnterInsertMode) {
-        updateMode('INSERT');
-      }
-    },
-    [buffer, getOffsetFromPosition, updateMode],
-  );
 
   /** Executes common commands to eliminate duplication in dot (.) repeat command */
   const executeCommand = useCallback(
@@ -456,110 +176,25 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
         }
 
         case CMD_TYPES.DELETE_WORD_END: {
-          const text = buffer.text;
-          const currentOffset = getCurrentOffset();
-          let endOffset = currentOffset;
-          let offset = currentOffset;
-
-          for (let i = 0; i < count; i++) {
-            const wordEndOffset = findWordEnd(text, offset);
-            if (wordEndOffset > offset) {
-              offset = wordEndOffset;
-            } else {
-              break;
-            }
-          }
-          endOffset = Math.min(offset + 1, text.length);
-
-          if (endOffset !== currentOffset) {
-            buffer.replaceRangeByOffset(
-              Math.min(currentOffset, endOffset),
-              Math.max(currentOffset, endOffset),
-              '',
-            );
-          }
+          buffer.vimDeleteWordEnd(count);
           break;
         }
 
         case CMD_TYPES.CHANGE_WORD_FORWARD: {
-          const text = buffer.text;
-          const currentOffset = getCurrentOffset();
-          let endOffset = currentOffset;
-          let offset = currentOffset;
-
-          for (let i = 0; i < count; i++) {
-            const nextWordOffset = findNextWordStart(text, offset);
-            if (nextWordOffset > offset) {
-              offset = nextWordOffset;
-            } else {
-              const wordEndOffset = findWordEnd(text, offset);
-              offset = Math.min(wordEndOffset + 1, text.length);
-              break;
-            }
-          }
-          endOffset = offset;
-
-          if (endOffset !== currentOffset) {
-            buffer.replaceRangeByOffset(
-              Math.min(currentOffset, endOffset),
-              Math.max(currentOffset, endOffset),
-              '',
-            );
-          }
+          buffer.vimChangeWordForward(count);
           updateMode('INSERT');
           break;
         }
 
         case CMD_TYPES.CHANGE_WORD_BACKWARD: {
-          const text = buffer.text;
-          const currentOffset = getCurrentOffset();
-          let endOffset = currentOffset;
-          let offset = currentOffset;
-
-          for (let i = 0; i < count; i++) {
-            const prevWordOffset = findPrevWordStart(text, offset);
-            if (prevWordOffset < offset) {
-              offset = prevWordOffset;
-            } else {
-              break;
-            }
-          }
-          endOffset = offset;
-
-          if (endOffset !== currentOffset) {
-            buffer.replaceRangeByOffset(
-              Math.min(currentOffset, endOffset),
-              Math.max(currentOffset, endOffset),
-              '',
-            );
-          }
+          buffer.vimChangeWordBackward(count);
           updateMode('INSERT');
           break;
         }
 
         case CMD_TYPES.CHANGE_WORD_END: {
-          const text = buffer.text;
-          const currentOffset = getCurrentOffset();
-          let endOffset = currentOffset;
-          let searchOffset = currentOffset;
-
-          for (let i = 0; i < count; i++) {
-            const wordEndOffset = findWordEnd(text, searchOffset);
-            if (wordEndOffset <= searchOffset) break;
-
-            endOffset = wordEndOffset + 1;
-
-            if (i < count - 1) {
-              const nextWordStart = findNextWordStart(text, wordEndOffset + 1);
-              searchOffset = nextWordStart;
-              if (nextWordStart <= wordEndOffset) break;
-            }
-          }
-
-          if (endOffset > currentOffset) {
-            buffer.replaceRangeByOffset(currentOffset, endOffset, '');
-            updateMode('INSERT');
-          }
+          buffer.vimChangeWordEnd(count);
+          updateMode('INSERT');
           break;
         }
 
@@ -582,36 +217,12 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
         }
 
         case CMD_TYPES.DELETE_LINE: {
-          const startRow = buffer.cursor[0];
-          const totalLines = buffer.lines.length;
-
-          if (totalLines === 1) {
-            const currentLine = buffer.lines[0] || '';
-            buffer.replaceRangeByOffset(0, currentLine.length, '');
-          } else {
-            const { startOffset, endOffset } = getLineRangeOffsets(
-              startRow,
-              count,
-            );
-            buffer.replaceRangeByOffset(startOffset, endOffset, '');
-          }
+          buffer.vimDeleteLine(count);
           break;
         }
 
         case CMD_TYPES.CHANGE_LINE: {
-          const startRow = buffer.cursor[0];
-          const totalLines = buffer.lines.length;
-
-          if (totalLines === 1) {
-            const currentLine = buffer.lines[0] || '';
-            buffer.replaceRangeByOffset(0, currentLine.length, '');
-          } else {
-            const { startOffset, endOffset } = getLineRangeOffsets(
-              startRow,
-              count,
-            );
-            buffer.replaceRangeByOffset(startOffset, endOffset, '');
-          }
+          buffer.vimChangeLine(count);
           updateMode('INSERT');
           break;
         }
@@ -621,17 +232,19 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
         case CMD_TYPES.CHANGE_MOVEMENT.UP:
         case CMD_TYPES.CHANGE_MOVEMENT.RIGHT: {
           const movementType = cmdType[1] as 'h' | 'j' | 'k' | 'l';
-          handleChangeMovement(movementType, count);
+          buffer.vimChangeMovement(movementType, count);
+          updateMode('INSERT');
           break;
         }
 
         case CMD_TYPES.DELETE_TO_EOL: {
-          handleEndOfLineOperation(false);
+          buffer.vimDeleteToEndOfLine();
           break;
         }
 
         case CMD_TYPES.CHANGE_TO_EOL: {
-          handleEndOfLineOperation(true);
+          buffer.vimChangeToEndOfLine();
+          updateMode('INSERT');
           break;
         }
 
@@ -642,10 +255,6 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
     },
     [
       buffer,
-      getCurrentOffset,
-      getLineRangeOffsets,
-      handleChangeMovement,
-      handleEndOfLineOperation,
       updateMode,
     ],
   );
@@ -741,14 +350,66 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
         const text = buffer.text;
         const currentOffset = getCurrentOffset();
 
+        // Helper function to handle change movement commands (ch, cj, ck, cl)
+        const handleChangeMovement = (movement: 'h' | 'j' | 'k' | 'l'): boolean => {
+          const count = getCurrentCount();
+          dispatch({ type: 'CLEAR_COUNT' });
+          buffer.vimChangeMovement(movement, count);
+          updateMode('INSERT');
+          
+          const cmdTypeMap = {
+            h: CMD_TYPES.CHANGE_MOVEMENT.LEFT,
+            j: CMD_TYPES.CHANGE_MOVEMENT.DOWN,
+            k: CMD_TYPES.CHANGE_MOVEMENT.UP,
+            l: CMD_TYPES.CHANGE_MOVEMENT.RIGHT,
+          };
+          
+          dispatch({
+            type: 'SET_LAST_COMMAND',
+            command: { type: cmdTypeMap[movement], count },
+          });
+          dispatch({ type: 'SET_PENDING_OPERATOR', operator: null });
+          return true;
+        };
+
+        // Helper function to handle operator-motion commands (dw/cw, db/cb, de/ce)
+        const handleOperatorMotion = (
+          operator: 'd' | 'c',
+          motion: 'w' | 'b' | 'e',
+        ): boolean => {
+          const count = getCurrentCount();
+          
+          const commandMap = {
+            d: {
+              w: CMD_TYPES.DELETE_WORD_FORWARD,
+              b: CMD_TYPES.DELETE_WORD_BACKWARD,
+              e: CMD_TYPES.DELETE_WORD_END,
+            },
+            c: {
+              w: CMD_TYPES.CHANGE_WORD_FORWARD,
+              b: CMD_TYPES.CHANGE_WORD_BACKWARD,
+              e: CMD_TYPES.CHANGE_WORD_END,
+            },
+          };
+
+          const cmdType = commandMap[operator][motion];
+          executeCommand(cmdType, count);
+
+          dispatch({
+            type: 'SET_LAST_COMMAND',
+            command: { type: cmdType, count },
+          });
+          dispatch({ type: 'CLEAR_COUNT' });
+          dispatch({ type: 'SET_PENDING_OPERATOR', operator: null });
+
+          return true;
+        };
+
         switch (normalizedKey.sequence) {
           case 'h': {
             // Check if this is part of a change command (ch)
-            if (state.pendingC) {
-              const commandRepeatCount = getCurrentCount();
-              dispatch({ type: 'CLEAR_COUNT' });
-              handleChangeMovement('h', commandRepeatCount);
-              return true;
+            if (state.pendingOperator === 'c') {
+              return handleChangeMovement('h');
             }
 
             // Normal left movement
@@ -769,11 +430,8 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
 
           case 'j': {
             // Check if this is part of a change command (cj)
-            if (state.pendingC) {
-              const repeatCount = getCurrentCount();
-              dispatch({ type: 'CLEAR_COUNT' });
-              handleChangeMovement('j', repeatCount);
-              return true;
+            if (state.pendingOperator === 'c') {
+              return handleChangeMovement('j');
             }
 
             // Normal down movement
@@ -786,11 +444,8 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
 
           case 'k': {
             // Check if this is part of a change command (ck)
-            if (state.pendingC) {
-              const repeatCount = getCurrentCount();
-              dispatch({ type: 'CLEAR_COUNT' });
-              handleChangeMovement('k', repeatCount);
-              return true;
+            if (state.pendingOperator === 'c') {
+              return handleChangeMovement('k');
             }
 
             // Normal up movement
@@ -803,11 +458,8 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
 
           case 'l': {
             // Check if this is part of a change command (cl)
-            if (state.pendingC) {
-              const repeatCount = getCurrentCount();
-              dispatch({ type: 'CLEAR_COUNT' });
-              handleChangeMovement('l', repeatCount);
-              return true;
+            if (state.pendingOperator === 'c') {
+              return handleChangeMovement('l');
             }
 
             // Normal right movement
@@ -830,43 +482,12 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
           }
 
           case 'w': {
-            // Check if this is part of a delete command (dw)
-            if (state.pendingD) {
-              const repeatCount = getCurrentCount();
-              dispatch({ type: 'CLEAR_COUNT' });
-
-              buffer.vimDeleteWordForward(repeatCount);
-
-              // Record this command for repeat
-              dispatch({
-                type: 'SET_LAST_COMMAND',
-                command: {
-                  type: CMD_TYPES.DELETE_WORD_FORWARD,
-                  count: repeatCount,
-                },
-              });
-              dispatch({ type: 'SET_PENDING_D', pending: false });
-              return true;
+            // Check if this is part of a delete or change command (dw/cw)
+            if (state.pendingOperator === 'd') {
+              return handleOperatorMotion('d', 'w');
             }
-
-            // Check if this is part of a change command (cw)
-            if (state.pendingC) {
-              const repeatCount = getCurrentCount();
-              dispatch({ type: 'CLEAR_COUNT' });
-
-              buffer.vimChangeWordForward(repeatCount);
-
-              // Record this command for repeat
-              dispatch({
-                type: 'SET_LAST_COMMAND',
-                command: {
-                  type: CMD_TYPES.CHANGE_WORD_FORWARD,
-                  count: repeatCount,
-                },
-              });
-              dispatch({ type: 'SET_PENDING_C', pending: false });
-              updateMode('INSERT');
-              return true;
+            if (state.pendingOperator === 'c') {
+              return handleOperatorMotion('c', 'w');
             }
 
             // Normal word movement
@@ -880,93 +501,18 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
                 break;
               }
             }
-            setOffsetPosition(offset);
+            buffer.moveToOffset(offset);
             dispatch({ type: 'CLEAR_COUNT' });
             return true;
           }
 
           case 'b': {
-            // Check if this is part of a delete command (db)
-            if (state.pendingD) {
-              const repeatCount = getCurrentCount();
-              dispatch({ type: 'CLEAR_COUNT' });
-
-              const text = buffer.text;
-              const currentOffset = getCurrentOffset();
-              let endOffset = currentOffset;
-
-              // Delete from cursor backward through N words
-              let offset = currentOffset;
-              for (let i = 0; i < repeatCount; i++) {
-                const prevWordOffset = findPrevWordStart(text, offset);
-                if (prevWordOffset < offset) {
-                  offset = prevWordOffset;
-                } else {
-                  break;
-                }
-              }
-              endOffset = offset;
-
-              if (endOffset !== currentOffset) {
-                buffer.replaceRangeByOffset(
-                  Math.min(currentOffset, endOffset),
-                  Math.max(currentOffset, endOffset),
-                  '',
-                );
-              }
-
-              // Record this command for repeat
-              dispatch({
-                type: 'SET_LAST_COMMAND',
-                command: {
-                  type: CMD_TYPES.DELETE_WORD_BACKWARD,
-                  count: repeatCount,
-                },
-              });
-              dispatch({ type: 'SET_PENDING_D', pending: false });
-              return true;
+            // Check if this is part of a delete or change command (db/cb)
+            if (state.pendingOperator === 'd') {
+              return handleOperatorMotion('d', 'b');
             }
-
-            // Check if this is part of a change command (cb)
-            if (state.pendingC) {
-              const repeatCount = getCurrentCount();
-              dispatch({ type: 'CLEAR_COUNT' });
-
-              const text = buffer.text;
-              const currentOffset = getCurrentOffset();
-              let endOffset = currentOffset;
-
-              // Change from cursor backward through N words
-              let offset = currentOffset;
-              for (let i = 0; i < repeatCount; i++) {
-                const prevWordOffset = findPrevWordStart(text, offset);
-                if (prevWordOffset < offset) {
-                  offset = prevWordOffset;
-                } else {
-                  break;
-                }
-              }
-              endOffset = offset;
-
-              if (endOffset !== currentOffset) {
-                buffer.replaceRangeByOffset(
-                  Math.min(currentOffset, endOffset),
-                  Math.max(currentOffset, endOffset),
-                  '',
-                );
-              }
-
-              // Record this command for repeat and switch to INSERT mode
-              dispatch({
-                type: 'SET_LAST_COMMAND',
-                command: {
-                  type: CMD_TYPES.CHANGE_WORD_BACKWARD,
-                  count: repeatCount,
-                },
-              });
-              dispatch({ type: 'SET_PENDING_C', pending: false });
-              updateMode('INSERT');
-              return true;
+            if (state.pendingOperator === 'c') {
+              return handleOperatorMotion('c', 'b');
             }
 
             // Normal backward word movement
@@ -974,102 +520,18 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
             for (let i = 0; i < repeatCount; i++) {
               offset = findPrevWordStart(text, offset);
             }
-            setOffsetPosition(offset);
+            buffer.moveToOffset(offset);
             dispatch({ type: 'CLEAR_COUNT' });
             return true;
           }
 
           case 'e': {
-            // Check if this is part of a delete command (de)
-            if (state.pendingD) {
-              const repeatCount = getCurrentCount();
-              dispatch({ type: 'CLEAR_COUNT' });
-
-              const text = buffer.text;
-              const currentOffset = getCurrentOffset();
-              let endOffset = currentOffset;
-
-              // Delete from cursor to end of N words
-              let offset = currentOffset;
-              for (let i = 0; i < repeatCount; i++) {
-                const wordEndOffset = findWordEnd(text, offset);
-                if (wordEndOffset > offset) {
-                  offset = wordEndOffset;
-                } else {
-                  break;
-                }
-              }
-              // Include the character at the end position for 'de'
-              endOffset = Math.min(offset + 1, text.length);
-
-              if (endOffset !== currentOffset) {
-                buffer.replaceRangeByOffset(
-                  Math.min(currentOffset, endOffset),
-                  Math.max(currentOffset, endOffset),
-                  '',
-                );
-              }
-
-              // Record this command for repeat
-              dispatch({
-                type: 'SET_LAST_COMMAND',
-                command: {
-                  type: CMD_TYPES.DELETE_WORD_END,
-                  count: repeatCount,
-                },
-              });
-              dispatch({ type: 'SET_PENDING_D', pending: false });
-              return true;
+            // Check if this is part of a delete or change command (de/ce)
+            if (state.pendingOperator === 'd') {
+              return handleOperatorMotion('d', 'e');
             }
-
-            // Check if this is part of a change command (ce)
-            if (state.pendingC) {
-              const repeatCount = getCurrentCount();
-              dispatch({ type: 'CLEAR_COUNT' });
-
-              const text = buffer.text;
-              const currentOffset = getCurrentOffset();
-              let endOffset = currentOffset;
-
-              // Change from cursor to end of N words
-              let searchOffset = currentOffset;
-              for (let i = 0; i < repeatCount; i++) {
-                const wordEndOffset = findWordEnd(text, searchOffset);
-                if (wordEndOffset > searchOffset) {
-                  endOffset = wordEndOffset + 1; // +1 to include the character at end position for 'ce'
-
-                  // For next iteration, move to start of next word
-                  if (i < repeatCount - 1) {
-                    // Only if there are more iterations
-                    searchOffset = findNextWordStart(text, wordEndOffset + 1);
-                    if (searchOffset <= wordEndOffset) {
-                      break; // No next word found
-                    }
-                  }
-                } else {
-                  break;
-                }
-              }
-
-              if (endOffset !== currentOffset) {
-                buffer.replaceRangeByOffset(
-                  Math.min(currentOffset, endOffset),
-                  Math.max(currentOffset, endOffset),
-                  '',
-                );
-              }
-
-              // Record this command for repeat
-              dispatch({
-                type: 'SET_LAST_COMMAND',
-                command: {
-                  type: CMD_TYPES.CHANGE_WORD_END,
-                  count: repeatCount,
-                },
-              });
-              dispatch({ type: 'SET_PENDING_C', pending: false });
-              updateMode('INSERT');
-              return true;
+            if (state.pendingOperator === 'c') {
+              return handleOperatorMotion('c', 'e');
             }
 
             // Normal word end movement
@@ -1077,31 +539,14 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
             for (let i = 0; i < repeatCount; i++) {
               offset = findWordEnd(text, offset);
             }
-            setOffsetPosition(offset);
+            buffer.moveToOffset(offset);
             dispatch({ type: 'CLEAR_COUNT' });
             return true;
           }
 
           case 'x': {
             // Delete character under cursor
-            for (let i = 0; i < repeatCount; i++) {
-              const currentRow = buffer.cursor[0];
-              const currentCol = buffer.cursor[1];
-              const currentLine = buffer.lines[currentRow] || '';
-
-              if (currentCol < currentLine.length) {
-                const isLastChar = currentCol === currentLine.length - 1;
-                buffer.del();
-
-                // In vim, when deleting the last character on a line,
-                // the cursor moves to the previous position
-                if (isLastChar && currentCol > 0) {
-                  buffer.move('left');
-                }
-              }
-            }
-
-            // Record this command for repeat
+            executeCommand(CMD_TYPES.DELETE_CHAR, repeatCount);
             dispatch({
               type: 'SET_LAST_COMMAND',
               command: { type: CMD_TYPES.DELETE_CHAR, count: repeatCount },
@@ -1175,20 +620,20 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
             ) {
               col++;
             }
-            const offset = getOffsetFromPosition(currentRow, col);
+            const offset = logicalPosToOffset(buffer.lines, currentRow, col);
             buffer.moveToOffset(offset);
             dispatch({ type: 'CLEAR_COUNT' });
             return true;
           }
 
           case 'g': {
-            if (state.pendingG) {
+            if (state.pendingOperator === 'g') {
               // Second 'g' - go to first line (gg command)
               buffer.moveToOffset(0);
-              dispatch({ type: 'SET_PENDING_G', pending: false });
+              dispatch({ type: 'SET_PENDING_OPERATOR', operator: null });
             } else {
               // First 'g' - wait for second g
-              dispatch({ type: 'SET_PENDING_G', pending: true });
+              dispatch({ type: 'SET_PENDING_OPERATOR', operator: 'g' });
             }
             dispatch({ type: 'CLEAR_COUNT' });
             return true;
@@ -1201,7 +646,7 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
                 state.count - 1,
                 buffer.lines.length - 1,
               );
-              const offset = getOffsetFromPosition(lineNum, 0);
+              const offset = logicalPosToOffset(buffer.lines, lineNum, 0);
               buffer.moveToOffset(offset);
             } else {
               // Go to last line when no count was provided
@@ -1224,7 +669,7 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
             ) {
               col++;
             }
-            const offset = getOffsetFromPosition(currentRow, col);
+            const offset = logicalPosToOffset(buffer.lines, currentRow, col);
             buffer.moveToOffset(offset);
             updateMode('INSERT');
             dispatch({ type: 'CLEAR_COUNT' });
@@ -1240,100 +685,44 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
           }
 
           case 'd': {
-            if (state.pendingD) {
+            if (state.pendingOperator === 'd') {
               // Second 'd' - delete N lines (dd command)
               const repeatCount = getCurrentCount();
-              dispatch({ type: 'CLEAR_COUNT' });
-
-              const startRow = buffer.cursor[0];
-              const totalLines = buffer.lines.length;
-
-              if (totalLines === 1) {
-                // Single line - clear the content but keep the line
-                const currentLine = buffer.lines[0] || '';
-                buffer.replaceRangeByOffset(0, currentLine.length, '');
-              } else {
-                // Multi-line - delete N lines including newlines
-                const { startOffset, endOffset } = getLineRangeOffsets(
-                  startRow,
-                  repeatCount,
-                );
-                buffer.replaceRangeByOffset(startOffset, endOffset, '');
-              }
-
-              // Record this command for repeat
+              executeCommand(CMD_TYPES.DELETE_LINE, repeatCount);
               dispatch({
                 type: 'SET_LAST_COMMAND',
                 command: { type: CMD_TYPES.DELETE_LINE, count: repeatCount },
               });
-              dispatch({ type: 'SET_PENDING_D', pending: false });
+              dispatch({ type: 'CLEAR_COUNT' });
+              dispatch({ type: 'SET_PENDING_OPERATOR', operator: null });
             } else {
               // First 'd' - wait for movement command
-              dispatch({ type: 'SET_PENDING_D', pending: true });
+              dispatch({ type: 'SET_PENDING_OPERATOR', operator: 'd' });
             }
             return true;
           }
 
           case 'c': {
-            if (state.pendingC) {
+            if (state.pendingOperator === 'c') {
               // Second 'c' - change N entire lines (cc command)
               const repeatCount = getCurrentCount();
-              dispatch({ type: 'CLEAR_COUNT' });
-
-              const startRow = buffer.cursor[0];
-              const totalLines = buffer.lines.length;
-              const linesToChange = Math.min(
-                repeatCount,
-                totalLines - startRow,
-              );
-
-              if (totalLines === 1) {
-                // Single line - clear the content but keep the line
-                const currentLine = buffer.lines[0] || '';
-                buffer.replaceRangeByOffset(0, currentLine.length, '');
-              } else {
-                // Multi-line - change N lines including newlines
-                let startOffset = 0;
-                for (let row = 0; row < startRow; row++) {
-                  startOffset += buffer.lines[row].length + 1; // +1 for newline
-                }
-
-                let endOffset = startOffset;
-                for (let i = 0; i < linesToChange; i++) {
-                  const lineIndex = startRow + i;
-                  if (lineIndex < totalLines) {
-                    endOffset += buffer.lines[lineIndex].length;
-                    // Add newline except for the last line if we're changing to the end
-                    if (lineIndex < totalLines - 1) {
-                      endOffset += 1;
-                    } else if (startRow > 0) {
-                      // Last line - include the newline before it
-                      startOffset -= 1;
-                    }
-                  }
-                }
-
-                buffer.replaceRangeByOffset(startOffset, endOffset, '');
-              }
-
-              updateMode('INSERT');
-
-              // Record this command for repeat
+              executeCommand(CMD_TYPES.CHANGE_LINE, repeatCount);
               dispatch({
                 type: 'SET_LAST_COMMAND',
                 command: { type: CMD_TYPES.CHANGE_LINE, count: repeatCount },
               });
-              dispatch({ type: 'SET_PENDING_C', pending: false });
+              dispatch({ type: 'CLEAR_COUNT' });
+              dispatch({ type: 'SET_PENDING_OPERATOR', operator: null });
             } else {
               // First 'c' - wait for movement command
-              dispatch({ type: 'SET_PENDING_C', pending: true });
+              dispatch({ type: 'SET_PENDING_OPERATOR', operator: 'c' });
             }
             return true;
           }
 
           case 'D': {
             // Delete from cursor to end of line (equivalent to d$)
-            handleEndOfLineOperation(false);
+            executeCommand(CMD_TYPES.DELETE_TO_EOL, 1);
             dispatch({
               type: 'SET_LAST_COMMAND',
               command: { type: CMD_TYPES.DELETE_TO_EOL, count: 1 },
@@ -1344,7 +733,7 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
 
           case 'C': {
             // Change from cursor to end of line (equivalent to c$)
-            handleEndOfLineOperation(true);
+            executeCommand(CMD_TYPES.CHANGE_TO_EOL, 1);
             dispatch({
               type: 'SET_LAST_COMMAND',
               command: { type: CMD_TYPES.CHANGE_TO_EOL, count: 1 },
@@ -1367,6 +756,82 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
           }
 
           default: {
+            // Check for arrow keys (they have different sequences but known names)
+            if (normalizedKey.name === 'left') {
+              // Left arrow - same as 'h'
+              if (state.pendingOperator === 'c') {
+                return handleChangeMovement('h');
+              }
+              
+              // Normal left movement (same as 'h')
+              for (let i = 0; i < repeatCount; i++) {
+                const currentRow = buffer.cursor[0];
+                const currentCol = buffer.cursor[1];
+                if (currentCol > 0) {
+                  buffer.move('left');
+                } else if (currentRow > 0) {
+                  // Move to end of previous line
+                  buffer.move('up');
+                  buffer.move('end');
+                }
+              }
+              dispatch({ type: 'CLEAR_COUNT' });
+              return true;
+            }
+            
+            if (normalizedKey.name === 'down') {
+              // Down arrow - same as 'j'
+              if (state.pendingOperator === 'c') {
+                return handleChangeMovement('j');
+              }
+              
+              // Normal down movement (same as 'j')
+              for (let i = 0; i < repeatCount; i++) {
+                buffer.move('down');
+              }
+              dispatch({ type: 'CLEAR_COUNT' });
+              return true;
+            }
+            
+            if (normalizedKey.name === 'up') {
+              // Up arrow - same as 'k'
+              if (state.pendingOperator === 'c') {
+                return handleChangeMovement('k');
+              }
+              
+              // Normal up movement (same as 'k')
+              for (let i = 0; i < repeatCount; i++) {
+                buffer.move('up');
+              }
+              dispatch({ type: 'CLEAR_COUNT' });
+              return true;
+            }
+            
+            if (normalizedKey.name === 'right') {
+              // Right arrow - same as 'l'
+              if (state.pendingOperator === 'c') {
+                return handleChangeMovement('l');
+              }
+              
+              // Normal right movement (same as 'l')
+              for (let i = 0; i < repeatCount; i++) {
+                const currentRow = buffer.cursor[0];
+                const currentCol = buffer.cursor[1];
+                const currentLine = buffer.lines[currentRow] || '';
+
+                // Don't move past the last character of the line
+                if (currentCol < currentLine.length - 1) {
+                  buffer.move('right');
+                } else if (currentRow < buffer.lines.length - 1) {
+                  // Move to beginning of next line
+                  buffer.move('down');
+                  buffer.move('home');
+                }
+              }
+              dispatch({ type: 'CLEAR_COUNT' });
+              return true;
+            }
+
             // Unknown command, clear count and pending states
             dispatch({ type: 'CLEAR_PENDING_STATES' });
             return true; // Still handled by vim to prevent other handlers
@@ -1383,12 +848,7 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
       onSubmit,
       getCurrentCount,
       getCurrentOffset,
-      setOffsetPosition,
       executeCommand,
-      getOffsetFromPosition,
-      getLineRangeOffsets,
-      handleChangeMovement,
-      handleEndOfLineOperation,
       updateMode,
     ],
   );
