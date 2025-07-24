@@ -143,7 +143,7 @@ export const ToolConfirmationMessage: React.FC<
       value: ToolConfirmationOutcome.ProceedOnce,
     });
 
-    if (!isMultiCommand) {
+    if (executionProps.showAllowAlways !== false) {
       options.push({
         label: `Yes, allow always "${executionProps.rootCommand}" ...`,
         value: ToolConfirmationOutcome.ProceedAlways,

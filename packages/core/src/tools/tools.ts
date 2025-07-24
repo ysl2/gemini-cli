@@ -254,6 +254,7 @@ export interface ToolExecuteConfirmationDetails {
   onConfirm: (outcome: ToolConfirmationOutcome) => Promise<void>;
   command: string;
   rootCommand: string;
+  showAllowAlways?: boolean;
 }
 
 export interface ToolMcpConfirmationDetails {

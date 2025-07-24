@@ -287,7 +287,7 @@ Process Group PGID: Process group started or \`(none)\``,
     }
 
     const command = this.stripShellWrapper(params.command);
-    const rootCommands = this.getCommandRoots(command);
+    const rootCommands = [...new Set(this.getCommandRoots(command))];
     const commandsToConfirm = rootCommands.filter(
       (command) => !this.whitelist.has(command),
     );
@@ -296,11 +296,13 @@ Process Group PGID: Process group started or \`(none)\``,
       return false; // already approved and whitelisted
     }
 
+    const isMulti = commandsToConfirm.length > 1;
     const confirmationDetails: ToolExecuteConfirmationDetails = {
       type: 'exec',
       title: 'Confirm Shell Command',
       command: params.command,
       rootCommand: commandsToConfirm.join(', '),
+      showAllowAlways: !isMulti,
       onConfirm: async (outcome: ToolConfirmationOutcome) => {
         if (outcome === ToolConfirmationOutcome.ProceedAlways) {
           commandsToConfirm.forEach((command) => this.whitelist.add(command));

@@ -661,3 +661,21 @@ describe('getCommandRoots', () => {
     expect(result).toEqual(['echo', 'echo']);
   });
 });
+
+import { ToolExecuteConfirmationDetails } from './tools.js';
+describe('shouldConfirmExecute', () => {
+  it('should de-duplicate command roots before asking for confirmation', async () => {
+    const shellTool = new ShellTool({
+      getCoreTools: () => ['run_shell_command'],
+      getExcludeTools: () => [],
+    } as unknown as Config);
+    const result = (await shellTool.shouldConfirmExecute(
+      {
+        command: 'git status && git log',
+      },
+      new AbortController().signal,
+    )) as ToolExecuteConfirmationDetails;
+    expect(result.rootCommand).toEqual('git');
+    expect(result.showAllowAlways).toBe(true);
+  });
+});
