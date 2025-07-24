@@ -556,7 +556,6 @@ export async function invokeMcpPrompt(
   promptParams: Record<string, unknown>,
 ): Promise<GetPromptResult> {
   try {
-    console.log(promptParams);
     const response = await mcpClient.request(
       {
         method: 'prompts/get',
