@@ -30,7 +30,6 @@ import { WebSearchTool } from '../tools/web-search.js';
 import { GeminiClient } from '../core/client.js';
 import { FileDiscoveryService } from '../services/fileDiscoveryService.js';
 import { GitService } from '../services/gitService.js';
-import { loadServerHierarchicalMemory } from '../utils/memoryDiscovery.js';
 import { getProjectTempDir } from '../utils/paths.js';
 import {
   initializeTelemetry,
@@ -45,6 +44,10 @@ import {
 } from './models.js';
 import { ClearcutLogger } from '../telemetry/clearcut-logger/clearcut-logger.js';
 import { shouldAttemptBrowserLaunch } from '../utils/browser.js';
+import { MCPOAuthConfig } from '../mcp/oauth-provider.js';
+
+// Re-export OAuth config type
+export type { MCPOAuthConfig };
 
 export enum ApprovalMode {
   DEFAULT = 'default',
@@ -69,6 +72,7 @@ export interface TelemetrySettings {
   target?: TelemetryTarget;
   otlpEndpoint?: string;
   logPrompts?: boolean;
+  outfile?: string;
 }
 
 export interface GeminiCLIExtension {
@@ -112,6 +116,8 @@ export class MCPServerConfig {
     readonly includeTools?: string[],
     readonly excludeTools?: string[],
     readonly extensionName?: string,
+    // OAuth configuration
+    readonly oauth?: MCPOAuthConfig,
   ) {}
 }
 
@@ -249,6 +255,7 @@ export class Config {
       target: params.telemetry?.target ?? DEFAULT_TELEMETRY_TARGET,
       otlpEndpoint: params.telemetry?.otlpEndpoint ?? DEFAULT_OTLP_ENDPOINT,
       logPrompts: params.telemetry?.logPrompts ?? true,
+      outfile: params.telemetry?.outfile,
     };
     this.usageStatisticsEnabled = params.usageStatisticsEnabled ?? true;
 
@@ -462,6 +469,10 @@ export class Config {
     return this.telemetrySettings.target ?? DEFAULT_TELEMETRY_TARGET;
   }
 
+  getTelemetryOutfile(): string | undefined {
+    return this.telemetrySettings.outfile;
+  }
+
   getGeminiClient(): GeminiClient {
     return this.geminiClient;
   }
@@ -563,21 +574,6 @@ export class Config {
       await this.gitService.initialize();
     }
     return this.gitService;
-  }
-
-  async refreshMemory(): Promise<{ memoryContent: string; fileCount: number }> {
-    const { memoryContent, fileCount } = await loadServerHierarchicalMemory(
-      this.getWorkingDir(),
-      this.getDebugMode(),
-      this.getFileService(),
-      this.getExtensionContextFilePaths(),
-      this.getFileFilteringOptions(),
-    );
-
-    this.setUserMemory(memoryContent);
-    this.setGeminiMdFileCount(fileCount);
-
-    return { memoryContent, fileCount };
   }
 
   async createToolRegistry(): Promise<ToolRegistry> {
