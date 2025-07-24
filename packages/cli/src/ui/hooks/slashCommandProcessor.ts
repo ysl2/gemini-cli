@@ -40,10 +40,6 @@ export const useSlashCommandProcessor = (
   openAuthDialog: () => void,
   openEditorDialog: () => void,
   toggleCorgiMode: () => void,
-  updateSetting: <K extends keyof import('../../config/settings.js').Settings>(
-    key: K,
-    value: import('../../config/settings.js').Settings[K],
-  ) => Promise<void>,
   setQuittingMessages: (message: HistoryItem[]) => void,
   openPrivacyNotice: () => void,
   toggleVimEnabled: () => Promise<boolean>,
@@ -143,7 +139,6 @@ export const useSlashCommandProcessor = (
         pendingItem: pendingCompressionItemRef.current,
         setPendingItem: setPendingCompressionItem,
         toggleCorgiMode,
-        updateSetting,
         toggleVimEnabled,
       },
       session: {
@@ -164,7 +159,6 @@ export const useSlashCommandProcessor = (
       pendingCompressionItemRef,
       setPendingCompressionItem,
       toggleCorgiMode,
-      updateSetting,
       toggleVimEnabled,
     ],
   );

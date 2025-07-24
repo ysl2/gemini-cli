@@ -10,7 +10,6 @@ import { Config, GitService, Logger } from '@google/gemini-cli-core';
 import { LoadedSettings } from '../../config/settings.js';
 import { UseHistoryManagerReturn } from '../hooks/useHistoryManager.js';
 import type { HistoryItem } from '../types.js';
-import type { Settings } from '../../config/settings.js';
 import { SessionStatsState } from '../contexts/SessionContext.js';
 
 // Grouped dependencies for clarity and easier mocking
@@ -59,11 +58,6 @@ export interface CommandContext {
     loadHistory: UseHistoryManagerReturn['loadHistory'];
     /** Toggles a special display mode. */
     toggleCorgiMode: () => void;
-    /** Updates a setting in the application configuration. */
-    updateSetting: <K extends keyof Settings>(
-      key: K,
-      value: Settings[K],
-    ) => Promise<void>;
     toggleVimEnabled: () => Promise<boolean>;
   };
   // Session-specific data
