@@ -184,7 +184,7 @@ describe('ShellTool', () => {
     );
   });
 
-  it('should allow any command when ShellTool is present with specific commands', async () => {
+  it('should allow any command when ShellTool is in present with specific commands', async () => {
     config = {
       getCoreTools: () => ['ShellTool', 'ShellTool(ls)'],
       getExcludeTools: () => [],
@@ -358,14 +358,17 @@ describe('ShellTool', () => {
     expect(result.allowed).toBe(true);
   });
 
-  it('should allow a command with command substitution using backticks', async () => {
+  it('should block a command with command substitution using backticks', async () => {
     config = {
       getCoreTools: () => ['run_shell_command(echo)'],
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
     const result = shellTool.isCommandAllowed('echo `rm -rf /`');
-    expect(result.allowed).toBe(true);
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toBe(
+      'Command substitution using $(), <(), or >() is not allowed for security reasons',
+    );
   });
 
   it('should block a command with command substitution using $()', async () => {
@@ -677,5 +680,67 @@ describe('shouldConfirmExecute', () => {
     )) as ToolExecuteConfirmationDetails;
     expect(result.rootCommand).toEqual('git');
     expect(result.showAllowAlways).toBe(true);
+  });
+});
+
+describe('ShellTool command substitution', () => {
+  let shellTool: ShellTool;
+
+  beforeEach(() => {
+    const config = {
+      getCoreTools: () => ['run_shell_command(echo)', 'run_shell_command(gh)'],
+      getExcludeTools: () => [],
+    } as unknown as Config;
+    shellTool = new ShellTool(config);
+  });
+
+  it('should block unquoted command substitution `$(...)`', () => {
+    const result = shellTool.isCommandAllowed('echo $(pwd)');
+    expect(result.allowed).toBe(false);
+  });
+
+  it('should block unquoted command substitution `<(...)`', () => {
+    const result = shellTool.isCommandAllowed('echo <(pwd)');
+    expect(result.allowed).toBe(false);
+  });
+
+  it('should allow command substitution in single quotes', () => {
+    const result = shellTool.isCommandAllowed("echo '$(pwd)'");
+    expect(result.allowed).toBe(true);
+  });
+
+  it('should allow backticks in single quotes', () => {
+    const result = shellTool.isCommandAllowed("echo '`rm -rf /`'");
+    expect(result.allowed).toBe(true);
+  });
+
+  it('should block command substitution in double quotes', () => {
+    const result = shellTool.isCommandAllowed('echo "$(pwd)"');
+    expect(result.allowed).toBe(false);
+  });
+
+  it('should allow escaped command substitution', () => {
+    const result = shellTool.isCommandAllowed('echo \\$(pwd)');
+    expect(result.allowed).toBe(true);
+  });
+
+  it('should allow complex commands with quoted substitution-like patterns', () => {
+    const command =
+      "gh pr comment 4795 --body 'This is a test comment with $(pwd) style text'";
+    const result = shellTool.isCommandAllowed(command);
+    expect(result.allowed).toBe(true);
+  });
+
+  it('should block complex commands with unquoted substitution-like patterns', () => {
+    const command =
+      'gh pr comment 4795 --body "This is a test comment with $(pwd) style text"';
+    const result = shellTool.isCommandAllowed(command);
+    expect(result.allowed).toBe(false);
+  });
+
+  it('should allow a command with markdown content using proper quoting', () => {
+    // Simple test with safe content in single quotes
+    const result = shellTool.isCommandAllowed("gh pr comment 4795 --body 'This is safe markdown content'");
+    expect(result.allowed).toBe(true);
   });
 });

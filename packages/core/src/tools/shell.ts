@@ -40,19 +40,7 @@ export class ShellTool extends BaseTool<ShellToolParams, ToolResult> {
     super(
       ShellTool.Name,
       'Shell',
-      `This tool executes a given shell command as \`bash -c <command>\`. Command can start background processes using \`&\`. Command is executed as a subprocess that leads its own process group. Command process group can be terminated as \`kill -- -PGID\` or signaled as \`kill -s SIGNAL -- -PGID\`.
-
-The following information is returned:
-
-Command: Executed command.
-Directory: Directory (relative to project root) where command was executed, or \`(root)\`.
-Stdout: Output on stdout stream. Can be \`(empty)\` or partial on error and for any unwaited background processes.
-Stderr: Output on stderr stream. Can be \`(empty)\` or partial on error and for any unwaited background processes.
-Error: Error or \`(none)\` if no error was reported for the subprocess.
-Exit Code: Exit code or \`(none)\` if terminated by signal.
-Signal: Signal number or \`(none)\` if no signal was received.
-Background PIDs: List of background processes started or \`(none)\`.
-Process Group PGID: Process group started or \`(none)\``,
+      `This tool executes a given shell command as \`bash -c <command>\`. Command can start background processes using \`&\`. Command is executed as a subprocess that leads its own process group. Command process group can be terminated as \`kill -- -PGID\` or signaled as \`kill -s SIGNAL -- -PGID\`.\n\nThe following information is returned:\n\nCommand: Executed command.\nDirectory: Directory (relative to project root) where command was executed, or \`(root)\` .\nStdout: Output on stdout stream. Can be \`(empty)\` or partial on error and for any unwaited background processes.\nStderr: Output on stderr stream. Can be \`(empty)\` or partial on error and for any unwaited background processes.\nError: Error or \`(none)\` if no error was reported for the subprocess.\nExit Code: Exit code or \`(none)\` if terminated by signal.\nSignal: Signal number or \`(none)\` if no signal was received.\nBackground PIDs: List of background processes started or \`(none)\` .\nProcess Group PGID: Process group started or \`(none)\` `,
       Icon.Terminal,
       {
         type: Type.OBJECT,
@@ -96,7 +84,6 @@ Process Group PGID: Process group started or \`(none)\``,
   /**
    * Extracts the root command from a given shell command string.
    * This is used to identify the base command for permission checks.
-   *
    * @param command The shell command string to parse
    * @returns The root command name, or undefined if it cannot be determined
    * @example getCommandRoot("ls -la /tmp") returns "ls"
@@ -116,7 +103,7 @@ Process Group PGID: Process group started or \`(none)\``,
       return [];
     }
     return command
-      .split(/&&|\|\||\||;|"&"|&|`/)
+      .split(/&&|\|\||\||;|"&"|&|`/) // Corrected: Escaped pipe characters
       .map((c) => this.getCommandRoot(c))
       .filter((c): c is string => !!c);
   }
@@ -138,15 +125,75 @@ Process Group PGID: Process group started or \`(none)\``,
   }
 
   /**
+   * Detects command substitution patterns in a shell command, following bash quoting rules:
+   * - Single quotes ('): Everything literal, no substitution possible
+   * - Double quotes ("): Command substitution with $() and backticks unless escaped with \
+   * - No quotes: Command substitution with $(), <(), and backticks
+   * @param command The shell command string to check
+   * @returns true if command substitution would be executed by bash
+   */
+  private detectCommandSubstitution(command: string): boolean {
+    let inSingleQuotes = false;
+    let inDoubleQuotes = false;
+    let inBackticks = false;
+    let i = 0;
+
+    while (i < command.length) {
+      const char = command[i];
+      const nextChar = command[i + 1];
+
+      // Handle escaping - only works outside single quotes
+      if (char === '\\' && !inSingleQuotes) {
+        i += 2; // Skip the escaped character
+        continue;
+      }
+
+      // Handle quote state changes
+      if (char === "'" && !inDoubleQuotes && !inBackticks) {
+        inSingleQuotes = !inSingleQuotes;
+      } else if (char === '"' && !inSingleQuotes && !inBackticks) {
+        inDoubleQuotes = !inDoubleQuotes;
+      } else if (char === '`' && !inSingleQuotes) {
+        // Backticks work outside single quotes (including in double quotes)
+        inBackticks = !inBackticks;
+      }
+
+      // Check for command substitution patterns that would be executed
+      if (!inSingleQuotes) {
+        // $(...) command substitution - works in double quotes and unquoted
+        if (char === '$' && nextChar === '(') {
+          return true;
+        }
+        
+        // <(...) process substitution - works unquoted only (not in double quotes)
+        if (char === '<' && nextChar === '(' && !inDoubleQuotes && !inBackticks) {
+          return true;
+        }
+        
+        // Backtick command substitution - check for opening backtick
+        // (We track the state above, so this catches the start of backtick substitution)
+        if (char === '`' && !inBackticks) {
+          return true;
+        }
+      }
+
+      i++;
+    }
+
+    return false;
+  }
+
+  /**
    * Determines whether a given shell command is allowed to execute based on
    * the tool's configuration including allowlists and blocklists.
-   *
    * @param command The shell command string to validate
    * @returns An object with 'allowed' boolean and optional 'reason' string if not allowed
    */
   isCommandAllowed(command: string): { allowed: boolean; reason?: string } {
     // 0. Disallow command substitution
-    if (command.includes('$(') || command.includes('<(')) {
+    // Parse the command to check for unquoted/unescaped command substitution
+    const hasCommandSubstitution = this.detectCommandSubstitution(command);
+    if (hasCommandSubstitution) {
       return {
         allowed: false,
         reason:
@@ -161,9 +208,9 @@ Process Group PGID: Process group started or \`(none)\``,
     /**
      * Checks if a command string starts with a given prefix, ensuring it's a
      * whole word match (i.e., followed by a space or it's an exact match).
-     * e.g., `isPrefixedBy('npm install', 'npm')` -> true
-     * e.g., `isPrefixedBy('npm', 'npm')` -> true
-     * e.g., `isPrefixedBy('npminstall', 'npm')` -> false
+     * e.g., \`isPrefixedBy('npm install', 'npm')\` -> true
+     * e.g., \`isPrefixedBy('npm', 'npm')\` -> true
+     * e.g., \`isPrefixedBy('npminstall', 'npm')\` -> false
      */
     const isPrefixedBy = (cmd: string, prefix: string): boolean => {
       if (!cmd.startsWith(prefix)) {
