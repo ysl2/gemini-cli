@@ -73,6 +73,9 @@ export async function getOauthClient(
   const client = new OAuth2Client({
     clientId: OAUTH_CLIENT_ID,
     clientSecret: OAUTH_CLIENT_SECRET,
+    transporterOptions: {
+      proxy: config.getProxy(),
+    },
   });
 
   client.on('tokens', async (tokens: Credentials) => {
@@ -118,7 +121,7 @@ export async function getOauthClient(
     }
   }
 
-  if (config.getNoBrowser()) {
+  if (config.isBrowserLaunchSuppressed()) {
     let success = false;
     const maxRetries = 2;
     for (let i = 0; !success && i < maxRetries; i++) {
@@ -136,13 +139,35 @@ export async function getOauthClient(
   } else {
     const webLogin = await authWithWeb(client);
 
-    // This does basically nothing, as it isn't show to the user.
     console.log(
       `\n\nCode Assist login required.\n` +
         `Attempting to open authentication page in your browser.\n` +
         `Otherwise navigate to:\n\n${webLogin.authUrl}\n\n`,
     );
-    await open(webLogin.authUrl);
+    try {
+      // Attempt to open the authentication URL in the default browser.
+      // We do not use the `wait` option here because the main script's execution
+      // is already paused by `loginCompletePromise`, which awaits the server callback.
+      const childProcess = await open(webLogin.authUrl);
+
+      // IMPORTANT: Attach an error handler to the returned child process.
+      // Without this, if `open` fails to spawn a process (e.g., `xdg-open` is not found
+      // in a minimal Docker container), it will emit an unhandled 'error' event,
+      // causing the entire Node.js process to crash.
+      childProcess.on('error', (_) => {
+        console.error(
+          'Failed to open browser automatically. Please try running again with NO_BROWSER=true set.',
+        );
+        process.exit(1);
+      });
+    } catch (err) {
+      console.error(
+        'An unexpected error occurred while trying to open the browser:',
+        err,
+        '\nPlease try running again with NO_BROWSER=true set.',
+      );
+      process.exit(1);
+    }
     console.log('Waiting for authentication...');
 
     await webLogin.loginCompletePromise;
@@ -152,7 +177,7 @@ export async function getOauthClient(
 }
 
 async function authWithUserCode(client: OAuth2Client): Promise<boolean> {
-  const redirectUri = 'https://sdk.cloud.google.com/authcode_cloudcode.html';
+  const redirectUri = 'https://codeassist.google.com/authcode';
   const codeVerifier = await client.generateCodeVerifierAsync();
   const state = crypto.randomBytes(32).toString('hex');
   const authUrl: string = client.generateAuthUrl({
@@ -163,38 +188,35 @@ async function authWithUserCode(client: OAuth2Client): Promise<boolean> {
     code_challenge: codeVerifier.codeChallenge,
     state,
   });
-  console.error('Please visit the following URL to authorize the application:');
-  console.error('');
-  console.error(authUrl);
-  console.error('');
+  console.log('Please visit the following URL to authorize the application:');
+  console.log('');
+  console.log(authUrl);
+  console.log('');
 
   const code = await new Promise<string>((resolve) => {
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
     });
-    rl.question('Enter the authorization code: ', (answer) => {
+    rl.question('Enter the authorization code: ', (code) => {
       rl.close();
-      resolve(answer.trim());
+      resolve(code.trim());
     });
   });
 
   if (!code) {
     console.error('Authorization code is required.');
     return false;
-  } else {
-    console.error(`Received authorization code: "${code}"`);
   }
 
   try {
-    const response = await client.getToken({
+    const { tokens } = await client.getToken({
       code,
       codeVerifier: codeVerifier.codeVerifier,
       redirect_uri: redirectUri,
     });
-    client.setCredentials(response.tokens);
+    client.setCredentials(tokens);
   } catch (_error) {
-    // Consider logging the error.
     return false;
   }
   return true;
@@ -202,6 +224,12 @@ async function authWithUserCode(client: OAuth2Client): Promise<boolean> {
 
 async function authWithWeb(client: OAuth2Client): Promise<OauthWebLogin> {
   const port = await getAvailablePort();
+  // The hostname used for the HTTP server binding (e.g., '0.0.0.0' in Docker).
+  const host = process.env.OAUTH_CALLBACK_HOST || 'localhost';
+  // The `redirectUri` sent to Google's authorization server MUST use a loopback IP literal
+  // (i.e., 'localhost' or '127.0.0.1'). This is a strict security policy for credentials of
+  // type 'Desktop app' or 'Web application' (when using loopback flow) to mitigate
+  // authorization code interception attacks.
   const redirectUri = `http://localhost:${port}/oauth2callback`;
   const state = crypto.randomBytes(32).toString('hex');
   const authUrl = client.generateAuthUrl({
@@ -259,7 +287,7 @@ async function authWithWeb(client: OAuth2Client): Promise<OauthWebLogin> {
         server.close();
       }
     });
-    server.listen(port);
+    server.listen(port, host);
   });
 
   return {
@@ -272,6 +300,16 @@ export function getAvailablePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     let port = 0;
     try {
+      const portStr = process.env.OAUTH_CALLBACK_PORT;
+      if (portStr) {
+        port = parseInt(portStr, 10);
+        if (isNaN(port) || port <= 0 || port > 65535) {
+          return reject(
+            new Error(`Invalid value for OAUTH_CALLBACK_PORT: "${portStr}"`),
+          );
+        }
+        return resolve(port);
+      }
       const server = net.createServer();
       server.listen(0, () => {
         const address = server.address()! as net.AddressInfo;

@@ -17,7 +17,7 @@ import {
   createContentGeneratorConfig,
 } from '../core/contentGenerator.js';
 import { GeminiClient } from '../core/client.js';
-import { loadServerHierarchicalMemory } from '../utils/memoryDiscovery.js';
+import { GitService } from '../services/gitService.js';
 
 // Mock dependencies that might be called during Config construction or createServerConfig
 vi.mock('../tools/tool-registry', () => {
@@ -75,6 +75,12 @@ vi.mock('../telemetry/index.js', async (importOriginal) => {
   };
 });
 
+vi.mock('../services/gitService.js', () => {
+  const GitServiceMock = vi.fn();
+  GitServiceMock.prototype.initialize = vi.fn();
+  return { GitService: GitServiceMock };
+});
+
 describe('Server Config (config.ts)', () => {
   const MODEL = 'gemini-pro';
   const SANDBOX: SandboxConfig = {
@@ -108,6 +114,32 @@ describe('Server Config (config.ts)', () => {
     vi.clearAllMocks();
   });
 
+  describe('initialize', () => {
+    it('should throw an error if checkpointing is enabled and GitService fails', async () => {
+      const gitError = new Error('Git is not installed');
+      (GitService.prototype.initialize as Mock).mockRejectedValue(gitError);
+
+      const config = new Config({
+        ...baseParams,
+        checkpointing: true,
+      });
+
+      await expect(config.initialize()).rejects.toThrow(gitError);
+    });
+
+    it('should not throw an error if checkpointing is disabled and GitService fails', async () => {
+      const gitError = new Error('Git is not installed');
+      (GitService.prototype.initialize as Mock).mockRejectedValue(gitError);
+
+      const config = new Config({
+        ...baseParams,
+        checkpointing: false,
+      });
+
+      await expect(config.initialize()).resolves.toBeUndefined();
+    });
+  });
+
   describe('refreshAuth', () => {
     it('should refresh auth and update config', async () => {
       const config = new Config(baseParams);
@@ -118,14 +150,12 @@ describe('Server Config (config.ts)', () => {
         apiKey: 'test-key',
       };
 
-      (createContentGeneratorConfig as Mock).mockResolvedValue(
-        mockContentConfig,
-      );
+      (createContentGeneratorConfig as Mock).mockReturnValue(mockContentConfig);
 
       await config.refreshAuth(authType);
 
       expect(createContentGeneratorConfig).toHaveBeenCalledWith(
-        MODEL, // Should be called with the original model 'gemini-pro'
+        config,
         authType,
       );
       // Verify that contentGeneratorConfig is updated with the new model
@@ -280,40 +310,6 @@ describe('Server Config (config.ts)', () => {
       delete paramsWithoutTelemetry.telemetry;
       const config = new Config(paramsWithoutTelemetry);
       expect(config.getTelemetryOtlpEndpoint()).toBe(DEFAULT_OTLP_ENDPOINT);
-    });
-  });
-
-  describe('refreshMemory', () => {
-    it('should update memory and file count on successful refresh', async () => {
-      const config = new Config(baseParams);
-      const mockMemoryData = {
-        memoryContent: 'new memory content',
-        fileCount: 5,
-      };
-
-      (loadServerHierarchicalMemory as Mock).mockResolvedValue(mockMemoryData);
-
-      const result = await config.refreshMemory();
-
-      expect(loadServerHierarchicalMemory).toHaveBeenCalledWith(
-        config.getWorkingDir(),
-        config.getDebugMode(),
-        config.getFileService(),
-        config.getExtensionContextFilePaths(),
-      );
-
-      expect(config.getUserMemory()).toBe(mockMemoryData.memoryContent);
-      expect(config.getGeminiMdFileCount()).toBe(mockMemoryData.fileCount);
-      expect(result).toEqual(mockMemoryData);
-    });
-
-    it('should propagate errors from loadServerHierarchicalMemory', async () => {
-      const config = new Config(baseParams);
-      const testError = new Error('Failed to load memory');
-
-      (loadServerHierarchicalMemory as Mock).mockRejectedValue(testError);
-
-      await expect(config.refreshMemory()).rejects.toThrow(testError);
     });
   });
 });
