@@ -116,13 +116,13 @@ Process Group PGID: Process group started or \`(none)\``,
       return [];
     }
     return command
-      .split(/&&|\|\||\||;/)
+      .split(/&&|\|\||\||;|"&"|&/)
       .map((c) => this.getCommandRoot(c)!)
       .filter(Boolean);
   }
 
   stripShellWrapper(command: string): string {
-    const pattern = /^\s*(?:sh|bash|zsh)\s+-c\s+/;
+    const pattern = /^\s*(?:sh|bash|zsh|cmd.exe)\s+(?:\/c|-c)\s+/;
     const match = command.match(pattern);
     if (match) {
       let newCommand = command.substring(match[0].length).trim();
@@ -146,7 +146,11 @@ Process Group PGID: Process group started or \`(none)\``,
    */
   isCommandAllowed(command: string): { allowed: boolean; reason?: string } {
     // 0. Disallow command substitution
-    if (command.includes('$(') || command.includes('<(') || command.includes('>(')) {
+    if (
+      command.includes('$(') ||
+      command.includes('<(') ||
+      command.includes('>')
+    ) {
       return {
         allowed: false,
         reason:

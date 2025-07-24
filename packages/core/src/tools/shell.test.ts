@@ -613,4 +613,18 @@ describe('stripShellWrapper', () => {
     const result = shellTool.stripShellWrapper('sh -c ls -l');
     expect(result).toEqual('ls -l');
   });
+
+  it('should strip cmd.exe /c from the beginning of the command', () => {
+    const shellTool = new ShellTool({} as Config);
+    const result = shellTool.stripShellWrapper('cmd.exe /c "dir"');
+    expect(result).toEqual('dir');
+  });
+});
+
+describe('getCommandRoots', () => {
+  it('should handle multiple commands with &', () => {
+    const shellTool = new ShellTool({} as Config);
+    const result = shellTool.getCommandRoots('echo "hello" & echo "world"');
+    expect(result).toEqual(['echo', 'echo']);
+  });
 });
