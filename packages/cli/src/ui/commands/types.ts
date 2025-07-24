@@ -56,6 +56,7 @@ export interface CommandContext {
       key: K,
       value: import('../../config/settings.js').Settings[K],
     ) => Promise<void>;
+    toggleVimEnabled: () => void;
   };
   // Session-specific data
   session: {

@@ -4,11 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useCallback, useReducer, useState } from 'react';
+import { useCallback, useReducer, useEffect } from 'react';
 import type { Key } from './useKeypress.js';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
-import type { LoadedSettings } from '../../config/settings.js';
-import { SettingScope } from '../../config/settings.js';
+import { useVimMode } from '../contexts/VimModeContext.js';
 
 export type VimMode = 'NORMAL' | 'INSERT';
 
@@ -224,11 +223,10 @@ const vimReducer = (state: VimState, action: VimAction): VimState => {
       };
 
     case 'ESCAPE_TO_NORMAL':
-      // Handle escape - switch to NORMAL mode and clear all pending states
+      // Handle escape - clear all pending states (mode is updated via context)
       return {
         ...state,
         ...createClearPendingState(),
-        mode: 'NORMAL',
       };
 
     default:
@@ -248,19 +246,26 @@ const vimReducer = (state: VimState, action: VimAction): VimState => {
  * - Settings persistence
  *
  * @param buffer - TextBuffer instance for text manipulation
- * @param settings - LoadedSettings for vim mode configuration
  * @param onSubmit - Optional callback for command submission
  * @returns Object with vim state and input handler
  */
-export function useVim(
-  buffer: TextBuffer,
-  settings: LoadedSettings,
-  onSubmit?: (value: string) => void,
-) {
+export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
+  const { vimEnabled, vimMode, setVimMode } = useVimMode();
   const [state, dispatch] = useReducer(vimReducer, initialVimState);
-  const [runtimeVimModeOverride, setRuntimeVimModeOverride] = useState<
-    boolean | null
-  >(null);
+
+  // Sync vim mode from context to local state
+  useEffect(() => {
+    dispatch({ type: 'SET_MODE', mode: vimMode });
+  }, [vimMode]);
+
+  // Helper to update mode in both reducer and context
+  const updateMode = useCallback(
+    (mode: VimMode) => {
+      setVimMode(mode);
+      dispatch({ type: 'SET_MODE', mode });
+    },
+    [setVimMode],
+  );
 
   // Helper functions using the reducer state
   const getCurrentCount = useCallback(
@@ -399,7 +404,7 @@ export function useVim(
           break;
       }
 
-      dispatch({ type: 'SET_MODE', mode: 'INSERT' });
+      updateMode('INSERT');
       const cmdTypeMap = {
         h: CMD_TYPES.CHANGE_MOVEMENT.LEFT,
         j: CMD_TYPES.CHANGE_MOVEMENT.DOWN,
@@ -413,7 +418,7 @@ export function useVim(
       });
       dispatch({ type: 'SET_PENDING_C', pending: false });
     },
-    [buffer, getLineRangeOffsets, dispatch],
+    [buffer, getLineRangeOffsets, dispatch, updateMode],
   );
 
   /** Handles end-of-line operations (D, C) */
@@ -430,10 +435,10 @@ export function useVim(
       }
 
       if (shouldEnterInsertMode) {
-        dispatch({ type: 'SET_MODE', mode: 'INSERT' });
+        updateMode('INSERT');
       }
     },
-    [buffer, getOffsetFromPosition, dispatch],
+    [buffer, getOffsetFromPosition, updateMode],
   );
 
   /** Executes common commands to eliminate duplication in dot (.) repeat command */
@@ -501,7 +506,7 @@ export function useVim(
               '',
             );
           }
-          dispatch({ type: 'SET_MODE', mode: 'INSERT' });
+          updateMode('INSERT');
           break;
         }
 
@@ -528,7 +533,7 @@ export function useVim(
               '',
             );
           }
-          dispatch({ type: 'SET_MODE', mode: 'INSERT' });
+          updateMode('INSERT');
           break;
         }
 
@@ -553,7 +558,7 @@ export function useVim(
 
           if (endOffset > currentOffset) {
             buffer.replaceRangeByOffset(currentOffset, endOffset, '');
-            dispatch({ type: 'SET_MODE', mode: 'INSERT' });
+            updateMode('INSERT');
           }
           break;
         }
@@ -607,7 +612,7 @@ export function useVim(
             );
             buffer.replaceRangeByOffset(startOffset, endOffset, '');
           }
-          dispatch({ type: 'SET_MODE', mode: 'INSERT' });
+          updateMode('INSERT');
           break;
         }
 
@@ -638,40 +643,16 @@ export function useVim(
     [
       buffer,
       getCurrentOffset,
-      dispatch,
       getLineRangeOffsets,
       handleChangeMovement,
       handleEndOfLineOperation,
+      updateMode,
     ],
   );
 
-  const getEffectiveVimMode = useCallback(
-    () =>
-      runtimeVimModeOverride !== null
-        ? runtimeVimModeOverride
-        : settings.merged.vimMode,
-    [runtimeVimModeOverride, settings.merged.vimMode],
-  );
-
-  const toggleVimMode = useCallback(() => {
-    const currentMode = getEffectiveVimMode();
-    const newMode = !currentMode;
-
-    // Persist the new vim mode setting
-    settings.setValue(SettingScope.User, 'vimMode', newMode);
-
-    // Update runtime override to reflect the change immediately
-    setRuntimeVimModeOverride(newMode);
-
-    // If disabling vim mode while in INSERT, switch to NORMAL first
-    if (currentMode && state.mode === 'INSERT') {
-      dispatch({ type: 'SET_MODE', mode: 'NORMAL' });
-    }
-  }, [getEffectiveVimMode, state.mode, settings]);
-
   const handleInput = useCallback(
     (key: Key): boolean => {
-      if (!getEffectiveVimMode()) {
+      if (!vimEnabled) {
         return false; // Let InputPrompt handle it
       }
 
@@ -696,6 +677,7 @@ export function useVim(
           }
 
           dispatch({ type: 'ESCAPE_TO_NORMAL' });
+          updateMode('NORMAL');
           return true;
         }
 
@@ -883,7 +865,7 @@ export function useVim(
                 },
               });
               dispatch({ type: 'SET_PENDING_C', pending: false });
-              dispatch({ type: 'SET_MODE', mode: 'INSERT' });
+              updateMode('INSERT');
               return true;
             }
 
@@ -983,7 +965,7 @@ export function useVim(
                 },
               });
               dispatch({ type: 'SET_PENDING_C', pending: false });
-              dispatch({ type: 'SET_MODE', mode: 'INSERT' });
+              updateMode('INSERT');
               return true;
             }
 
@@ -1086,7 +1068,7 @@ export function useVim(
                 },
               });
               dispatch({ type: 'SET_PENDING_C', pending: false });
-              dispatch({ type: 'SET_MODE', mode: 'INSERT' });
+              updateMode('INSERT');
               return true;
             }
 
@@ -1130,7 +1112,7 @@ export function useVim(
 
           case 'i': {
             // Enter INSERT mode at current position
-            dispatch({ type: 'SET_MODE', mode: 'INSERT' });
+            updateMode('INSERT');
             dispatch({ type: 'CLEAR_COUNT' });
             return true;
           }
@@ -1144,7 +1126,7 @@ export function useVim(
             if (currentCol < currentLine.length) {
               buffer.move('right');
             }
-            dispatch({ type: 'SET_MODE', mode: 'INSERT' });
+            updateMode('INSERT');
             dispatch({ type: 'CLEAR_COUNT' });
             return true;
           }
@@ -1153,7 +1135,7 @@ export function useVim(
             // Insert new line after current line and enter INSERT mode
             buffer.move('end');
             buffer.newline();
-            dispatch({ type: 'SET_MODE', mode: 'INSERT' });
+            updateMode('INSERT');
             dispatch({ type: 'CLEAR_COUNT' });
             return true;
           }
@@ -1163,7 +1145,7 @@ export function useVim(
             buffer.move('home');
             buffer.newline();
             buffer.move('up');
-            dispatch({ type: 'SET_MODE', mode: 'INSERT' });
+            updateMode('INSERT');
             dispatch({ type: 'CLEAR_COUNT' });
             return true;
           }
@@ -1244,7 +1226,7 @@ export function useVim(
             }
             const offset = getOffsetFromPosition(currentRow, col);
             buffer.moveToOffset(offset);
-            dispatch({ type: 'SET_MODE', mode: 'INSERT' });
+            updateMode('INSERT');
             dispatch({ type: 'CLEAR_COUNT' });
             return true;
           }
@@ -1252,7 +1234,7 @@ export function useVim(
           case 'A': {
             // Enter INSERT mode at end of line
             buffer.move('end');
-            dispatch({ type: 'SET_MODE', mode: 'INSERT' });
+            updateMode('INSERT');
             dispatch({ type: 'CLEAR_COUNT' });
             return true;
           }
@@ -1334,7 +1316,7 @@ export function useVim(
                 buffer.replaceRangeByOffset(startOffset, endOffset, '');
               }
 
-              dispatch({ type: 'SET_MODE', mode: 'INSERT' });
+              updateMode('INSERT');
 
               // Record this command for repeat
               dispatch({
@@ -1397,7 +1379,7 @@ export function useVim(
     [
       state,
       buffer,
-      getEffectiveVimMode,
+      vimEnabled,
       onSubmit,
       getCurrentCount,
       getCurrentOffset,
@@ -1407,14 +1389,13 @@ export function useVim(
       getLineRangeOffsets,
       handleChangeMovement,
       handleEndOfLineOperation,
+      updateMode,
     ],
   );
 
   return {
     mode: state.mode,
-    setMode: (mode: VimMode) => dispatch({ type: 'SET_MODE', mode }),
-    vimModeEnabled: getEffectiveVimMode(),
-    toggleVimMode,
+    vimModeEnabled: vimEnabled,
     handleInput, // Expose the input handler for InputPrompt to use
   };
 }

@@ -6,9 +6,23 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+import React from 'react';
 import { useVim } from './vim.js';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
 import type { LoadedSettings } from '../../config/settings.js';
+
+// Mock the VimModeContext
+const mockVimContext = {
+  vimEnabled: true,
+  vimMode: 'NORMAL' as const,
+  toggleVimEnabled: vi.fn(),
+  setVimMode: vi.fn(),
+};
+
+vi.mock('../contexts/VimModeContext.js', () => ({
+  useVimMode: () => mockVimContext,
+  VimModeProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
 
 // Test constants
 const TEST_SEQUENCES = {
@@ -32,7 +46,6 @@ const TEST_SEQUENCES = {
 
 describe('useVim hook', () => {
   let mockBuffer: Partial<TextBuffer>;
-  let mockSettings: Partial<LoadedSettings>;
   let mockHandleFinalSubmit: vi.Mock;
 
   const createMockBuffer = (
@@ -93,23 +106,20 @@ describe('useVim hook', () => {
     merged: { vimMode },
   });
 
-  const renderVimHook = (
-    buffer?: Partial<TextBuffer>,
-    settings?: Partial<LoadedSettings>,
-  ) =>
+  const renderVimHook = (buffer?: Partial<TextBuffer>) =>
     renderHook(() =>
-      useVim(
-        (buffer || mockBuffer) as TextBuffer,
-        (settings || mockSettings) as LoadedSettings,
-        mockHandleFinalSubmit,
-      ),
+      useVim((buffer || mockBuffer) as TextBuffer, mockHandleFinalSubmit),
     );
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockHandleFinalSubmit = vi.fn();
     mockBuffer = createMockBuffer();
-    mockSettings = createMockSettings();
+    // Reset mock context to default state
+    mockVimContext.vimEnabled = true;
+    mockVimContext.vimMode = 'NORMAL';
+    mockVimContext.toggleVimEnabled.mockClear();
+    mockVimContext.setVimMode.mockClear();
   });
 
   describe('Mode switching', () => {
@@ -126,6 +136,7 @@ describe('useVim hook', () => {
       });
 
       expect(result.current.mode).toBe('INSERT');
+      expect(mockVimContext.setVimMode).toHaveBeenCalledWith('INSERT');
     });
 
     it('should switch back to NORMAL mode with Escape', () => {
@@ -333,8 +344,8 @@ describe('useVim hook', () => {
 
     it('should only delete 1 character with x command when no count is specified', () => {
       const testBuffer = createMockBuffer();
-      const testSettings = createMockSettings();
-      const { result } = renderVimHook(testBuffer, testSettings);
+      const _testSettings = createMockSettings();
+      const { result } = renderVimHook(testBuffer);
 
       act(() => {
         result.current.handleInput({ sequence: 'x' });
@@ -452,8 +463,8 @@ describe('useVim hook', () => {
 
   describe('Disabled vim mode', () => {
     it('should not respond to vim commands when disabled', () => {
-      const disabledSettings = createMockSettings(false);
-      const { result } = renderVimHook(mockBuffer, disabledSettings);
+      mockVimContext.vimEnabled = false;
+      const { result } = renderVimHook(mockBuffer);
 
       act(() => {
         result.current.handleInput({ sequence: 'h' });
@@ -463,40 +474,8 @@ describe('useVim hook', () => {
     });
   });
 
-  describe('Toggle vim mode', () => {
-    it('should toggle vim mode setting when called', () => {
-      const testSettings = createMockSettings(true);
-      const { result } = renderVimHook(mockBuffer, testSettings);
-
-      expect(result.current.vimModeEnabled).toBe(true);
-
-      act(() => {
-        result.current.toggleVimMode();
-      });
-
-      expect(testSettings.setValue).toHaveBeenCalledWith(
-        expect.anything(),
-        'vimMode',
-        false,
-      );
-    });
-
-    it('should switch from INSERT to NORMAL when disabling vim mode', () => {
-      const testSettings = createMockSettings(true);
-      const { result } = renderVimHook(mockBuffer, testSettings);
-
-      act(() => {
-        result.current.handleInput(TEST_SEQUENCES.INSERT);
-      });
-      expect(result.current.mode).toBe('INSERT');
-
-      act(() => {
-        result.current.toggleVimMode();
-      });
-
-      expect(result.current.mode).toBe('NORMAL');
-    });
-  });
+  // Toggle vim mode functionality has been moved to VimModeContext
+  // These tests are no longer applicable at the hook level
 
   describe('Command repeat system', () => {
     it('should repeat x command from current cursor position', () => {

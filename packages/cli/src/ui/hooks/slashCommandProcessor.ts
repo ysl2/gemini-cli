@@ -46,6 +46,7 @@ export const useSlashCommandProcessor = (
   ) => Promise<void>,
   setQuittingMessages: (message: HistoryItem[]) => void,
   openPrivacyNotice: () => void,
+  toggleVimEnabled: () => void,
 ) => {
   const session = useSessionStats();
   const [commands, setCommands] = useState<readonly SlashCommand[]>([]);
@@ -143,6 +144,7 @@ export const useSlashCommandProcessor = (
         setPendingItem: setPendingCompressionItem,
         toggleCorgiMode,
         updateSetting,
+        toggleVimEnabled,
       },
       session: {
         stats: session.stats,
@@ -163,6 +165,7 @@ export const useSlashCommandProcessor = (
       setPendingCompressionItem,
       toggleCorgiMode,
       updateSetting,
+      toggleVimEnabled,
     ],
   );
 

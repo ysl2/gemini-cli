@@ -40,7 +40,6 @@ export interface InputPromptProps {
   suggestionsWidth: number;
   shellModeActive: boolean;
   setShellModeActive: (value: boolean) => void;
-  vimModeEnabled?: boolean;
   vimHandleInput?: (key: Key) => boolean;
 }
 
@@ -58,7 +57,6 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
   suggestionsWidth,
   shellModeActive,
   setShellModeActive,
-  vimModeEnabled,
   vimHandleInput,
 }) => {
   const [justNavigatedHistory, setJustNavigatedHistory] = useState(false);
@@ -289,13 +287,8 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
         return;
       }
 
-      // When vim mode is enabled, let vim hook handle input first
-      if (vimModeEnabled && vimHandleInput) {
-        const handled = vimHandleInput(key);
-        if (handled) {
-          return; // Vim handled it, don't process further
-        }
-        // If vim returned false, continue with normal input processing (completion, etc.)
+      if (vimHandleInput && vimHandleInput(key)) {
+        return;
       }
 
       if (
@@ -477,7 +470,6 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
       shellHistory,
       handleClipboardImage,
       resetCompletionState,
-      vimModeEnabled,
       vimHandleInput,
     ],
   );

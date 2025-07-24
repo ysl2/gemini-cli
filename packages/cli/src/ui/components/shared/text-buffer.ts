@@ -58,16 +58,11 @@ const findNextWordStart = (text: string, currentOffset: number): number => {
     i++;
   }
 
-  // If we reached the end of text and there's no next word,
-  // vim behavior for dw is to delete to the end of the current word
+  // If we reached the end of text, return the end position
+  // In vim, 'dw' (delete word) should delete from cursor to start of next word,
+  // including any whitespace. When there's no next word, it deletes to end of text.
   if (i >= text.length) {
-    // Go back to find the end of the last word
-    let endOfLastWord = text.length - 1;
-    while (endOfLastWord >= 0 && /\s/.test(text[endOfLastWord])) {
-      endOfLastWord--;
-    }
-    // For dw on last word, return position AFTER the last character to delete entire word
-    return Math.max(currentOffset + 1, endOfLastWord + 1);
+    return text.length;
   }
 
   return i;
