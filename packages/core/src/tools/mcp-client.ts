@@ -15,7 +15,12 @@ import {
   StreamableHTTPClientTransport,
   StreamableHTTPClientTransportOptions,
 } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { ListPromptsResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import {
+  Prompt,
+  ListPromptsResultSchema,
+  GetPromptResult,
+  GetPromptResultSchema,
+} from '@modelcontextprotocol/sdk/types.js';
 import { parse } from 'shell-quote';
 import { MCPServerConfig } from '../config/config.js';
 import { DiscoveredMCPTool } from './mcp-tool.js';
@@ -34,10 +39,7 @@ import { getErrorMessage } from '../utils/errors.js';
 
 export const MCP_DEFAULT_TIMEOUT_MSEC = 10 * 60 * 1000; // default to 10 minutes
 
-export interface DiscoveredMCPPrompt {
-  name: string;
-  description?: string;
-}
+export type DiscoveredMCPPrompt = Prompt;
 
 /**
  * Enum representing the connection status of an MCP server
@@ -535,6 +537,50 @@ export async function discoverPrompts(
         )}`,
       );
     }
+  }
+}
+
+/**
+ * Invokes a prompt on a connected MCP client.
+ *
+ * @param mcpServerName The name of the MCP server.
+ * @param mcpClient The active MCP client instance.
+ * @param promptName The name of the prompt to invoke.
+ * @param promptParams The parameters to pass to the prompt.
+ * @returns A promise that resolves to the result of the prompt invocation.
+ */
+export async function invokeMcpPrompt(
+  mcpServerName: string,
+  mcpClient: Client,
+  promptName: string,
+  promptParams: Record<string, unknown>,
+): Promise<GetPromptResult> {
+  try {
+    console.log(promptParams);
+    const response = await mcpClient.request(
+      {
+        method: 'prompts/get',
+        params: {
+          name: promptName,
+          arguments: promptParams,
+        },
+      },
+      GetPromptResultSchema,
+    );
+
+    return response;
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      !error.message?.includes('Method not found')
+    ) {
+      console.error(
+        `Error invoking prompt '${promptName}' from ${mcpServerName} ${promptParams}: ${getErrorMessage(
+          error,
+        )}`,
+      );
+    }
+    throw error;
   }
 }
 
