@@ -53,6 +53,7 @@ export interface CliArgs {
   telemetryTarget: string | undefined;
   telemetryOtlpEndpoint: string | undefined;
   telemetryLogPrompts: boolean | undefined;
+  telemetryOutfile: string | undefined;
   allowedMcpServerNames: string[] | undefined;
   experimentalAcp: boolean | undefined;
   extensions: string[] | undefined;
@@ -157,6 +158,10 @@ export async function parseArguments(): Promise<CliArgs> {
       description:
         'Enable or disable logging of user prompts for telemetry. Overrides settings files.',
     })
+    .option('telemetry-outfile', {
+      type: 'string',
+      description: 'Redirect all telemetry output to the specified file.',
+    })
     .option('checkpointing', {
       alias: 'c',
       type: 'boolean',
@@ -218,6 +223,7 @@ export async function loadHierarchicalGeminiMemory(
   currentWorkingDirectory: string,
   debugMode: boolean,
   fileService: FileDiscoveryService,
+  settings: Settings,
   extensionContextFilePaths: string[] = [],
   fileFilteringOptions?: FileFilteringOptions,
 ): Promise<{ memoryContent: string; fileCount: number }> {
@@ -235,6 +241,7 @@ export async function loadHierarchicalGeminiMemory(
     fileService,
     extensionContextFilePaths,
     fileFilteringOptions,
+    settings.memoryDiscoveryMaxDirs,
   );
 }
 
@@ -291,6 +298,7 @@ export async function loadCliConfig(
     process.cwd(),
     debugMode,
     fileService,
+    settings,
     extensionContextFilePaths,
     fileFiltering,
   );
@@ -379,6 +387,7 @@ export async function loadCliConfig(
         process.env.OTEL_EXPORTER_OTLP_ENDPOINT ??
         settings.telemetry?.otlpEndpoint,
       logPrompts: argv.telemetryLogPrompts ?? settings.telemetry?.logPrompts,
+      outfile: argv.telemetryOutfile ?? settings.telemetry?.outfile,
     },
     usageStatisticsEnabled: settings.usageStatisticsEnabled ?? true,
     // Git-aware file filtering settings
