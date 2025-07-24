@@ -23,7 +23,7 @@ describe('ShellTool', () => {
   });
 
   it('should allow a command if no restrictions are provided', async () => {
-    const result = await shellTool.isCommandAllowed('ls -l');
+    const result = shellTool.isCommandAllowed('ls -l');
     expect(result.allowed).toBe(true);
   });
 
@@ -33,7 +33,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => undefined,
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('ls -l');
+    const result = shellTool.isCommandAllowed('ls -l');
     expect(result.allowed).toBe(true);
   });
 
@@ -43,7 +43,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => undefined,
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('rm -rf /');
+    const result = shellTool.isCommandAllowed('rm -rf /');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       "Command 'rm -rf /' is not in the allowed commands list",
@@ -56,7 +56,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => ['ShellTool(rm -rf /)'],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('rm -rf /');
+    const result = shellTool.isCommandAllowed('rm -rf /');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       "Command 'rm -rf /' is blocked by configuration",
@@ -69,7 +69,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => ['ShellTool(rm -rf /)'],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('ls -l');
+    const result = shellTool.isCommandAllowed('ls -l');
     expect(result.allowed).toBe(true);
   });
 
@@ -79,7 +79,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => ['ShellTool(rm -rf /)'],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('rm -rf /');
+    const result = shellTool.isCommandAllowed('rm -rf /');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       "Command 'rm -rf /' is blocked by configuration",
@@ -92,7 +92,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('any command');
+    const result = shellTool.isCommandAllowed('any command');
     expect(result.allowed).toBe(true);
   });
 
@@ -102,7 +102,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => ['ShellTool'],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('any command');
+    const result = shellTool.isCommandAllowed('any command');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       'Shell tool is globally disabled in configuration',
@@ -115,7 +115,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => undefined,
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('ls -l');
+    const result = shellTool.isCommandAllowed('ls -l');
     expect(result.allowed).toBe(true);
   });
 
@@ -125,7 +125,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => ['run_shell_command(rm -rf /)'],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('rm -rf /');
+    const result = shellTool.isCommandAllowed('rm -rf /');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       "Command 'rm -rf /' is blocked by configuration",
@@ -138,7 +138,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => ['run_shell_command'],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('any command');
+    const result = shellTool.isCommandAllowed('any command');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       'Shell tool is globally disabled in configuration',
@@ -151,7 +151,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('any command');
+    const result = shellTool.isCommandAllowed('any command');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       "Command 'any command' is not in the allowed commands list",
@@ -164,7 +164,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('any command');
+    const result = shellTool.isCommandAllowed('any command');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       "Command 'any command' is not in the allowed commands list",
@@ -177,7 +177,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => ['ShellTool(rm -rf /)'],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed(' rm  -rf  / ');
+    const result = shellTool.isCommandAllowed(' rm  -rf  / ');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       "Command 'rm -rf /' is blocked by configuration",
@@ -190,7 +190,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('any command');
+    const result = shellTool.isCommandAllowed('any command');
     expect(result.allowed).toBe(true);
   });
 
@@ -200,7 +200,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => ['ShellTool(rm -rf /)'],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('rm -rf /');
+    const result = shellTool.isCommandAllowed('rm -rf /');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       "Command 'rm -rf /' is blocked by configuration",
@@ -213,7 +213,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed(
+    const result = shellTool.isCommandAllowed(
       'gh issue edit 1 --add-label "kind/feature"',
     );
     expect(result.allowed).toBe(true);
@@ -225,7 +225,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed(
+    const result = shellTool.isCommandAllowed(
       'gh issue edit 1 --add-label "kind/feature"',
     );
     expect(result.allowed).toBe(true);
@@ -237,7 +237,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('gh issue edit&&rm -rf /');
+    const result = shellTool.isCommandAllowed('gh issue edit&&rm -rf /');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       "Command 'rm -rf /' is not in the allowed commands list",
@@ -250,7 +250,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('gh issue');
+    const result = shellTool.isCommandAllowed('gh issue');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       "Command 'gh issue' is not in the allowed commands list",
@@ -263,7 +263,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => ['run_shell_command(gh issue edit)'],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('gh issue');
+    const result = shellTool.isCommandAllowed('gh issue');
     expect(result.allowed).toBe(true);
   });
 
@@ -273,7 +273,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('gh issue list | rm -rf /');
+    const result = shellTool.isCommandAllowed('gh issue list | rm -rf /');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       "Command 'rm -rf /' is not in the allowed commands list",
@@ -286,7 +286,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('gh issue list; rm -rf /');
+    const result = shellTool.isCommandAllowed('gh issue list; rm -rf /');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       "Command 'rm -rf /' is not in the allowed commands list",
@@ -299,7 +299,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => ['run_shell_command(rm)'],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('echo "hello" && rm -rf /');
+    const result = shellTool.isCommandAllowed('echo "hello" && rm -rf /');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       "Command 'rm -rf /' is blocked by configuration",
@@ -312,7 +312,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => ['run_shell_command(git)'],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('git push');
+    const result = shellTool.isCommandAllowed('git push');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       "Command 'git push' is blocked by configuration",
@@ -325,7 +325,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('ECHO "hello"');
+    const result = shellTool.isCommandAllowed('ECHO "hello"');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       'Command \'ECHO "hello"\' is not in the allowed commands list',
@@ -338,7 +338,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => ['run_shell_command(rm)'],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('ls -l  ;  rm -rf /');
+    const result = shellTool.isCommandAllowed('ls -l  ;  rm -rf /');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       "Command 'rm -rf /' is blocked by configuration",
@@ -354,7 +354,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('echo "hello" && ls -l');
+    const result = shellTool.isCommandAllowed('echo "hello" && ls -l');
     expect(result.allowed).toBe(true);
   });
 
@@ -364,7 +364,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('echo `rm -rf /`');
+    const result = shellTool.isCommandAllowed('echo `rm -rf /`');
     expect(result.allowed).toBe(true);
   });
 
@@ -374,7 +374,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('echo $(rm -rf /)');
+    const result = shellTool.isCommandAllowed('echo $(rm -rf /)');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       'Command substitution using $(), <(), or >() is not allowed for security reasons',
@@ -387,7 +387,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('diff <(ls) <(ls -a)');
+    const result = shellTool.isCommandAllowed('diff <(ls) <(ls -a)');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       'Command substitution using $(), <(), or >() is not allowed for security reasons',
@@ -400,7 +400,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('echo "hello" > file.txt');
+    const result = shellTool.isCommandAllowed('echo "hello" > file.txt');
     expect(result.allowed).toBe(true);
   });
 
@@ -410,7 +410,7 @@ describe('ShellTool', () => {
       getExcludeTools: () => [],
     } as unknown as Config;
     shellTool = new ShellTool(config);
-    const result = await shellTool.isCommandAllowed('gh issue list || rm -rf /');
+    const result = shellTool.isCommandAllowed('gh issue list || rm -rf /');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
       "Command 'rm -rf /' is not in the allowed commands list",
@@ -559,89 +559,89 @@ describe('ShellTool Bug Reproduction', () => {
 });
 
 describe('getCommandRoots', () => {
-  it('should return a single command', async () => {
+  it('should return a single command', () => {
     const shellTool = new ShellTool({} as Config);
-    const result = await shellTool.getCommandRoots('ls -l');
+    const result = shellTool.getCommandRoots('ls -l');
     expect(result).toEqual(['ls']);
   });
 
-  it('should return multiple commands', async () => {
+  it('should return multiple commands', () => {
     const shellTool = new ShellTool({} as Config);
-    const result = await shellTool.getCommandRoots('ls -l | grep "test"');
+    const result = shellTool.getCommandRoots('ls -l | grep "test"');
     expect(result).toEqual(['ls', 'grep']);
   });
 
-  it('should handle multiple commands with &&', async () => {
+  it('should handle multiple commands with &&', () => {
     const shellTool = new ShellTool({} as Config);
-    const result = await shellTool.getCommandRoots('npm run build && npm test');
+    const result = shellTool.getCommandRoots('npm run build && npm test');
     expect(result).toEqual(['npm', 'npm']);
   });
 
-  it('should handle multiple commands with ;', async () => {
+  it('should handle multiple commands with ;', () => {
     const shellTool = new ShellTool({} as Config);
-    const result = await shellTool.getCommandRoots('echo "hello"; echo "world"');
+    const result = shellTool.getCommandRoots('echo "hello"; echo "world"');
     expect(result).toEqual(['echo', 'echo']);
   });
 
-  it('should handle a mix of operators', async () => {
+  it('should handle a mix of operators', () => {
     const shellTool = new ShellTool({} as Config);
-    const result = await shellTool.getCommandRoots(
+    const result = shellTool.getCommandRoots(
       'cat package.json | grep "version" && echo "done"',
     );
     expect(result).toEqual(['cat', 'grep', 'echo']);
   });
 
-  it('should handle commands with paths', async () => {
+  it('should handle commands with paths', () => {
     const shellTool = new ShellTool({} as Config);
-    const result = await shellTool.getCommandRoots('/usr/local/bin/node script.js');
+    const result = shellTool.getCommandRoots('/usr/local/bin/node script.js');
     expect(result).toEqual(['node']);
   });
 
-  it('should return an empty array for an empty string', async () => {
+  it('should return an empty array for an empty string', () => {
     const shellTool = new ShellTool({} as Config);
-    const result = await shellTool.getCommandRoots('');
+    const result = shellTool.getCommandRoots('');
     expect(result).toEqual([]);
   });
 });
 
 describe('stripShellWrapper', () => {
-  it('should strip sh -c from the beginning of the command', async () => {
+  it('should strip sh -c from the beginning of the command', () => {
     const shellTool = new ShellTool({} as Config);
     const result = shellTool.stripShellWrapper('sh -c "ls -l"');
     expect(result).toEqual('ls -l');
   });
 
-  it('should strip bash -c from the beginning of the command', async () => {
+  it('should strip bash -c from the beginning of the command', () => {
     const shellTool = new ShellTool({} as Config);
     const result = shellTool.stripShellWrapper('bash -c "ls -l"');
     expect(result).toEqual('ls -l');
   });
 
-  it('should strip zsh -c from the beginning of the command', async () => {
+  it('should strip zsh -c from the beginning of the command', () => {
     const shellTool = new ShellTool({} as Config);
     const result = shellTool.stripShellWrapper('zsh -c "ls -l"');
     expect(result).toEqual('ls -l');
   });
 
-  it('should not strip anything if the command does not start with a shell wrapper', async () => {
+  it('should not strip anything if the command does not start with a shell wrapper', () => {
     const shellTool = new ShellTool({} as Config);
     const result = shellTool.stripShellWrapper('ls -l');
     expect(result).toEqual('ls -l');
   });
 
-  it('should handle extra whitespace', async () => {
+  it('should handle extra whitespace', () => {
     const shellTool = new ShellTool({} as Config);
     const result = shellTool.stripShellWrapper('  sh   -c   "ls -l"  ');
     expect(result).toEqual('ls -l');
   });
 
-  it('should handle commands without quotes', async () => {
+  it('should handle commands without quotes', () => {
     const shellTool = new ShellTool({} as Config);
     const result = shellTool.stripShellWrapper('sh -c ls -l');
     expect(result).toEqual('ls -l');
   });
 
-  it('should strip cmd.exe /c from the beginning of the command', async () => {
+  it('should strip cmd.exe /c from the beginning of the command', () => {
     const shellTool = new ShellTool({} as Config);
     const result = shellTool.stripShellWrapper('cmd.exe /c "dir"');
     expect(result).toEqual('dir');
@@ -649,15 +649,15 @@ describe('stripShellWrapper', () => {
 });
 
 describe('getCommandRoots', () => {
-  it('should handle commands with backticks', async () => {
+  it('should handle commands with backticks', () => {
     const shellTool = new ShellTool({} as Config);
-    const result = await shellTool.getCommandRoots('echo `rm -rf /`');
+    const result = shellTool.getCommandRoots('echo `rm -rf /`');
     expect(result).toEqual(['echo', 'rm']);
   });
 
-  it('should handle multiple commands with &', async () => {
+  it('should handle multiple commands with &', () => {
     const shellTool = new ShellTool({} as Config);
-    const result = await shellTool.getCommandRoots('echo "hello" & echo "world"');
+    const result = shellTool.getCommandRoots('echo "hello" & echo "world"');
     expect(result).toEqual(['echo', 'echo']);
   });
 });
