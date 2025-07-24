@@ -11,13 +11,7 @@ import { type Config } from '@google/gemini-cli-core';
 import * as child_process from 'child_process';
 import { glob } from 'glob';
 
-import {
-  getMCPDiscoveryState,
-  getMCPServerStatus,
-  IDE_SERVER_NAME,
-  MCPDiscoveryState,
-  MCPServerStatus,
-} from '@google/gemini-cli-core';
+import { ideModeManager } from '@google/gemini-cli-core';
 
 vi.mock('child_process');
 vi.mock('glob');
@@ -26,8 +20,9 @@ vi.mock('@google/gemini-cli-core', async (importOriginal) => {
     await importOriginal<typeof import('@google/gemini-cli-core')>();
   return {
     ...original,
-    getMCPServerStatus: vi.fn(),
-    getMCPDiscoveryState: vi.fn(),
+    ideModeManager: {
+      getServerStatus: vi.fn(),
+    },
   };
 });
 
@@ -37,8 +32,7 @@ describe('ideCommand', () => {
   let execSyncSpy: vi.SpyInstance;
   let globSyncSpy: vi.SpyInstance;
   let platformSpy: vi.SpyInstance;
-  let getMCPServerStatusSpy: vi.SpyInstance;
-  let getMCPDiscoveryStateSpy: vi.SpyInstance;
+  let getServerStatusSpy: vi.SpyInstance;
 
   beforeEach(() => {
     mockContext = {
@@ -54,8 +48,7 @@ describe('ideCommand', () => {
     execSyncSpy = vi.spyOn(child_process, 'execSync');
     globSyncSpy = vi.spyOn(glob, 'sync');
     platformSpy = vi.spyOn(process, 'platform', 'get');
-    getMCPServerStatusSpy = vi.mocked(getMCPServerStatus);
-    getMCPDiscoveryStateSpy = vi.mocked(getMCPDiscoveryState);
+    getServerStatusSpy = vi.mocked(ideModeManager.getServerStatus);
   });
 
   afterEach(() => {
@@ -84,10 +77,14 @@ describe('ideCommand', () => {
     });
 
     it('should show connected status', () => {
-      getMCPServerStatusSpy.mockReturnValue(MCPServerStatus.CONNECTED);
+      getServerStatusSpy.mockReturnValue({
+        type: 'message',
+        messageType: 'info',
+        content: '🟢 Connected',
+      });
       const command = ideCommand(mockConfig);
       const result = command?.subCommands?.[0].action(mockContext, '');
-      expect(getMCPServerStatusSpy).toHaveBeenCalledWith(IDE_SERVER_NAME);
+      expect(getServerStatusSpy).toHaveBeenCalled();
       expect(result).toEqual({
         type: 'message',
         messageType: 'info',
@@ -95,32 +92,13 @@ describe('ideCommand', () => {
       });
     });
 
-    it('should show connecting status', () => {
-      getMCPServerStatusSpy.mockReturnValue(MCPServerStatus.CONNECTING);
-      const command = ideCommand(mockConfig);
-      const result = command?.subCommands?.[0].action(mockContext, '');
-      expect(result).toEqual({
-        type: 'message',
-        messageType: 'info',
-        content: '🔄 Initializing...',
-      });
-    });
-
-    it('should show discovery in progress status', () => {
-      getMCPServerStatusSpy.mockReturnValue(MCPServerStatus.DISCONNECTED);
-      getMCPDiscoveryStateSpy.mockReturnValue(MCPDiscoveryState.IN_PROGRESS);
-      const command = ideCommand(mockConfig);
-      const result = command?.subCommands?.[0].action(mockContext, '');
-      expect(result).toEqual({
-        type: 'message',
-        messageType: 'info',
-        content: '🔄 Initializing...',
-      });
-    });
 
     it('should show disconnected status', () => {
-      getMCPServerStatusSpy.mockReturnValue(MCPServerStatus.DISCONNECTED);
-      getMCPDiscoveryStateSpy.mockReturnValue(MCPDiscoveryState.NOT_FOUND);
+      getServerStatusSpy.mockReturnValue({
+        type: 'message',
+        messageType: 'error',
+        content: '🔴 Disconnected',
+      });
       const command = ideCommand(mockConfig);
       const result = command?.subCommands?.[0].action(mockContext, '');
       expect(result).toEqual({
