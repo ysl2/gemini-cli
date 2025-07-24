@@ -15,10 +15,10 @@ import {
   StreamableHTTPClientTransport,
   StreamableHTTPClientTransportOptions,
 } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { ListPromptsResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { parse } from 'shell-quote';
 import { MCPServerConfig } from '../config/config.js';
 import { DiscoveredMCPTool } from './mcp-tool.js';
-import { z } from 'zod';
 
 import { FunctionDeclaration, mcpToTool } from '@google/genai';
 import { ToolRegistry } from './tool-registry.js';
@@ -494,15 +494,6 @@ export async function discoverTools(
   }
 }
 
-const PromptListResponseSchema = z.object({
-  prompts: z.array(
-    z.object({
-      name: z.string(),
-      description: z.string().optional(),
-    }),
-  ),
-});
-
 /**
  * Discovers and logs prompts from a connected MCP client.
  * It retrieves prompt declarations from the client and logs their names.
@@ -517,7 +508,7 @@ export async function discoverPrompts(
   try {
     const response = await mcpClient.request(
       { method: 'prompts/list', params: {} },
-      PromptListResponseSchema,
+      ListPromptsResultSchema,
     );
 
     const prompts = response.prompts;

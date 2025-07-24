@@ -61,9 +61,11 @@ describe('mcp-client', () => {
         request: mockRequest,
       } as unknown as ClientLib.Client;
 
-      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {
-        // no-op
-      });
+      const consoleLogSpy = vi
+        .spyOn(console, 'debug')
+        .mockImplementation(() => {
+          // no-op
+        });
 
       await discoverPrompts('test-server', mockedClient);
 
@@ -86,9 +88,11 @@ describe('mcp-client', () => {
         request: mockRequest,
       } as unknown as ClientLib.Client;
 
-      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {
-        // no-op
-      });
+      const consoleLogSpy = vi
+        .spyOn(console, 'debug')
+        .mockImplementation(() => {
+          // no-op
+        });
 
       await discoverPrompts('test-server', mockedClient);
 

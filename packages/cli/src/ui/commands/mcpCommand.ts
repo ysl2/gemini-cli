@@ -243,7 +243,7 @@ const getMcpStatus = async (
           }
         }
       });
-    
+    }
     if (serverPrompts.length > 0) {
       if (serverTools.length > 0) {
         message += '\n';
@@ -269,12 +269,15 @@ const getMcpStatus = async (
 
     if (serverTools.length === 0 && serverPrompts.length === 0) {
       message += '  No tools or prompts available\n';
-    } else {
+    } else if (serverTools.length === 0) {
       message += '  No tools available';
       if (status === MCPServerStatus.DISCONNECTED && needsAuthHint) {
         message += ` ${COLOR_GREY}(type: "/mcp auth ${serverName}" to authenticate this server)${RESET_COLOR}`;
       }
       message += '\n';
+    } else if (status === MCPServerStatus.DISCONNECTED && needsAuthHint) {
+      // This case is for when serverTools.length > 0
+      message += `  ${COLOR_GREY}(type: "/mcp auth ${serverName}" to authenticate this server)${RESET_COLOR}\n`;
     }
     message += '\n';
   }

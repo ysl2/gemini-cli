@@ -31,6 +31,7 @@ vi.mock('@google/gemini-cli-core', async (importOriginal) => {
     ...actual,
     getMCPServerStatus: vi.fn(),
     getMCPDiscoveryState: vi.fn(),
+    getMCPServerPrompts: vi.fn(),
     MCPOAuthProvider: {
       authenticate: vi.fn(),
     },
