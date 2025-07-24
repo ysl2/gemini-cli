@@ -327,7 +327,7 @@ export class ShellTool extends BaseTool<ShellToolParams, ToolResult> {
       coreTools.includes(name),
     );
 
-    const commandsToValidate = command.split(/&&|\|\||\||;/).map(normalize);
+    const commandsToValidate = this.splitCommands(command).map(normalize);
 
     const blockedCommandsArr = [...blockedCommands];
 
