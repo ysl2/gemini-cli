@@ -117,8 +117,8 @@ Process Group PGID: Process group started or \`(none)\``,
     }
     return command
       .split(/&&|\|\||\||;|"&"|&|`/)
-      .map((c) => this.getCommandRoot(c)!)
-      .filter(Boolean);
+      .map((c) => this.getCommandRoot(c))
+      .filter((c): c is string => !!c);
   }
 
   stripShellWrapper(command: string): string {
