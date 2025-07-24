@@ -723,7 +723,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   // enough but not too large to make the terminal hard to use.
   const staticAreaMaxItemHeight = Math.max(terminalHeight * 4, 100);
   const placeholder = vimModeEnabled
-    ? "Vim mode enabled. Press 'i' for INSERT mode and 'Esc' for NORMAL mode."
+    ? "  Press 'i' for INSERT mode and 'Esc' for NORMAL mode."
     : '  Type your message or @path/to/file';
 
   return (

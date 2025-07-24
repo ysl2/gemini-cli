@@ -18,7 +18,7 @@ export type VimMode = 'NORMAL' | 'INSERT';
 interface VimModeContextType {
   vimEnabled: boolean;
   vimMode: VimMode;
-  toggleVimEnabled: () => void;
+  toggleVimEnabled: () => Promise<boolean>;
   setVimMode: (mode: VimMode) => void;
 }
 
@@ -55,6 +55,7 @@ export const VimModeProvider = ({
       setVimMode('NORMAL');
     }
     await settings.setValue(SettingScope.User, 'vimMode', newValue);
+    return newValue;
   }, [vimEnabled, settings]);
 
   const value = {
