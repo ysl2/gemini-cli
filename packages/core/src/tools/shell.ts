@@ -105,9 +105,9 @@ Process Group PGID: Process group started or \`(none)\``,
   getCommandRoot(command: string): string | undefined {
     return command
       .trim() // remove leading and trailing whitespace
-      .replace(/[{}()]/g, '') // remove all grouping operators
+      .replace(/[{}()`]/g, ' ') // remove all grouping operators
       .split(/[\s;&|]+/)[0] // split on any whitespace or separator or chaining operators and take first part
-      ?.split(/[/\\]/) // split on any path separators (or return undefined if previous line was undefined)
+      ?.split(/[\\/\\]/) // split on any path separators (or return undefined if previous line was undefined)
       .pop(); // take last part and return command root (or undefined if previous line was empty)
   }
 
@@ -116,7 +116,7 @@ Process Group PGID: Process group started or \`(none)\``,
       return [];
     }
     return command
-      .split(/&&|\|\||\||;|"&"|&/)
+      .split(/&&|\|\||\||;|"&"|&|`/)
       .map((c) => this.getCommandRoot(c)!)
       .filter(Boolean);
   }
@@ -146,11 +146,7 @@ Process Group PGID: Process group started or \`(none)\``,
    */
   isCommandAllowed(command: string): { allowed: boolean; reason?: string } {
     // 0. Disallow command substitution
-    if (
-      command.includes('$(') ||
-      command.includes('<(') ||
-      command.includes('>')
-    ) {
+    if (command.includes('$(') || command.includes('<(')) {
       return {
         allowed: false,
         reason:

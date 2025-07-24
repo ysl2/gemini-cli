@@ -622,6 +622,12 @@ describe('stripShellWrapper', () => {
 });
 
 describe('getCommandRoots', () => {
+  it('should handle commands with backticks', () => {
+    const shellTool = new ShellTool({} as Config);
+    const result = shellTool.getCommandRoots('echo `rm -rf /`');
+    expect(result).toEqual(['echo', 'rm']);
+  });
+
   it('should handle multiple commands with &', () => {
     const shellTool = new ShellTool({} as Config);
     const result = shellTool.getCommandRoots('echo "hello" & echo "world"');
