@@ -37,7 +37,6 @@ export class ShellTool extends BaseTool<ShellToolParams, ToolResult> {
   static Name: string = 'run_shell_command';
   private whitelist: Set<string> = new Set();
 
-
   constructor(private readonly config: Config) {
     super(
       ShellTool.Name,
@@ -128,12 +127,10 @@ Process Group PGID: Process group started or \`(none)\``,
     if (!command) {
       return [];
     }
-    
+
     // Use regex for extraction (reliable and fast)
     const regexResults = await Promise.all(
-      command
-        .split(/&&|\|\||\||;|"&"|&|`/)
-        .map((c) => this.getCommandRoot(c))
+      command.split(/&&|\|\||\||;|"&"|&|`/).map((c) => this.getCommandRoot(c)),
     );
     const filteredResults = regexResults.filter((c): c is string => !!c);
 
@@ -171,7 +168,9 @@ Process Group PGID: Process group started or \`(none)\``,
    * @param command The shell command string to validate
    * @returns An object with 'allowed' boolean and optional 'reason' string if not allowed
    */
-  async isCommandAllowed(command: string): Promise<{ allowed: boolean; reason?: string }> {
+  async isCommandAllowed(
+    command: string,
+  ): Promise<{ allowed: boolean; reason?: string }> {
     // 0. Disallow command substitution
     if (command.includes('$(') || command.includes('<(')) {
       return {
@@ -233,8 +232,10 @@ Process Group PGID: Process group started or \`(none)\``,
     );
 
     // Use regex for command extraction with sh-syntax validation
-    const commandsToValidate: string[] = command.split(/&&|\|\||\||;/).map(normalize);
-    
+    const commandsToValidate: string[] = command
+      .split(/&&|\|\||\||;/)
+      .map(normalize);
+
     // Optionally validate with sh-syntax for better error detection
     try {
       await parse(command);
@@ -289,7 +290,8 @@ Process Group PGID: Process group started or \`(none)\``,
       return 'Command cannot be empty.';
     }
     // Quick regex-based validation for command root
-    const command = params.command.trim()
+    const command = params.command
+      .trim()
       .replace(/[{}()`]/g, ' ')
       .split(/[\s;&|]+/)[0]
       ?.split(/[/\\]/)
@@ -312,7 +314,9 @@ Process Group PGID: Process group started or \`(none)\``,
     return null;
   }
 
-  async validateToolParamsAsync(params: ShellToolParams): Promise<string | null> {
+  async validateToolParamsAsync(
+    params: ShellToolParams,
+  ): Promise<string | null> {
     // First run synchronous validation
     const syncError = this.validateToolParams(params);
     if (syncError) {
@@ -331,7 +335,7 @@ Process Group PGID: Process group started or \`(none)\``,
       return commandCheck.reason;
     }
 
-    // Check command roots using AST parsing  
+    // Check command roots using AST parsing
     const commandRoots = await this.getCommandRoots(params.command);
     if (commandRoots.length === 0) {
       return 'Could not identify command root to obtain permission from user.';
