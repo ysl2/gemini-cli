@@ -98,6 +98,7 @@ describe('mcp-client', () => {
 
     it('should log an error if discovery fails', async () => {
       const testError = new Error('test error');
+      testError.message = 'test error';
       const mockRequest = vi.fn().mockRejectedValue(testError);
       const mockedClient = {
         request: mockRequest,
@@ -112,7 +113,9 @@ describe('mcp-client', () => {
       await discoverPrompts('test-server', mockedClient);
 
       expect(mockRequest).toHaveBeenCalledOnce();
-      expect(consoleErrorSpy).toHaveBeenCalledWith(testError);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        `Error discovering prompts from test-server: ${testError.message}`,
+      );
 
       consoleErrorSpy.mockRestore();
     });
