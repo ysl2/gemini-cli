@@ -371,7 +371,20 @@ describe('ShellTool', () => {
     const result = shellTool.isCommandAllowed('echo $(rm -rf /)');
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe(
-      'Command substitution using $() is not allowed for security reasons',
+      'Command substitution using $(), <(), or >() is not allowed for security reasons',
+    );
+  });
+
+  it('should block a command with process substitution using <()', async () => {
+    const config = {
+      getCoreTools: () => ['run_shell_command(diff)'],
+      getExcludeTools: () => [],
+    } as unknown as Config;
+    const shellTool = new ShellTool(config);
+    const result = shellTool.isCommandAllowed('diff <(ls) <(ls -a)');
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toBe(
+      'Command substitution using $(), <(), or >() is not allowed for security reasons',
     );
   });
 
@@ -426,6 +439,7 @@ describe('ShellTool Bug Reproduction', () => {
     const result = await shellTool.execute(
       { command: 'echo "hello"' },
       abortSignal,
+      () => {},
     );
 
     expect(result.returnDisplay).toBe('hello\n');
@@ -452,6 +466,7 @@ describe('ShellTool Bug Reproduction', () => {
     const result = await shellTool.execute(
       { command: 'echo "hello"' },
       abortSignal,
+      () => {},
     );
 
     expect(result.returnDisplay).toBe('hello\n');
@@ -477,7 +492,7 @@ describe('ShellTool Bug Reproduction', () => {
       .mockResolvedValue('summarized output');
 
     const abortSignal = new AbortController().signal;
-    await shellTool.execute({ command: 'echo "hello"' }, abortSignal);
+    await shellTool.execute({ command: 'echo "hello"' }, abortSignal, () => {});
 
     expect(summarizeSpy).toHaveBeenCalledWith(
       expect.any(String),
@@ -505,7 +520,7 @@ describe('ShellTool Bug Reproduction', () => {
       .mockResolvedValue('summarized output');
 
     const abortSignal = new AbortController().signal;
-    await shellTool.execute({ command: 'echo "hello"' }, abortSignal);
+    await shellTool.execute({ command: 'echo "hello"' }, abortSignal, () => {});
 
     expect(summarizeSpy).toHaveBeenCalledWith(
       expect.any(String),
@@ -513,5 +528,89 @@ describe('ShellTool Bug Reproduction', () => {
       expect.any(Object),
       undefined,
     );
+  });
+});
+
+describe('getCommandRoots', () => {
+  it('should return a single command', () => {
+    const shellTool = new ShellTool({} as Config);
+    const result = shellTool.getCommandRoots('ls -l');
+    expect(result).toEqual(['ls']);
+  });
+
+  it('should return multiple commands', () => {
+    const shellTool = new ShellTool({} as Config);
+    const result = shellTool.getCommandRoots('ls -l | grep "test"');
+    expect(result).toEqual(['ls', 'grep']);
+  });
+
+  it('should handle multiple commands with &&', () => {
+    const shellTool = new ShellTool({} as Config);
+    const result = shellTool.getCommandRoots('npm run build && npm test');
+    expect(result).toEqual(['npm', 'npm']);
+  });
+
+  it('should handle multiple commands with ;', () => {
+    const shellTool = new ShellTool({} as Config);
+    const result = shellTool.getCommandRoots('echo "hello"; echo "world"');
+    expect(result).toEqual(['echo', 'echo']);
+  });
+
+  it('should handle a mix of operators', () => {
+    const shellTool = new ShellTool({} as Config);
+    const result = shellTool.getCommandRoots(
+      'cat package.json | grep "version" && echo "done"',
+    );
+    expect(result).toEqual(['cat', 'grep', 'echo']);
+  });
+
+  it('should handle commands with paths', () => {
+    const shellTool = new ShellTool({} as Config);
+    const result = shellTool.getCommandRoots('/usr/local/bin/node script.js');
+    expect(result).toEqual(['node']);
+  });
+
+  it('should return an empty array for an empty string', () => {
+    const shellTool = new ShellTool({} as Config);
+    const result = shellTool.getCommandRoots('');
+    expect(result).toEqual([]);
+  });
+});
+
+describe('stripShellWrapper', () => {
+  it('should strip sh -c from the beginning of the command', () => {
+    const shellTool = new ShellTool({} as Config);
+    const result = shellTool.stripShellWrapper('sh -c "ls -l"');
+    expect(result).toEqual('ls -l');
+  });
+
+  it('should strip bash -c from the beginning of the command', () => {
+    const shellTool = new ShellTool({} as Config);
+    const result = shellTool.stripShellWrapper('bash -c "ls -l"');
+    expect(result).toEqual('ls -l');
+  });
+
+  it('should strip zsh -c from the beginning of the command', () => {
+    const shellTool = new ShellTool({} as Config);
+    const result = shellTool.stripShellWrapper('zsh -c "ls -l"');
+    expect(result).toEqual('ls -l');
+  });
+
+  it('should not strip anything if the command does not start with a shell wrapper', () => {
+    const shellTool = new ShellTool({} as Config);
+    const result = shellTool.stripShellWrapper('ls -l');
+    expect(result).toEqual('ls -l');
+  });
+
+  it('should handle extra whitespace', () => {
+    const shellTool = new ShellTool({} as Config);
+    const result = shellTool.stripShellWrapper('  sh   -c   "ls -l"  ');
+    expect(result).toEqual('ls -l');
+  });
+
+  it('should handle commands without quotes', () => {
+    const shellTool = new ShellTool({} as Config);
+    const result = shellTool.stripShellWrapper('sh -c ls -l');
+    expect(result).toEqual('ls -l');
   });
 });

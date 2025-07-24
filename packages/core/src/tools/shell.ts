@@ -111,6 +111,32 @@ Process Group PGID: Process group started or \`(none)\``,
       .pop(); // take last part and return command root (or undefined if previous line was empty)
   }
 
+  getCommandRoots(command: string): string[] {
+    if (!command) {
+      return [];
+    }
+    return command
+      .split(/&&|\|\||\||;/)
+      .map((c) => this.getCommandRoot(c)!)
+      .filter(Boolean);
+  }
+
+  stripShellWrapper(command: string): string {
+    const pattern = /^\s*(?:sh|bash|zsh)\s+-c\s+/;
+    const match = command.match(pattern);
+    if (match) {
+      let newCommand = command.substring(match[0].length).trim();
+      if (
+        (newCommand.startsWith('"') && newCommand.endsWith('"')) ||
+        (newCommand.startsWith("'") && newCommand.endsWith("'"))
+      ) {
+        newCommand = newCommand.substring(1, newCommand.length - 1);
+      }
+      return newCommand;
+    }
+    return command.trim();
+  }
+
   /**
    * Determines whether a given shell command is allowed to execute based on
    * the tool's configuration including allowlists and blocklists.
@@ -120,11 +146,11 @@ Process Group PGID: Process group started or \`(none)\``,
    */
   isCommandAllowed(command: string): { allowed: boolean; reason?: string } {
     // 0. Disallow command substitution
-    if (command.includes('$(')) {
+    if (command.includes('$(') || command.includes('<(') || command.includes('>(')) {
       return {
         allowed: false,
         reason:
-          'Command substitution using $() is not allowed for security reasons',
+          'Command substitution using $(), <(), or >() is not allowed for security reasons',
       };
     }
 
@@ -234,7 +260,7 @@ Process Group PGID: Process group started or \`(none)\``,
     if (!params.command.trim()) {
       return 'Command cannot be empty.';
     }
-    if (!this.getCommandRoot(params.command)) {
+    if (this.getCommandRoots(params.command).length === 0) {
       return 'Could not identify command root to obtain permission from user.';
     }
     if (params.directory) {
@@ -259,18 +285,25 @@ Process Group PGID: Process group started or \`(none)\``,
     if (this.validateToolParams(params)) {
       return false; // skip confirmation, execute call will fail immediately
     }
-    const rootCommand = this.getCommandRoot(params.command)!; // must be non-empty string post-validation
-    if (this.whitelist.has(rootCommand)) {
+
+    const command = this.stripShellWrapper(params.command);
+    const rootCommands = this.getCommandRoots(command);
+    const commandsToConfirm = rootCommands.filter(
+      (command) => !this.whitelist.has(command),
+    );
+
+    if (commandsToConfirm.length === 0) {
       return false; // already approved and whitelisted
     }
+
     const confirmationDetails: ToolExecuteConfirmationDetails = {
       type: 'exec',
       title: 'Confirm Shell Command',
       command: params.command,
-      rootCommand,
+      rootCommand: commandsToConfirm.join(', '),
       onConfirm: async (outcome: ToolConfirmationOutcome) => {
         if (outcome === ToolConfirmationOutcome.ProceedAlways) {
-          this.whitelist.add(rootCommand);
+          commandsToConfirm.forEach((command) => this.whitelist.add(command));
         }
       },
     };
@@ -279,21 +312,22 @@ Process Group PGID: Process group started or \`(none)\``,
 
   async execute(
     params: ShellToolParams,
-    abortSignal: AbortSignal,
-    updateOutput?: (chunk: string) => void,
+    signal: AbortSignal,
+    updateOutput: (output: string) => void,
   ): Promise<ToolResult> {
-    const validationError = this.validateToolParams(params);
+    const strippedCommand = this.stripShellWrapper(params.command);
+    const validationError = this.validateToolParams({
+      ...params,
+      command: strippedCommand,
+    });
     if (validationError) {
       return {
-        llmContent: [
-          `Command rejected: ${params.command}`,
-          `Reason: ${validationError}`,
-        ].join('\n'),
-        returnDisplay: `Error: ${validationError}`,
+        llmContent: validationError,
+        returnDisplay: validationError,
       };
     }
 
-    if (abortSignal.aborted) {
+    if (signal.aborted) {
       return {
         llmContent: 'Command was cancelled by user before it could start.',
         returnDisplay: 'Command cancelled by user.',
@@ -307,23 +341,23 @@ Process Group PGID: Process group started or \`(none)\``,
     const tempFilePath = path.join(os.tmpdir(), tempFileName);
 
     // pgrep is not available on Windows, so we can't get background PIDs
-    const command = isWindows
-      ? params.command
+    const commandToExecute = isWindows
+      ? strippedCommand
       : (() => {
           // wrap command to append subprocess pids (via pgrep) to temporary file
-          let command = params.command.trim();
+          let command = strippedCommand.trim();
           if (!command.endsWith('&')) command += ';';
           return `{ ${command} }; __code=$?; pgrep -g 0 >${tempFilePath} 2>&1; exit $__code;`;
         })();
 
     // spawn command in specified directory (or project root if not specified)
     const shell = isWindows
-      ? spawn('cmd.exe', ['/c', command], {
+      ? spawn('cmd.exe', ['/c', commandToExecute], {
           stdio: ['ignore', 'pipe', 'pipe'],
           // detached: true, // ensure subprocess starts its own process group (esp. in Linux)
           cwd: path.resolve(this.config.getTargetDir(), params.directory || ''),
         })
-      : spawn('bash', ['-c', command], {
+      : spawn('bash', ['-c', commandToExecute], {
           stdio: ['ignore', 'pipe', 'pipe'],
           detached: true, // ensure subprocess starts its own process group (esp. in Linux)
           cwd: path.resolve(this.config.getTargetDir(), params.directory || ''),
@@ -369,7 +403,7 @@ Process Group PGID: Process group started or \`(none)\``,
     shell.on('error', (err: Error) => {
       error = err;
       // remove wrapper from user's command in error message
-      error.message = error.message.replace(command, params.command);
+      error.message = error.message.replace(commandToExecute, params.command);
     });
 
     let code: number | null = null;
@@ -411,13 +445,13 @@ Process Group PGID: Process group started or \`(none)\``,
         }
       }
     };
-    abortSignal.addEventListener('abort', abortHandler);
+    signal.addEventListener('abort', abortHandler);
 
     // wait for the shell to exit
     try {
       await new Promise((resolve) => shell.on('exit', resolve));
     } finally {
-      abortSignal.removeEventListener('abort', abortHandler);
+      signal.removeEventListener('abort', abortHandler);
     }
 
     // parse pids (pgrep output) from temporary file and remove it
@@ -440,14 +474,14 @@ Process Group PGID: Process group started or \`(none)\``,
         }
         fs.unlinkSync(tempFilePath);
       } else {
-        if (!abortSignal.aborted) {
+        if (!signal.aborted) {
           console.error('missing pgrep output');
         }
       }
     }
 
     let llmContent = '';
-    if (abortSignal.aborted) {
+    if (signal.aborted) {
       llmContent = 'Command was cancelled by user before it could complete.';
       if (output.trim()) {
         llmContent += ` Below is the output (on stdout and stderr) before it was cancelled:\n${output}`;
@@ -476,7 +510,7 @@ Process Group PGID: Process group started or \`(none)\``,
         returnDisplayMessage = output;
       } else {
         // Output is empty, let's provide a reason if the command failed or was cancelled
-        if (abortSignal.aborted) {
+        if (signal.aborted) {
           returnDisplayMessage = 'Command cancelled by user.';
         } else if (processSignal) {
           returnDisplayMessage = `Command terminated by signal: ${processSignal}`;
@@ -496,7 +530,7 @@ Process Group PGID: Process group started or \`(none)\``,
       const summary = await summarizeToolOutput(
         llmContent,
         this.config.getGeminiClient(),
-        abortSignal,
+        signal,
         summarizeConfig[this.name].tokenBudget,
       );
       return {
