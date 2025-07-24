@@ -740,7 +740,9 @@ describe('ShellTool command substitution', () => {
 
   it('should allow a command with markdown content using proper quoting', () => {
     // Simple test with safe content in single quotes
-    const result = shellTool.isCommandAllowed("gh pr comment 4795 --body 'This is safe markdown content'");
+    const result = shellTool.isCommandAllowed(
+      "gh pr comment 4795 --body 'This is safe markdown content'",
+    );
     expect(result.allowed).toBe(true);
   });
 });

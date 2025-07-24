@@ -164,12 +164,17 @@ export class ShellTool extends BaseTool<ShellToolParams, ToolResult> {
         if (char === '$' && nextChar === '(') {
           return true;
         }
-        
+
         // <(...) process substitution - works unquoted only (not in double quotes)
-        if (char === '<' && nextChar === '(' && !inDoubleQuotes && !inBackticks) {
+        if (
+          char === '<' &&
+          nextChar === '(' &&
+          !inDoubleQuotes &&
+          !inBackticks
+        ) {
           return true;
         }
-        
+
         // Backtick command substitution - check for opening backtick
         // (We track the state above, so this catches the start of backtick substitution)
         if (char === '`' && !inBackticks) {
