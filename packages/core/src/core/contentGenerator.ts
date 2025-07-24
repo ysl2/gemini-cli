@@ -16,6 +16,7 @@ import {
 import { createCodeAssistContentGenerator } from '../code_assist/codeAssist.js';
 import { DEFAULT_GEMINI_MODEL } from '../config/models.js';
 import { getEffectiveModel } from './modelCheck.js';
+import { OpenAIConfig, OpenAIProxy } from '../openai/openaiProxy.js';
 
 /**
  * Interface abstracting the core functionalities for generating content and counting tokens.
@@ -38,6 +39,7 @@ export enum AuthType {
   LOGIN_WITH_GOOGLE_PERSONAL = 'oauth-personal',
   USE_GEMINI = 'gemini-api-key',
   USE_VERTEX_AI = 'vertex-ai',
+  USE_OPENAI = 'openai-like',
 }
 
 export type ContentGeneratorConfig = {
@@ -54,6 +56,7 @@ export async function createContentGeneratorConfig(
 ): Promise<ContentGeneratorConfig> {
   const geminiApiKey = process.env.GEMINI_API_KEY;
   const googleApiKey = process.env.GOOGLE_API_KEY;
+  const openaiApiKey = process.env.OPENAI_API_KEY;
   const googleCloudProject = process.env.GOOGLE_CLOUD_PROJECT;
   const googleCloudLocation = process.env.GOOGLE_CLOUD_LOCATION;
 
@@ -77,6 +80,11 @@ export async function createContentGeneratorConfig(
       contentGeneratorConfig.model,
     );
 
+    return contentGeneratorConfig;
+  }
+
+  if (authType === AuthType.USE_OPENAI && openaiApiKey) {
+    contentGeneratorConfig.apiKey = openaiApiKey;
     return contentGeneratorConfig;
   }
 
@@ -123,6 +131,16 @@ export async function createContentGenerator(
     });
 
     return googleGenAI.models;
+  }
+
+  if (config.authType === AuthType.USE_OPENAI) {
+    const baseURL = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+    const openaiConfig: OpenAIConfig = {
+      model: config.model,
+      apiKey: config.apiKey || '',
+      baseURL,
+    };
+    return new OpenAIProxy(openaiConfig, httpOptions);
   }
 
   throw new Error(
