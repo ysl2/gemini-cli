@@ -227,7 +227,6 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
     setCorgiMode((prev) => !prev);
   }, []);
 
-
   const performMemoryRefresh = useCallback(async () => {
     addItem(
       {
