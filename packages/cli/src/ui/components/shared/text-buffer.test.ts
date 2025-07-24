@@ -1343,17 +1343,17 @@ describe('offsetToLogicalPos', () => {
 describe('logicalPosToOffset', () => {
   it('should convert row/col position to offset correctly', () => {
     const lines = ['hello', 'world', '123'];
-    
+
     // Line 0: "hello" (5 chars)
     expect(logicalPosToOffset(lines, 0, 0)).toBe(0); // Start of 'hello'
     expect(logicalPosToOffset(lines, 0, 3)).toBe(3); // 'l' in 'hello'
     expect(logicalPosToOffset(lines, 0, 5)).toBe(5); // End of 'hello'
-    
-    // Line 1: "world" (5 chars), offset starts at 6 (5 + 1 for newline)  
+
+    // Line 1: "world" (5 chars), offset starts at 6 (5 + 1 for newline)
     expect(logicalPosToOffset(lines, 1, 0)).toBe(6); // Start of 'world'
     expect(logicalPosToOffset(lines, 1, 2)).toBe(8); // 'r' in 'world'
     expect(logicalPosToOffset(lines, 1, 5)).toBe(11); // End of 'world'
-    
+
     // Line 2: "123" (3 chars), offset starts at 12 (5 + 1 + 5 + 1)
     expect(logicalPosToOffset(lines, 2, 0)).toBe(12); // Start of '123'
     expect(logicalPosToOffset(lines, 2, 1)).toBe(13); // '2' in '123'
@@ -1362,7 +1362,7 @@ describe('logicalPosToOffset', () => {
 
   it('should handle empty lines', () => {
     const lines = ['a', '', 'c'];
-    
+
     expect(logicalPosToOffset(lines, 0, 0)).toBe(0); // 'a'
     expect(logicalPosToOffset(lines, 0, 1)).toBe(1); // End of 'a'
     expect(logicalPosToOffset(lines, 1, 0)).toBe(2); // Empty line
@@ -1372,14 +1372,14 @@ describe('logicalPosToOffset', () => {
 
   it('should handle single empty line', () => {
     const lines = [''];
-    
+
     expect(logicalPosToOffset(lines, 0, 0)).toBe(0);
   });
 
   it('should be inverse of offsetToLogicalPos', () => {
     const lines = ['hello', 'world', '123'];
     const text = lines.join('\n');
-    
+
     // Test round-trip conversion
     for (let offset = 0; offset <= text.length; offset++) {
       const [row, col] = offsetToLogicalPos(text, offset);
@@ -1390,10 +1390,10 @@ describe('logicalPosToOffset', () => {
 
   it('should handle out-of-bounds positions', () => {
     const lines = ['hello'];
-    
+
     // Beyond end of line
     expect(logicalPosToOffset(lines, 0, 10)).toBe(5); // Clamps to end of line
-    
+
     // Beyond array bounds - should clamp to the last line
     expect(logicalPosToOffset(lines, 5, 0)).toBe(0); // Clamps to start of last line (row 0)
     expect(logicalPosToOffset(lines, 5, 10)).toBe(5); // Clamps to end of last line

@@ -34,7 +34,10 @@ function isWordChar(ch: string | undefined): boolean {
 }
 
 // Vim-specific word boundary functions
-export const findNextWordStart = (text: string, currentOffset: number): number => {
+export const findNextWordStart = (
+  text: string,
+  currentOffset: number,
+): number => {
   let i = currentOffset;
 
   if (i >= text.length) return i;
@@ -49,11 +52,7 @@ export const findNextWordStart = (text: string, currentOffset: number): number =
     }
   } else if (!/\s/.test(currentChar)) {
     // Skip current non-word, non-whitespace characters (like "/", ".", etc.)
-    while (
-      i < text.length &&
-      !/\w/.test(text[i]) &&
-      !/\s/.test(text[i])
-    ) {
+    while (i < text.length && !/\w/.test(text[i]) && !/\s/.test(text[i])) {
       i++;
     }
   }
@@ -78,7 +77,10 @@ export const findNextWordStart = (text: string, currentOffset: number): number =
   return i;
 };
 
-export const findPrevWordStart = (text: string, currentOffset: number): number => {
+export const findPrevWordStart = (
+  text: string,
+  currentOffset: number,
+): number => {
   let i = currentOffset;
 
   // If at beginning of text, return current position
@@ -444,20 +446,20 @@ export function logicalPosToOffset(
   col: number,
 ): number {
   let offset = 0;
-  
+
   // Clamp row to valid range
   const actualRow = Math.min(row, lines.length - 1);
-  
+
   // Add lengths of all lines before the target row
   for (let i = 0; i < actualRow; i++) {
     offset += cpLen(lines[i]) + 1; // +1 for newline
   }
-  
+
   // Add column offset within the target row
   if (actualRow >= 0 && actualRow < lines.length) {
     offset += Math.min(col, cpLen(lines[actualRow]));
   }
-  
+
   return offset;
 }
 

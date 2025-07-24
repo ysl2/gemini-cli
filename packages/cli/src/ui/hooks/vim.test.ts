@@ -10,7 +10,6 @@ import React from 'react';
 import { useVim } from './vim.js';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
 import { textBufferReducer } from '../components/shared/text-buffer.js';
-import type { LoadedSettings } from '../../config/settings.js';
 
 // Mock the VimModeContext
 const mockVimContext = {
@@ -760,7 +759,7 @@ describe('useVim hook', () => {
 
         const result = textBufferReducer(initialState, {
           type: 'vim_delete_word_forward',
-          payload: { count: 1 }
+          payload: { count: 1 },
         });
 
         // Should delete "hello " (word + space), leaving "world test"
@@ -783,7 +782,7 @@ describe('useVim hook', () => {
 
         const result = textBufferReducer(initialState, {
           type: 'vim_delete_word_forward',
-          payload: { count: 1 }
+          payload: { count: 1 },
         });
 
         // Should delete "llo " (rest of word + space), leaving "he world test"
@@ -806,7 +805,7 @@ describe('useVim hook', () => {
 
         const result = textBufferReducer(initialState, {
           type: 'vim_delete_word_forward',
-          payload: { count: 1 }
+          payload: { count: 1 },
         });
 
         // Should delete "world" (no trailing space at end), leaving "hello "
@@ -814,7 +813,6 @@ describe('useVim hook', () => {
         expect(result.cursorRow).toBe(0);
         expect(result.cursorCol).toBe(6);
       });
-
 
       it('should delete multiple words with count', () => {
         const testBuffer = createMockBuffer('one two three four', [0, 0]);
@@ -1006,7 +1004,10 @@ describe('useVim hook', () => {
       });
 
       it('should change multiple lines with count', () => {
-        const testBuffer = createMockBuffer('line1\nline2\nline3\nline4', [1, 0]);
+        const testBuffer = createMockBuffer(
+          'line1\nline2\nline3\nline4',
+          [1, 0],
+        );
         const { result } = renderVimHook(testBuffer);
 
         act(() => {
@@ -1221,7 +1222,7 @@ describe('useVim hook', () => {
 
         const result = textBufferReducer(initialState, {
           type: 'vim_delete_word_end',
-          payload: { count: 1 }
+          payload: { count: 1 },
         });
 
         // Should delete "ello" (from cursor to end of word), leaving "h world test"
@@ -1244,7 +1245,7 @@ describe('useVim hook', () => {
 
         const result = textBufferReducer(initialState, {
           type: 'vim_delete_word_end',
-          payload: { count: 2 }
+          payload: { count: 2 },
         });
 
         // Should delete "ello world" (to end of second word), leaving "h test more"
@@ -1269,7 +1270,7 @@ describe('useVim hook', () => {
 
         const result = textBufferReducer(initialState, {
           type: 'vim_delete_word_backward',
-          payload: { count: 1 }
+          payload: { count: 1 },
         });
 
         // Should delete "world" (previous word only), leaving "hello  test"
@@ -1292,7 +1293,7 @@ describe('useVim hook', () => {
 
         const result = textBufferReducer(initialState, {
           type: 'vim_delete_word_backward',
-          payload: { count: 2 }
+          payload: { count: 2 },
         });
 
         // Should delete "world test " (two words backward), leaving "hello more"
@@ -1317,7 +1318,7 @@ describe('useVim hook', () => {
 
         const result = textBufferReducer(initialState, {
           type: 'vim_change_word_forward',
-          payload: { count: 1 }
+          payload: { count: 1 },
         });
 
         // Should delete "hello " (word + space), leaving "world test"
@@ -1340,7 +1341,7 @@ describe('useVim hook', () => {
 
         const result = textBufferReducer(initialState, {
           type: 'vim_change_word_forward',
-          payload: { count: 2 }
+          payload: { count: 2 },
         });
 
         // Should delete "hello world " (two words), leaving "test more"
@@ -1365,7 +1366,7 @@ describe('useVim hook', () => {
 
         const result = textBufferReducer(initialState, {
           type: 'vim_change_word_end',
-          payload: { count: 1 }
+          payload: { count: 1 },
         });
 
         // Should delete "ello" (from cursor to end of word), leaving "h world test"
@@ -1388,7 +1389,7 @@ describe('useVim hook', () => {
 
         const result = textBufferReducer(initialState, {
           type: 'vim_change_word_end',
-          payload: { count: 2 }
+          payload: { count: 2 },
         });
 
         // Should delete "ello world" (to end of second word), leaving "h test"
@@ -1413,7 +1414,7 @@ describe('useVim hook', () => {
 
         const result = textBufferReducer(initialState, {
           type: 'vim_change_word_backward',
-          payload: { count: 1 }
+          payload: { count: 1 },
         });
 
         // Should delete "world" (previous word only), leaving "hello  test"
@@ -1438,14 +1439,13 @@ describe('useVim hook', () => {
 
         const result = textBufferReducer(initialState, {
           type: 'vim_change_line',
-          payload: { count: 1 }
+          payload: { count: 1 },
         });
 
         expect(result.lines).toEqual(['']);
         expect(result.cursorRow).toBe(0);
         expect(result.cursorCol).toBe(0);
       });
-
     });
 
     describe('dd (delete line)', () => {
@@ -1463,7 +1463,7 @@ describe('useVim hook', () => {
 
         const result = textBufferReducer(initialState, {
           type: 'vim_delete_line',
-          payload: { count: 1 }
+          payload: { count: 1 },
         });
 
         expect(result.lines).toEqual(['line1', 'line3']);
@@ -1485,7 +1485,7 @@ describe('useVim hook', () => {
 
         const result = textBufferReducer(initialState, {
           type: 'vim_delete_line',
-          payload: { count: 2 }
+          payload: { count: 2 },
         });
 
         // Should delete lines 1 and 2
@@ -1508,7 +1508,7 @@ describe('useVim hook', () => {
 
         const result = textBufferReducer(initialState, {
           type: 'vim_delete_line',
-          payload: { count: 1 }
+          payload: { count: 1 },
         });
 
         // Should leave an empty line when deleting the only line
@@ -1532,7 +1532,7 @@ describe('useVim hook', () => {
         };
 
         const result = textBufferReducer(initialState, {
-          type: 'vim_delete_to_end_of_line'
+          type: 'vim_delete_to_end_of_line',
         });
 
         // Should delete "world test", leaving "hello "
@@ -1554,7 +1554,7 @@ describe('useVim hook', () => {
         };
 
         const result = textBufferReducer(initialState, {
-          type: 'vim_delete_to_end_of_line'
+          type: 'vim_delete_to_end_of_line',
         });
 
         // Should not change anything when at end of line
@@ -1578,7 +1578,7 @@ describe('useVim hook', () => {
         };
 
         const result = textBufferReducer(initialState, {
-          type: 'vim_change_to_end_of_line'
+          type: 'vim_change_to_end_of_line',
         });
 
         // Should delete "world test", leaving "hello "
@@ -1600,7 +1600,7 @@ describe('useVim hook', () => {
         };
 
         const result = textBufferReducer(initialState, {
-          type: 'vim_change_to_end_of_line'
+          type: 'vim_change_to_end_of_line',
         });
 
         // Should delete entire line content

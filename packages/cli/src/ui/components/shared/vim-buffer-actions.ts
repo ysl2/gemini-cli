@@ -1,5 +1,12 @@
-import { TextBufferState, TextBufferAction } from './text-buffer.js';
+/**
+ * @license
+ * Copyright 2025 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import {
+  TextBufferState,
+  TextBufferAction,
   findNextWordStart,
   findPrevWordStart,
   findWordEnd,
@@ -9,7 +16,7 @@ import {
   replaceRangeInternal,
   pushUndo,
 } from './text-buffer.js';
-import { cpLen, cpSlice } from '../../utils/textUtils.js';
+import { cpLen } from '../../utils/textUtils.js';
 
 export type VimAction = Extract<
   TextBufferAction,
@@ -36,11 +43,7 @@ export function handleVimAction(
   switch (action.type) {
     case 'vim_delete_word_forward': {
       const { count } = action.payload;
-      const currentOffset = getOffsetFromPosition(
-        cursorRow,
-        cursorCol,
-        lines,
-      );
+      const currentOffset = getOffsetFromPosition(cursorRow, cursorCol, lines);
 
       let endOffset = currentOffset;
       let searchOffset = currentOffset;
@@ -79,11 +82,7 @@ export function handleVimAction(
 
     case 'vim_delete_word_backward': {
       const { count } = action.payload;
-      const currentOffset = getOffsetFromPosition(
-        cursorRow,
-        cursorCol,
-        lines,
-      );
+      const currentOffset = getOffsetFromPosition(cursorRow, cursorCol, lines);
 
       let startOffset = currentOffset;
       let searchOffset = currentOffset;
@@ -121,11 +120,7 @@ export function handleVimAction(
 
     case 'vim_delete_word_end': {
       const { count } = action.payload;
-      const currentOffset = getOffsetFromPosition(
-        cursorRow,
-        cursorCol,
-        lines,
-      );
+      const currentOffset = getOffsetFromPosition(cursorRow, cursorCol, lines);
 
       let offset = currentOffset;
       let endOffset = currentOffset;
@@ -170,11 +165,7 @@ export function handleVimAction(
 
     case 'vim_change_word_forward': {
       const { count } = action.payload;
-      const currentOffset = getOffsetFromPosition(
-        cursorRow,
-        cursorCol,
-        lines,
-      );
+      const currentOffset = getOffsetFromPosition(cursorRow, cursorCol, lines);
 
       let searchOffset = currentOffset;
       let endOffset = currentOffset;
@@ -213,11 +204,7 @@ export function handleVimAction(
 
     case 'vim_change_word_backward': {
       const { count } = action.payload;
-      const currentOffset = getOffsetFromPosition(
-        cursorRow,
-        cursorCol,
-        lines,
-      );
+      const currentOffset = getOffsetFromPosition(cursorRow, cursorCol, lines);
 
       let startOffset = currentOffset;
       let searchOffset = currentOffset;
@@ -253,11 +240,7 @@ export function handleVimAction(
 
     case 'vim_change_word_end': {
       const { count } = action.payload;
-      const currentOffset = getOffsetFromPosition(
-        cursorRow,
-        cursorCol,
-        lines,
-      );
+      const currentOffset = getOffsetFromPosition(cursorRow, cursorCol, lines);
 
       let offset = currentOffset;
       let endOffset = currentOffset;
@@ -398,12 +381,13 @@ export function handleVimAction(
 
     case 'vim_change_movement': {
       const { movement, count } = action.payload;
-      let endRow = cursorRow;
-      let endCol = cursorCol;
+      const _endRow = cursorRow;
+      const _endCol = cursorCol;
       const totalLines = lines.length;
 
       switch (movement) {
-        case 'h': // Left
+        case 'h': {
+          // Left
           // Change N characters to the left
           const startCol = Math.max(0, cursorCol - count);
           return replaceRangeInternal(
@@ -414,8 +398,10 @@ export function handleVimAction(
             cursorCol,
             '',
           );
+        }
 
-        case 'j': // Down
+        case 'j': {
+          // Down
           const linesToChange = Math.min(count, totalLines - cursorRow);
           if (linesToChange > 0) {
             if (totalLines === 1) {
@@ -448,8 +434,10 @@ export function handleVimAction(
             }
           }
           return state;
+        }
 
-        case 'k': // Up
+        case 'k': {
+          // Up
           const upLines = Math.min(count, cursorRow + 1);
           if (upLines > 0) {
             if (state.lines.length === 1) {
@@ -476,7 +464,11 @@ export function handleVimAction(
                 startCol,
                 endRow,
                 endCol,
-              } = getPositionFromOffsets(startOffset, endOffset, nextState.lines);
+              } = getPositionFromOffsets(
+                startOffset,
+                endOffset,
+                nextState.lines,
+              );
               const resultState = replaceRangeInternal(
                 nextState,
                 newStartRow,
@@ -493,29 +485,30 @@ export function handleVimAction(
             }
           }
           return state;
+        }
 
-        case 'l': // Right
+        case 'l': {
+          // Right
           // Change N characters to the right
           return replaceRangeInternal(
             pushUndo(state),
             cursorRow,
             cursorCol,
             cursorRow,
-            Math.min(
-              cpLen(lines[cursorRow] || ''),
-              cursorCol + count,
-            ),
+            Math.min(cpLen(lines[cursorRow] || ''), cursorCol + count),
             '',
           );
+        }
 
         default:
           return state;
       }
     }
 
-    default:
+    default: {
       // This should never happen if TypeScript is working correctly
       const _exhaustiveCheck: never = action;
       return state;
+    }
   }
 }

@@ -7,7 +7,12 @@
 import { useCallback, useReducer, useEffect } from 'react';
 import type { Key } from './useKeypress.js';
 import type { TextBuffer } from '../components/shared/text-buffer.js';
-import { findNextWordStart, findPrevWordStart, findWordEnd, logicalPosToOffset } from '../components/shared/text-buffer.js';
+import {
+  findNextWordStart,
+  findPrevWordStart,
+  findWordEnd,
+  logicalPosToOffset,
+} from '../components/shared/text-buffer.js';
 import { useVimMode } from '../contexts/VimModeContext.js';
 
 export type VimMode = 'NORMAL' | 'INSERT';
@@ -15,9 +20,7 @@ export type VimMode = 'NORMAL' | 'INSERT';
 // Constants
 const DIGIT_MULTIPLIER = 10;
 const DEFAULT_COUNT = 1;
-const LINE_SEPARATOR = '\n';
 const WHITESPACE_CHARS = /\s/;
-const WORD_CHARS = /\w/;
 const DIGIT_1_TO_9 = /^[1-9]$/;
 
 // Command types
@@ -253,10 +256,7 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
       }
       return true;
     },
-    [
-      buffer,
-      updateMode,
-    ],
+    [buffer, updateMode],
   );
 
   const handleInput = useCallback(
@@ -351,19 +351,21 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
         const currentOffset = getCurrentOffset();
 
         // Helper function to handle change movement commands (ch, cj, ck, cl)
-        const handleChangeMovement = (movement: 'h' | 'j' | 'k' | 'l'): boolean => {
+        const handleChangeMovement = (
+          movement: 'h' | 'j' | 'k' | 'l',
+        ): boolean => {
           const count = getCurrentCount();
           dispatch({ type: 'CLEAR_COUNT' });
           buffer.vimChangeMovement(movement, count);
           updateMode('INSERT');
-          
+
           const cmdTypeMap = {
             h: CMD_TYPES.CHANGE_MOVEMENT.LEFT,
             j: CMD_TYPES.CHANGE_MOVEMENT.DOWN,
             k: CMD_TYPES.CHANGE_MOVEMENT.UP,
             l: CMD_TYPES.CHANGE_MOVEMENT.RIGHT,
           };
-          
+
           dispatch({
             type: 'SET_LAST_COMMAND',
             command: { type: cmdTypeMap[movement], count },
@@ -378,7 +380,7 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
           motion: 'w' | 'b' | 'e',
         ): boolean => {
           const count = getCurrentCount();
-          
+
           const commandMap = {
             d: {
               w: CMD_TYPES.DELETE_WORD_FORWARD,
@@ -762,7 +764,7 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
               if (state.pendingOperator === 'c') {
                 return handleChangeMovement('h');
               }
-              
+
               // Normal left movement (same as 'h')
               for (let i = 0; i < repeatCount; i++) {
                 const currentRow = buffer.cursor[0];
@@ -778,13 +780,13 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
               dispatch({ type: 'CLEAR_COUNT' });
               return true;
             }
-            
+
             if (normalizedKey.name === 'down') {
               // Down arrow - same as 'j'
               if (state.pendingOperator === 'c') {
                 return handleChangeMovement('j');
               }
-              
+
               // Normal down movement (same as 'j')
               for (let i = 0; i < repeatCount; i++) {
                 buffer.move('down');
@@ -792,13 +794,13 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
               dispatch({ type: 'CLEAR_COUNT' });
               return true;
             }
-            
+
             if (normalizedKey.name === 'up') {
               // Up arrow - same as 'k'
               if (state.pendingOperator === 'c') {
                 return handleChangeMovement('k');
               }
-              
+
               // Normal up movement (same as 'k')
               for (let i = 0; i < repeatCount; i++) {
                 buffer.move('up');
@@ -806,13 +808,13 @@ export function useVim(buffer: TextBuffer, onSubmit?: (value: string) => void) {
               dispatch({ type: 'CLEAR_COUNT' });
               return true;
             }
-            
+
             if (normalizedKey.name === 'right') {
               // Right arrow - same as 'l'
               if (state.pendingOperator === 'c') {
                 return handleChangeMovement('l');
               }
-              
+
               // Normal right movement (same as 'l')
               for (let i = 0; i < repeatCount; i++) {
                 const currentRow = buffer.cursor[0];

@@ -389,7 +389,7 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
   const { rows: terminalHeight, columns: terminalWidth } = useTerminalSize();
   const { stdin, setRawMode } = useStdin();
   const isInitialMount = useRef(true);
-  
+
   const widthFraction = 0.9;
   const inputWidth = Math.max(
     20,
