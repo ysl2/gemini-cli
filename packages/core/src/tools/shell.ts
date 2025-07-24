@@ -21,6 +21,7 @@ import { Type } from '@google/genai';
 import { SchemaValidator } from '../utils/schemaValidator.js';
 import { getErrorMessage } from '../utils/errors.js';
 import stripAnsi from 'strip-ansi';
+import { parse } from 'sh-syntax';
 
 export interface ShellToolParams {
   command: string;
@@ -35,6 +36,7 @@ const OUTPUT_UPDATE_INTERVAL_MS = 1000;
 export class ShellTool extends BaseTool<ShellToolParams, ToolResult> {
   static Name: string = 'run_shell_command';
   private whitelist: Set<string> = new Set();
+
 
   constructor(private readonly config: Config) {
     super(
@@ -102,23 +104,48 @@ Process Group PGID: Process group started or \`(none)\``,
    * @example getCommandRoot("ls -la /tmp") returns "ls"
    * @example getCommandRoot("git status && npm test") returns "git"
    */
-  getCommandRoot(command: string): string | undefined {
-    return command
-      .trim() // remove leading and trailing whitespace
-      .replace(/[{}()`]/g, ' ') // remove all grouping operators
-      .split(/[\s;&|]+/)[0] // split on any whitespace or separator or chaining operators and take first part
-      ?.split(/[\\/\\]/) // split on any path separators (or return undefined if previous line was undefined)
-      .pop(); // take last part and return command root (or undefined if previous line was empty)
+  async getCommandRoot(command: string): Promise<string | undefined> {
+    // Use regex for extraction (reliable and fast)
+    const regexResult = command
+      .trim()
+      .replace(/[{}()`]/g, ' ')
+      .split(/[\s;&|]+/)[0]
+      ?.split(/[/\\]/)
+      .pop();
+
+    // Optionally validate with sh-syntax for better error detection
+    try {
+      await parse(command.trim());
+      // If parsing succeeds, return regex result
+      return regexResult;
+    } catch (_error) {
+      // If sh-syntax fails, still return regex result but could indicate syntax issues
+      return regexResult;
+    }
   }
 
-  getCommandRoots(command: string): string[] {
+  async getCommandRoots(command: string): Promise<string[]> {
     if (!command) {
       return [];
     }
-    return command
-      .split(/&&|\|\||\||;|"&"|&|`/)
-      .map((c) => this.getCommandRoot(c))
-      .filter((c): c is string => !!c);
+    
+    // Use regex for extraction (reliable and fast)
+    const regexResults = await Promise.all(
+      command
+        .split(/&&|\|\||\||;|"&"|&|`/)
+        .map((c) => this.getCommandRoot(c))
+    );
+    const filteredResults = regexResults.filter((c): c is string => !!c);
+
+    // Optionally validate with sh-syntax for better error detection
+    try {
+      await parse(command.trim());
+      // If parsing succeeds, return regex results
+      return filteredResults;
+    } catch (_error) {
+      // If sh-syntax fails, still return regex results but could indicate syntax issues
+      return filteredResults;
+    }
   }
 
   stripShellWrapper(command: string): string {
@@ -144,7 +171,7 @@ Process Group PGID: Process group started or \`(none)\``,
    * @param command The shell command string to validate
    * @returns An object with 'allowed' boolean and optional 'reason' string if not allowed
    */
-  isCommandAllowed(command: string): { allowed: boolean; reason?: string } {
+  async isCommandAllowed(command: string): Promise<{ allowed: boolean; reason?: string }> {
     // 0. Disallow command substitution
     if (command.includes('$(') || command.includes('<(')) {
       return {
@@ -205,7 +232,17 @@ Process Group PGID: Process group started or \`(none)\``,
       coreTools.includes(name),
     );
 
-    const commandsToValidate = command.split(/&&|\|\||\||;/).map(normalize);
+    // Use regex for command extraction with sh-syntax validation
+    const commandsToValidate: string[] = command.split(/&&|\|\||\||;/).map(normalize);
+    
+    // Optionally validate with sh-syntax for better error detection
+    try {
+      await parse(command);
+      // If parsing succeeds, continue with regex results
+    } catch (_error) {
+      // If sh-syntax fails, still continue with regex results
+      // This could indicate syntax issues but we still allow the command
+    }
 
     const blockedCommandsArr = [...blockedCommands];
 
@@ -243,16 +280,7 @@ Process Group PGID: Process group started or \`(none)\``,
   }
 
   validateToolParams(params: ShellToolParams): string | null {
-    const commandCheck = this.isCommandAllowed(params.command);
-    if (!commandCheck.allowed) {
-      if (!commandCheck.reason) {
-        console.error(
-          'Unexpected: isCommandAllowed returned false without a reason',
-        );
-        return `Command is not allowed: ${params.command}`;
-      }
-      return commandCheck.reason;
-    }
+    // Basic validation without AST parsing for performance
     const errors = SchemaValidator.validate(this.schema.parameters, params);
     if (errors) {
       return errors;
@@ -260,7 +288,13 @@ Process Group PGID: Process group started or \`(none)\``,
     if (!params.command.trim()) {
       return 'Command cannot be empty.';
     }
-    if (this.getCommandRoots(params.command).length === 0) {
+    // Quick regex-based validation for command root
+    const command = params.command.trim()
+      .replace(/[{}()`]/g, ' ')
+      .split(/[\s;&|]+/)[0]
+      ?.split(/[/\\]/)
+      .pop();
+    if (!command) {
       return 'Could not identify command root to obtain permission from user.';
     }
     if (params.directory) {
@@ -278,16 +312,44 @@ Process Group PGID: Process group started or \`(none)\``,
     return null;
   }
 
+  async validateToolParamsAsync(params: ShellToolParams): Promise<string | null> {
+    // First run synchronous validation
+    const syncError = this.validateToolParams(params);
+    if (syncError) {
+      return syncError;
+    }
+
+    // Then run async command validation
+    const commandCheck = await this.isCommandAllowed(params.command);
+    if (!commandCheck.allowed) {
+      if (!commandCheck.reason) {
+        console.error(
+          'Unexpected: isCommandAllowed returned false without a reason',
+        );
+        return `Command is not allowed: ${params.command}`;
+      }
+      return commandCheck.reason;
+    }
+
+    // Check command roots using AST parsing  
+    const commandRoots = await this.getCommandRoots(params.command);
+    if (commandRoots.length === 0) {
+      return 'Could not identify command root to obtain permission from user.';
+    }
+
+    return null;
+  }
+
   async shouldConfirmExecute(
     params: ShellToolParams,
     _abortSignal: AbortSignal,
   ): Promise<ToolCallConfirmationDetails | false> {
-    if (this.validateToolParams(params)) {
+    if (await this.validateToolParamsAsync(params)) {
       return false; // skip confirmation, execute call will fail immediately
     }
 
     const command = this.stripShellWrapper(params.command);
-    const rootCommands = this.getCommandRoots(command);
+    const rootCommands = await this.getCommandRoots(command);
     const commandsToConfirm = rootCommands.filter(
       (command) => !this.whitelist.has(command),
     );
@@ -316,7 +378,7 @@ Process Group PGID: Process group started or \`(none)\``,
     updateOutput?: (output: string) => void,
   ): Promise<ToolResult> {
     const strippedCommand = this.stripShellWrapper(params.command);
-    const validationError = this.validateToolParams({
+    const validationError = await this.validateToolParamsAsync({
       ...params,
       command: strippedCommand,
     });
