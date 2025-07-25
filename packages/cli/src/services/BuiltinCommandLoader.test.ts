@@ -30,7 +30,6 @@ import { CommandKind } from '../ui/commands/types.js';
 
 import { ideCommand } from '../ui/commands/ideCommand.js';
 import { restoreCommand } from '../ui/commands/restoreCommand.js';
-import { createMcpCommand } from '../ui/commands/mcpCommand.js';
 import { createPromptCommands } from '../ui/commands/promptCommands.js';
 
 vi.mock('../ui/commands/authCommand.js', () => ({ authCommand: {} }));
@@ -51,13 +50,13 @@ vi.mock('../ui/commands/quitCommand.js', () => ({ quitCommand: {} }));
 vi.mock('../ui/commands/statsCommand.js', () => ({ statsCommand: {} }));
 vi.mock('../ui/commands/themeCommand.js', () => ({ themeCommand: {} }));
 vi.mock('../ui/commands/toolsCommand.js', () => ({ toolsCommand: {} }));
+vi.mock('../ui/commands/mcpCommand.js', () => ({ mcpCommand: {} }));
 
 describe('BuiltinCommandLoader', () => {
   let mockConfig: Config;
 
   const ideCommandMock = ideCommand as Mock;
   const restoreCommandMock = restoreCommand as Mock;
-  const createMcpCommandMock = createMcpCommand as Mock;
   const createPromptCommandsMock = createPromptCommands as Mock;
 
   beforeEach(() => {
@@ -72,11 +71,6 @@ describe('BuiltinCommandLoader', () => {
     restoreCommandMock.mockReturnValue({
       name: 'restore',
       description: 'Restore command',
-      kind: CommandKind.BUILT_IN,
-    });
-    createMcpCommandMock.mockResolvedValue({
-      name: 'mcp',
-      description: 'MCP command',
       kind: CommandKind.BUILT_IN,
     });
     createPromptCommandsMock.mockResolvedValue({
@@ -94,8 +88,6 @@ describe('BuiltinCommandLoader', () => {
     expect(ideCommandMock).toHaveBeenCalledWith(mockConfig);
     expect(restoreCommandMock).toHaveBeenCalledTimes(1);
     expect(restoreCommandMock).toHaveBeenCalledWith(mockConfig);
-    expect(createMcpCommandMock).toHaveBeenCalledTimes(1);
-    expect(createMcpCommandMock).toHaveBeenCalledWith(mockConfig);
     expect(createPromptCommandsMock).toHaveBeenCalledTimes(1);
     expect(createPromptCommandsMock).toHaveBeenCalledWith(mockConfig);
   });
@@ -122,8 +114,6 @@ describe('BuiltinCommandLoader', () => {
     expect(ideCommandMock).toHaveBeenCalledWith(null);
     expect(restoreCommandMock).toHaveBeenCalledTimes(1);
     expect(restoreCommandMock).toHaveBeenCalledWith(null);
-    expect(createMcpCommandMock).toHaveBeenCalledTimes(1);
-    expect(createMcpCommandMock).toHaveBeenCalledWith(null);
     expect(createPromptCommandsMock).toHaveBeenCalledTimes(1);
     expect(createPromptCommandsMock).toHaveBeenCalledWith(null);
   });
