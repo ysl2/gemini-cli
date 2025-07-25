@@ -487,9 +487,6 @@ export async function discoverTools(
       );
       console.debug(`Discovered tool: ${funcDecl.name}`);
     }
-    if (discoveredTools.length === 0) {
-      throw Error('No enabled tools found');
-    }
     return discoveredTools;
   } catch (error) {
     throw new Error(`Error discovering tools: ${error}`);

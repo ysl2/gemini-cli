@@ -31,6 +31,7 @@ import { CommandKind } from '../ui/commands/types.js';
 import { ideCommand } from '../ui/commands/ideCommand.js';
 import { restoreCommand } from '../ui/commands/restoreCommand.js';
 import { createMcpCommand } from '../ui/commands/mcpCommand.js';
+import { createPromptCommands } from '../ui/commands/promptCommands.js';
 
 vi.mock('../ui/commands/authCommand.js', () => ({ authCommand: {} }));
 vi.mock('../ui/commands/bugCommand.js', () => ({ bugCommand: {} }));
@@ -57,6 +58,7 @@ describe('BuiltinCommandLoader', () => {
   const ideCommandMock = ideCommand as Mock;
   const restoreCommandMock = restoreCommand as Mock;
   const createMcpCommandMock = createMcpCommand as Mock;
+  const createPromptCommandsMock = createPromptCommands as Mock;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -77,6 +79,11 @@ describe('BuiltinCommandLoader', () => {
       description: 'MCP command',
       kind: CommandKind.BUILT_IN,
     });
+    createPromptCommandsMock.mockResolvedValue({
+      name: 'prompt',
+      description: 'prompt command',
+      kind: CommandKind.BUILT_IN,
+    });
   });
 
   it('should correctly pass the config object to command factory functions', async () => {
@@ -89,6 +96,8 @@ describe('BuiltinCommandLoader', () => {
     expect(restoreCommandMock).toHaveBeenCalledWith(mockConfig);
     expect(createMcpCommandMock).toHaveBeenCalledTimes(1);
     expect(createMcpCommandMock).toHaveBeenCalledWith(mockConfig);
+    expect(createPromptCommandsMock).toHaveBeenCalledTimes(1);
+    expect(createPromptCommandsMock).toHaveBeenCalledWith(mockConfig);
   });
 
   it('should filter out null command definitions returned by factories', async () => {
@@ -115,6 +124,8 @@ describe('BuiltinCommandLoader', () => {
     expect(restoreCommandMock).toHaveBeenCalledWith(null);
     expect(createMcpCommandMock).toHaveBeenCalledTimes(1);
     expect(createMcpCommandMock).toHaveBeenCalledWith(null);
+    expect(createPromptCommandsMock).toHaveBeenCalledTimes(1);
+    expect(createPromptCommandsMock).toHaveBeenCalledWith(null);
   });
 
   it('should return a list of all loaded commands', async () => {

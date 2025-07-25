@@ -12,7 +12,6 @@ import {
   MessageActionReturn,
 } from './types.js';
 import {
-  Config,
   DiscoveredMCPPrompt,
   DiscoveredMCPTool,
   getMCPDiscoveryState,
@@ -22,8 +21,6 @@ import {
   MCPServerStatus,
   mcpServerRequiresOAuth,
   getErrorMessage,
-  invokeMcpPrompt,
-  connectToMcpServer,
 } from '@google/gemini-cli-core';
 import open from 'open';
 
@@ -169,14 +166,14 @@ const getMcpStatus = async (
       const parts = [];
       if (serverTools.length > 0) {
         parts.push(
-          `${serverTools.length} ${serverTools.length === 1 ? 'tool' : 'tools'}`, 
+          `${serverTools.length} ${serverTools.length === 1 ? 'tool' : 'tools'}`,
         );
       }
       if (serverPrompts.length > 0) {
         parts.push(
           `${serverPrompts.length} ${
             serverPrompts.length === 1 ? 'prompt' : 'prompts'
-          }`, 
+          }`,
         );
       }
       if (parts.length > 0) {

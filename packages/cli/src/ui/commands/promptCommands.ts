@@ -46,7 +46,7 @@ export function createPromptCommands(config: Config | null): SlashCommand[] {
             const promptArgs = args.trim();
 
             const argValues: { [key: string]: string } = {};
-            // Arg parsing: --key="value" or --key=value
+            // arg parsing: --key="value" or --key=value
             const argRegex = /--([^=]+)=(?:"([^"]*)"|([^ ]*))/g;
             let match;
             while ((match = argRegex.exec(promptArgs)) !== null) {

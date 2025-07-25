@@ -45,7 +45,6 @@ export class BuiltinCommandLoader implements ICommandLoader {
    * @returns A promise that resolves to an array of `SlashCommand` objects.
    */
   async loadCommands(_signal: AbortSignal): Promise<SlashCommand[]> {
-    const promptCommands = await createPromptCommands(this.config);
     const allDefinitions: Array<SlashCommand | null> = [
       aboutCommand,
       authCommand,
@@ -68,7 +67,7 @@ export class BuiltinCommandLoader implements ICommandLoader {
       statsCommand,
       themeCommand,
       toolsCommand,
-      ...promptCommands,
+      ...createPromptCommands(this.config),
     ];
 
     return allDefinitions.filter((cmd): cmd is SlashCommand => cmd !== null);
