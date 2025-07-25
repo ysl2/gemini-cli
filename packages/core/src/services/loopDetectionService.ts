@@ -13,6 +13,8 @@ import { SchemaUnion, Type } from '@google/genai';
 
 const TOOL_CALL_LOOP_THRESHOLD = 5;
 const CONTENT_LOOP_THRESHOLD = 10;
+const CONTENT_CHUNK_SIZE = 50;
+const MAX_HISTORY_LENGTH = 1000;
 
 /**
  * The number of recent conversation turns to include in the history when asking the LLM to check for a loop.
@@ -42,8 +44,6 @@ const MIN_LLM_CHECK_INTERVAL = 5;
  */
 const MAX_LLM_CHECK_INTERVAL = 15;
 
-const SENTENCE_ENDING_PUNCTUATION_REGEX = /[.!?]+(?=\s|$)/;
-
 /**
  * Service for detecting and preventing infinite loops in AI responses.
  * Monitors tool call repetitions and content sentence repetitions.
@@ -57,9 +57,10 @@ export class LoopDetectionService {
   private toolCallRepetitionCount: number = 0;
 
   // Content streaming tracking
-  private lastRepeatedSentence: string = '';
-  private sentenceRepetitionCount: number = 0;
-  private partialContent: string = '';
+  private streamContentHistory = '';
+  private contentStats = new Map<string, number[]>();
+  private lastContentIndex = 0;
+  private loopDetected = false;
 
   // LLM loop track tracking
   private turnsInCurrentPrompt = 0;
@@ -82,17 +83,24 @@ export class LoopDetectionService {
    * @returns true if a loop is detected, false otherwise
    */
   addAndCheck(event: ServerGeminiStreamEvent): boolean {
+    if (this.loopDetected) {
+      return true;
+    }
+
     switch (event.type) {
       case GeminiEventType.ToolCallRequest:
         // content chanting only happens in one single stream, reset if there
         // is a tool call in between
-        this.resetSentenceCount();
-        return this.checkToolCallLoop(event.value);
+        this.resetContentTracking();
+        this.loopDetected = this.checkToolCallLoop(event.value);
+        break;
       case GeminiEventType.Content:
-        return this.checkContentLoop(event.value);
+        this.loopDetected = this.checkContentLoop(event.value);
+        break;
       default:
-        return false;
+        this.loopDetected = false;
     }
+    return this.loopDetected;
   }
 
   /**
@@ -141,47 +149,78 @@ export class LoopDetectionService {
   }
 
   private checkContentLoop(content: string): boolean {
-    this.partialContent += content;
+    this.streamContentHistory += content;
 
-    if (!SENTENCE_ENDING_PUNCTUATION_REGEX.test(this.partialContent)) {
-      return false;
+    if (this.streamContentHistory.length > MAX_HISTORY_LENGTH) {
+      const truncationAmount =
+        this.streamContentHistory.length - MAX_HISTORY_LENGTH;
+      this.streamContentHistory =
+        this.streamContentHistory.slice(truncationAmount);
+      this.lastContentIndex = Math.max(
+        0,
+        this.lastContentIndex - truncationAmount,
+      );
+
+      for (const hash of this.contentStats.keys()) {
+        const oldIndices = this.contentStats.get(hash)!;
+        const newIndices = oldIndices
+          .map((index) => index - truncationAmount)
+          .filter((index) => index >= 0);
+
+        if (newIndices.length > 0) {
+          this.contentStats.set(hash, newIndices);
+        } else {
+          this.contentStats.delete(hash);
+        }
+      }
     }
 
-    const completeSentences =
-      this.partialContent.match(/[^.!?]+[.!?]+(?=\s|$)/g) || [];
-    if (completeSentences.length === 0) {
-      return false;
-    }
+    while (
+      this.lastContentIndex + CONTENT_CHUNK_SIZE <=
+      this.streamContentHistory.length
+    ) {
+      const chunk = this.streamContentHistory.substring(
+        this.lastContentIndex,
+        this.lastContentIndex + CONTENT_CHUNK_SIZE,
+      );
+      const hash = createHash('sha256').update(chunk).digest('hex');
 
-    const lastSentence = completeSentences[completeSentences.length - 1];
-    const lastCompleteIndex = this.partialContent.lastIndexOf(lastSentence);
-    const endOfLastSentence = lastCompleteIndex + lastSentence.length;
-    this.partialContent = this.partialContent.slice(endOfLastSentence);
+      const indices = this.contentStats.get(hash);
 
-    for (const sentence of completeSentences) {
-      const trimmedSentence = sentence.trim();
-      if (trimmedSentence === '') {
-        continue;
-      }
-
-      if (this.lastRepeatedSentence === trimmedSentence) {
-        this.sentenceRepetitionCount++;
-      } else {
-        this.lastRepeatedSentence = trimmedSentence;
-        this.sentenceRepetitionCount = 1;
-      }
-
-      if (this.sentenceRepetitionCount >= CONTENT_LOOP_THRESHOLD) {
-        logLoopDetected(
-          this.config,
-          new LoopDetectedEvent(
-            LoopType.CHANTING_IDENTICAL_SENTENCES,
-            this.promptId,
-          ),
+      if (indices) {
+        // To prevent hash collisions, we still need to check the actual content
+        const originalChunk = this.streamContentHistory.substring(
+          indices[0],
+          indices[0] + CONTENT_CHUNK_SIZE,
         );
-        return true;
+
+        if (originalChunk === chunk) {
+          indices.push(this.lastContentIndex);
+
+          if (indices.length >= CONTENT_LOOP_THRESHOLD) {
+            const recentIndices = indices.slice(-CONTENT_LOOP_THRESHOLD);
+            const totalDistance =
+              recentIndices[recentIndices.length - 1] - recentIndices[0];
+            const avgDistance = totalDistance / (CONTENT_LOOP_THRESHOLD - 1);
+
+            if (avgDistance <= CONTENT_CHUNK_SIZE * 1.5) {
+              logLoopDetected(
+                this.config,
+                new LoopDetectedEvent(
+                  LoopType.CHANTING_IDENTICAL_SENTENCES,
+                  this.promptId,
+                ),
+              );
+              return true;
+            }
+          }
+        }
+      } else {
+        this.contentStats.set(hash, [this.lastContentIndex]);
       }
+      this.lastContentIndex++;
     }
+
     return false;
   }
 
@@ -261,8 +300,9 @@ Please analyze the conversation history to determine the possibility that the co
   reset(promptId: string): void {
     this.promptId = promptId;
     this.resetToolCallCount();
-    this.resetSentenceCount();
+    this.resetContentTracking();
     this.resetLlmCheckTracking();
+    this.loopDetected = false;
   }
 
   private resetToolCallCount(): void {
@@ -270,10 +310,12 @@ Please analyze the conversation history to determine the possibility that the co
     this.toolCallRepetitionCount = 0;
   }
 
-  private resetSentenceCount(): void {
-    this.lastRepeatedSentence = '';
-    this.sentenceRepetitionCount = 0;
-    this.partialContent = '';
+  private resetContentTracking(resetHistory = true): void {
+    if (resetHistory) {
+      this.streamContentHistory = '';
+    }
+    this.contentStats.clear();
+    this.lastContentIndex = 0;
   }
 
   private resetLlmCheckTracking(): void {
