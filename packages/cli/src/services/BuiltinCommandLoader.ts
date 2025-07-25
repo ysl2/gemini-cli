@@ -20,7 +20,7 @@ import { editorCommand } from '../ui/commands/editorCommand.js';
 import { extensionsCommand } from '../ui/commands/extensionsCommand.js';
 import { helpCommand } from '../ui/commands/helpCommand.js';
 import { ideCommand } from '../ui/commands/ideCommand.js';
-import { createMcpCommands } from '../ui/commands/mcpCommand.js';
+import { createMcpCommand } from '../ui/commands/mcpCommand.js';
 import { memoryCommand } from '../ui/commands/memoryCommand.js';
 import { privacyCommand } from '../ui/commands/privacyCommand.js';
 import { quitCommand } from '../ui/commands/quitCommand.js';
@@ -28,6 +28,7 @@ import { restoreCommand } from '../ui/commands/restoreCommand.js';
 import { statsCommand } from '../ui/commands/statsCommand.js';
 import { themeCommand } from '../ui/commands/themeCommand.js';
 import { toolsCommand } from '../ui/commands/toolsCommand.js';
+import { createPromptCommands } from '../ui/commands/promptCommands.js';
 
 /**
  * Loads the core, hard-coded slash commands that are an integral part
@@ -44,7 +45,7 @@ export class BuiltinCommandLoader implements ICommandLoader {
    * @returns A promise that resolves to an array of `SlashCommand` objects.
    */
   async loadCommands(_signal: AbortSignal): Promise<SlashCommand[]> {
-    const mcpCommands = createMcpCommands(this.config);
+    const promptCommands = await createPromptCommands(this.config);
     const allDefinitions: Array<SlashCommand | null> = [
       aboutCommand,
       authCommand,
@@ -59,14 +60,15 @@ export class BuiltinCommandLoader implements ICommandLoader {
       extensionsCommand,
       helpCommand,
       ideCommand(this.config),
-      ...mcpCommands,
       memoryCommand,
       privacyCommand,
+      createMcpCommand(),
       quitCommand,
       restoreCommand(this.config),
       statsCommand,
       themeCommand,
       toolsCommand,
+      ...promptCommands,
     ];
 
     return allDefinitions.filter((cmd): cmd is SlashCommand => cmd !== null);
