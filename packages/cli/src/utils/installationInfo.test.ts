@@ -108,7 +108,7 @@ describe('getInstallationInfo', () => {
 
     const info = getInstallationInfo(projectRoot, false);
 
-    expect(info.packageManager).toBe(PackageManager.NPX);
+    expect(info.packageManager).toBe(PackageManager.PNPX);
     expect(info.isGlobal).toBe(false);
     expect(info.updateMessage).toBe('Running via pnpx, update not applicable.');
   });
@@ -117,10 +117,13 @@ describe('getInstallationInfo', () => {
     const bunxPath = `/Users/test/.bun/install/cache/12345/bin/gemini`;
     process.argv[1] = bunxPath;
     mockedRealPathSync.mockReturnValue(bunxPath);
+    mockedExecSync.mockImplementation(() => {
+      throw new Error('Command failed');
+    });
 
     const info = getInstallationInfo(projectRoot, false);
 
-    expect(info.packageManager).toBe(PackageManager.NPX);
+    expect(info.packageManager).toBe(PackageManager.BUNX);
     expect(info.isGlobal).toBe(false);
     expect(info.updateMessage).toBe('Running via bunx, update not applicable.');
   });

@@ -13,7 +13,9 @@ export enum PackageManager {
   NPM = 'npm',
   YARN = 'yarn',
   PNPM = 'pnpm',
+  PNPX = 'pnpx',
   BUN = 'bun',
+  BUNX = 'bunx',
   HOMEBREW = 'homebrew',
   NPX = 'npx',
   UNKNOWN = 'unknown',
@@ -54,7 +56,7 @@ export function getInstallationInfo(
       };
     }
 
-    // Check for npx/pnpx/bunx
+    // Check for npx/pnpx
     if (
       realPath.includes(path.join('.npm', '_npx')) ||
       realPath.includes(path.join('npm', '_npx'))
@@ -67,16 +69,9 @@ export function getInstallationInfo(
     }
     if (realPath.includes(path.join('.pnpm', '_pnpx'))) {
       return {
-        packageManager: PackageManager.NPX,
+        packageManager: PackageManager.PNPX,
         isGlobal: false,
         updateMessage: 'Running via pnpx, update not applicable.',
-      };
-    }
-    if (realPath.includes(path.join('.bun', 'install', 'cache'))) {
-      return {
-        packageManager: PackageManager.NPX,
-        isGlobal: false,
-        updateMessage: 'Running via bunx, update not applicable.',
       };
     }
 
@@ -124,6 +119,13 @@ export function getInstallationInfo(
     }
 
     // Check for bun
+    if (realPath.includes(path.join('.bun', 'install', 'cache'))) {
+      return {
+        packageManager: PackageManager.BUNX,
+        isGlobal: false,
+        updateMessage: 'Running via bunx, update not applicable.',
+      };
+    }
     if (realPath.includes(path.join('.bun', 'bin'))) {
       const updateCommand = 'bun add -g @google/gemini-cli@latest';
       return {

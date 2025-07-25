@@ -84,7 +84,7 @@ import ansiEscapes from 'ansi-escapes';
 import { OverflowProvider } from './contexts/OverflowContext.js';
 import { ShowMoreLines } from './components/ShowMoreLines.js';
 import { PrivacyNotice } from './privacy/PrivacyNotice.js';
-import { updatEventEmitter } from '../utils/updateEventEmitter.js';
+import { updateEventEmitter } from '../utils/updateEventEmitter.js';
 
 const CTRL_EXIT_PROMPT_DURATION_MS = 1000;
 
@@ -161,16 +161,16 @@ const App = ({ config, settings, startupWarnings = [], version }: AppProps) => {
       );
     };
 
-    updatEventEmitter.on('update-received', handleUpdateRecieved);
-    updatEventEmitter.on('update-failed', handleUpdateFailed);
-    updatEventEmitter.on('update-success', handleUpdateSuccess);
-    updatEventEmitter.on('update-info', handleUpdateInfo);
+    updateEventEmitter.on('update-received', handleUpdateRecieved);
+    updateEventEmitter.on('update-failed', handleUpdateFailed);
+    updateEventEmitter.on('update-success', handleUpdateSuccess);
+    updateEventEmitter.on('update-info', handleUpdateInfo);
 
     return () => {
-      updatEventEmitter.off('update-received', handleUpdateRecieved);
-      updatEventEmitter.off('update-failed', handleUpdateFailed);
-      updatEventEmitter.off('update-success', handleUpdateSuccess);
-      updatEventEmitter.off('update-info', handleUpdateInfo);
+      updateEventEmitter.off('update-received', handleUpdateRecieved);
+      updateEventEmitter.off('update-failed', handleUpdateFailed);
+      updateEventEmitter.off('update-success', handleUpdateSuccess);
+      updateEventEmitter.off('update-info', handleUpdateInfo);
     };
   }, [addItem]);
 

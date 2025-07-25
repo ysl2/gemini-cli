@@ -10,4 +10,4 @@ import { EventEmitter } from 'events';
  * A shared event emitter for application-wide communication
  * between decoupled parts of the CLI.
  */
-export const updatEventEmitter = new EventEmitter();
+export const updateEventEmitter = new EventEmitter();

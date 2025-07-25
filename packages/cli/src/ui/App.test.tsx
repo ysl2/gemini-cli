@@ -24,7 +24,7 @@ import { StreamingState } from './types.js';
 import { Tips } from './components/Tips.js';
 import { checkForUpdates, UpdateInfo } from './utils/updateCheck.js';
 import { EventEmitter } from 'events';
-import { updatEventEmitter } from '../utils/updateEventEmitter.js';
+import { updateEventEmitter } from '../utils/updateEventEmitter.js';
 
 // Define a more complete mock server config based on actual Config
 interface MockServerConfig {
@@ -356,7 +356,7 @@ describe('App UI', () => {
       );
       currentUnmount = unmount;
 
-      updatEventEmitter.emit('update-success', info);
+      updateEventEmitter.emit('update-success', info);
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
@@ -386,7 +386,7 @@ describe('App UI', () => {
       );
       currentUnmount = unmount;
 
-      updatEventEmitter.emit('update-failed', info);
+      updateEventEmitter.emit('update-failed', info);
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
@@ -418,7 +418,7 @@ describe('App UI', () => {
 
       // We are testing the App's reaction to an `update-failed` event,
       // which is what should be emitted when a spawn error occurs elsewhere.
-      updatEventEmitter.emit('update-failed', info);
+      updateEventEmitter.emit('update-failed', info);
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
