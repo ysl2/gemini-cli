@@ -70,11 +70,13 @@ describe('BuiltinCommandLoader', () => {
       description: 'Restore command',
       kind: CommandKind.BUILT_IN,
     });
-    createPromptCommandsMock.mockReturnValue({
-      name: 'prompt',
-      description: 'prompt command',
-      kind: CommandKind.BUILT_IN,
-    });
+    createPromptCommandsMock.mockReturnValue([
+      {
+        name: 'prompt',
+        description: 'prompt command',
+        kind: CommandKind.BUILT_IN,
+      },
+    ]);
   });
 
   it('should correctly pass the config object to command factory functions', async () => {
