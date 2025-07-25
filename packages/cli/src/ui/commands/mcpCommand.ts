@@ -378,11 +378,7 @@ const authCommand: SlashCommand = {
       // Import dynamically to avoid circular dependencies
       const { MCPOAuthProvider } = await import('@google/gemini-cli-core');
 
-      // Create OAuth config for authentication (will be discovered automatically)
-      const oauthConfig = server.oauth || {
-        authorizationUrl: '', // Will be discovered automatically
-        tokenUrl: '', // Will be discovered automatically
-      };
+      const oauthConfig = server.oauth;
 
       // Pass the MCP server URL for OAuth discovery
       const mcpServerUrl = server.httpUrl || server.url;
