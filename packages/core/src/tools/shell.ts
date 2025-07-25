@@ -411,7 +411,7 @@ export class ShellTool extends BaseTool<ShellToolParams, ToolResult> {
     const command = this.stripShellWrapper(params.command);
     const rootCommands = [...new Set(this.getCommandRoots(command))];
     const commandsToConfirm = rootCommands.filter(
-      (command) => !this.whitelist.has(command),
+      (command) => !this.allowlist.has(command),
     );
 
     if (commandsToConfirm.length === 0) {
