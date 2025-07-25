@@ -30,6 +30,36 @@ export function createPromptCommands(config: Config | null): SlashCommand[] {
           name: commandName,
           description: prompt.description || `Invoke prompt ${prompt.name}`,
           kind: CommandKind.BUILT_IN,
+          subCommands: [
+            {
+              name: 'help',
+              description: 'Show help for this prompt',
+              kind: CommandKind.BUILT_IN,
+              action: async (): Promise<SlashCommandActionReturn> => {
+                if (!prompt.arguments || prompt.arguments.length === 0) {
+                  return {
+                    type: 'message',
+                    messageType: 'info',
+                    content: `Prompt "${prompt.name}" has no arguments.`,
+                  };
+                }
+
+                let helpMessage = `Arguments for "${prompt.name}":\n\n`;
+                for (const arg of prompt.arguments) {
+                  helpMessage += `  --${arg.name}\n`;
+                  if (arg.description) {
+                    helpMessage += `    ${arg.description}\n`;
+                  }
+                  helpMessage += `    (required: ${arg.required ? 'yes' : 'no'})\n\n`;
+                }
+                return {
+                  type: 'message',
+                  messageType: 'info',
+                  content: helpMessage,
+                };
+              },
+            },
+          ],
           action: async (
             context: CommandContext,
             args: string,
