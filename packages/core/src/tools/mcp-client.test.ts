@@ -63,23 +63,12 @@ describe('mcp-client', () => {
         request: mockRequest,
       } as unknown as ClientLib.Client;
 
-      const consoleLogSpy = vi
-        .spyOn(console, 'debug')
-        .mockImplementation(() => {
-          // no-op
-        });
-
       await discoverPrompts('test-server', mockedClient);
 
       expect(mockRequest).toHaveBeenCalledWith(
         { method: 'prompts/list', params: {} },
         expect.anything(),
       );
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        'Discovered prompts from test-server: prompt1, prompt2',
-      );
-
-      consoleLogSpy.mockRestore();
     });
 
     it('should do nothing if no prompts are discovered', async () => {

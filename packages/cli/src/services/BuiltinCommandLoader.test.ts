@@ -73,7 +73,7 @@ describe('BuiltinCommandLoader', () => {
       description: 'Restore command',
       kind: CommandKind.BUILT_IN,
     });
-    createPromptCommandsMock.mockResolvedValue({
+    createPromptCommandsMock.mockReturnValue({
       name: 'prompt',
       description: 'prompt command',
       kind: CommandKind.BUILT_IN,

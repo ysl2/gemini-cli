@@ -486,7 +486,6 @@ export async function discoverTools(
           mcpServerConfig.trust,
         ),
       );
-      console.debug(`Discovered tool: ${funcDecl.name}`);
     }
     return discoveredTools;
   } catch (error) {
@@ -513,14 +512,6 @@ export async function discoverPrompts(
 
     const prompts = response.prompts;
     mcpServerPromptsInternal.set(mcpServerName, prompts);
-
-    const promptNames = prompts.map((p) => p.name);
-
-    if (promptNames.length > 0) {
-      console.debug(
-        `Discovered prompts from ${mcpServerName}: ${promptNames.join(', ')}`,
-      );
-    }
   } catch (error) {
     mcpServerPromptsInternal.delete(mcpServerName);
     // It's okay if this fails, not all servers will have prompts.

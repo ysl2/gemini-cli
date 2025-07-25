@@ -77,7 +77,7 @@ export function createPromptCommands(config: Config | null): SlashCommand[] {
 
             const argValues: { [key: string]: string } = {};
             // arg parsing: --key="value" or --key=value
-            const argRegex = /--([^=]+)=(?:"([^"]*)"|([^ ]*))/g;
+            const argRegex = /--([^=]+)=(?:"((?:\\.|[^"\\])*)"|([^ ]*))/g;
             let match;
             while ((match = argRegex.exec(promptArgs)) !== null) {
               const key = match[1];
@@ -129,6 +129,15 @@ export function createPromptCommands(config: Config | null): SlashCommand[] {
                   type: 'message',
                   messageType: 'error',
                   content: `Error invoking prompt: ${result.error}`,
+                };
+              }
+
+              if (!result.messages?.[0]?.content?.text) {
+                return {
+                  type: 'message',
+                  messageType: 'error',
+                  content:
+                    'Received an empty or invalid prompt response from the server.',
                 };
               }
 
