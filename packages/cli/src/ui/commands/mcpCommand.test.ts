@@ -13,7 +13,6 @@ import {
   getMCPServerStatus,
   getMCPDiscoveryState,
   DiscoveredMCPTool,
-  getMCPServerPrompts,
 } from '@google/gemini-cli-core';
 import open from 'open';
 import { MessageActionReturn } from './types.js';
@@ -31,7 +30,6 @@ vi.mock('@google/gemini-cli-core', async (importOriginal) => {
     ...actual,
     getMCPServerStatus: vi.fn(),
     getMCPDiscoveryState: vi.fn(),
-    getMCPServerPrompts: vi.fn(),
     MCPOAuthProvider: {
       authenticate: vi.fn(),
     },
@@ -86,7 +84,6 @@ describe('mcpCommand', () => {
     vi.mocked(getMCPDiscoveryState).mockReturnValue(
       MCPDiscoveryState.COMPLETED,
     );
-    vi.mocked(getMCPServerPrompts).mockReturnValue([]);
 
     // Create mock config with all necessary methods
     mockConfig = {

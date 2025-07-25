@@ -19,6 +19,7 @@ import * as ClientLib from '@modelcontextprotocol/sdk/client/index.js';
 import * as GenAiLib from '@google/genai';
 import { GoogleCredentialProvider } from '../mcp/google-auth-provider.js';
 import { AuthProviderType } from '../config/config.js';
+import { PromptRegistry } from '../prompts/prompt-registry.js';
 
 vi.mock('@modelcontextprotocol/sdk/client/stdio.js');
 vi.mock('@modelcontextprotocol/sdk/client/index.js');
@@ -52,6 +53,10 @@ describe('mcp-client', () => {
   });
 
   describe('discoverPrompts', () => {
+    const mockedPromptRegistry = {
+      registerPrompt: vi.fn(),
+    } as unknown as PromptRegistry;
+
     it('should discover and log prompts', async () => {
       const mockRequest = vi.fn().mockResolvedValue({
         prompts: [
@@ -63,7 +68,7 @@ describe('mcp-client', () => {
         request: mockRequest,
       } as unknown as ClientLib.Client;
 
-      await discoverPrompts('test-server', mockedClient);
+      await discoverPrompts('test-server', mockedClient, mockedPromptRegistry);
 
       expect(mockRequest).toHaveBeenCalledWith(
         { method: 'prompts/list', params: {} },
@@ -85,7 +90,7 @@ describe('mcp-client', () => {
           // no-op
         });
 
-      await discoverPrompts('test-server', mockedClient);
+      await discoverPrompts('test-server', mockedClient, mockedPromptRegistry);
 
       expect(mockRequest).toHaveBeenCalledOnce();
       expect(consoleLogSpy).not.toHaveBeenCalled();
@@ -107,7 +112,7 @@ describe('mcp-client', () => {
           // no-op
         });
 
-      await discoverPrompts('test-server', mockedClient);
+      await discoverPrompts('test-server', mockedClient, mockedPromptRegistry);
 
       expect(mockRequest).toHaveBeenCalledOnce();
       expect(consoleErrorSpy).toHaveBeenCalledWith(

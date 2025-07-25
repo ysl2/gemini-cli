@@ -15,7 +15,6 @@ import {
   DiscoveredMCPPrompt,
   DiscoveredMCPTool,
   getMCPDiscoveryState,
-  getMCPServerPrompts,
   getMCPServerStatus,
   MCPDiscoveryState,
   MCPServerStatus,
@@ -103,7 +102,8 @@ const getMcpStatus = async (
       (tool) =>
         tool instanceof DiscoveredMCPTool && tool.serverName === serverName,
     ) as DiscoveredMCPTool[];
-    const serverPrompts = getMCPServerPrompts(serverName) || [];
+    const promptRegistry = await config.getPromptRegistry();
+    const serverPrompts = promptRegistry.getPromptsByServer(serverName) || [];
 
     const status = getMCPServerStatus(serverName);
 

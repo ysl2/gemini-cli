@@ -28,6 +28,7 @@ import { DiscoveredMCPTool } from './mcp-tool.js';
 
 import { FunctionDeclaration, mcpToTool } from '@google/genai';
 import { ToolRegistry } from './tool-registry.js';
+import { PromptRegistry } from '../prompts/prompt-registry.js';
 import { MCPOAuthProvider } from '../mcp/oauth-provider.js';
 import { OAuthUtils } from '../mcp/oauth-utils.js';
 import { MCPOAuthTokenStorage } from '../mcp/oauth-token-storage.js';
@@ -40,7 +41,10 @@ import { getErrorMessage } from '../utils/errors.js';
 
 export const MCP_DEFAULT_TIMEOUT_MSEC = 10 * 60 * 1000; // default to 10 minutes
 
-export type DiscoveredMCPPrompt = Prompt;
+export type DiscoveredMCPPrompt = Prompt & {
+  serverName: string;
+  invoke: (params: Record<string, unknown>) => Promise<GetPromptResult>;
+};
 
 /**
  * Enum representing the connection status of an MCP server
@@ -69,12 +73,7 @@ export enum MCPDiscoveryState {
 /**
  * Map to track the status of each MCP server within the core package
  */
-const mcpServerStatusesInternal: Map<string, MCPServerStatus> = new Map();
-
-/**
- * Map to track discovered prompts for each MCP server
- */
-const mcpServerPromptsInternal: Map<string, DiscoveredMCPPrompt[]> = new Map();
+const serverStatuses: Map<string, MCPServerStatus> = new Map();
 
 /**
  * Track the overall MCP discovery state
@@ -123,7 +122,7 @@ function updateMCPServerStatus(
   serverName: string,
   status: MCPServerStatus,
 ): void {
-  mcpServerStatusesInternal.set(serverName, status);
+  serverStatuses.set(serverName, status);
   // Notify all listeners
   for (const listener of statusChangeListeners) {
     listener(serverName, status);
@@ -134,25 +133,14 @@ function updateMCPServerStatus(
  * Get the current status of an MCP server
  */
 export function getMCPServerStatus(serverName: string): MCPServerStatus {
-  return (
-    mcpServerStatusesInternal.get(serverName) || MCPServerStatus.DISCONNECTED
-  );
-}
-
-/**
- * Get the discovered prompts for an MCP server
- */
-export function getMCPServerPrompts(
-  serverName: string,
-): DiscoveredMCPPrompt[] | undefined {
-  return mcpServerPromptsInternal.get(serverName);
+  return serverStatuses.get(serverName) || MCPServerStatus.DISCONNECTED;
 }
 
 /**
  * Get all MCP server statuses
  */
 export function getAllMCPServerStatuses(): Map<string, MCPServerStatus> {
-  return new Map(mcpServerStatusesInternal);
+  return new Map(serverStatuses);
 }
 
 /**
@@ -335,6 +323,7 @@ export async function discoverMcpTools(
   mcpServers: Record<string, MCPServerConfig>,
   mcpServerCommand: string | undefined,
   toolRegistry: ToolRegistry,
+  promptRegistry: PromptRegistry,
   debugMode: boolean,
 ): Promise<void> {
   mcpDiscoveryState = MCPDiscoveryState.IN_PROGRESS;
@@ -347,6 +336,7 @@ export async function discoverMcpTools(
           mcpServerName,
           mcpServerConfig,
           toolRegistry,
+          promptRegistry,
           debugMode,
         ),
     );
@@ -390,6 +380,7 @@ export async function connectAndDiscover(
   mcpServerName: string,
   mcpServerConfig: MCPServerConfig,
   toolRegistry: ToolRegistry,
+  promptRegistry: PromptRegistry,
   debugMode: boolean,
 ): Promise<void> {
   updateMCPServerStatus(mcpServerName, MCPServerStatus.CONNECTING);
@@ -406,7 +397,6 @@ export async function connectAndDiscover(
       mcpClient.onerror = (error) => {
         console.error(`MCP ERROR (${mcpServerName}):`, error.toString());
         updateMCPServerStatus(mcpServerName, MCPServerStatus.DISCONNECTED);
-        mcpServerPromptsInternal.delete(mcpServerName);
         if (mcpServerName === IDE_SERVER_NAME) {
           ideContext.clearOpenFilesContext();
         }
@@ -421,7 +411,7 @@ export async function connectAndDiscover(
         );
       }
 
-      await discoverPrompts(mcpServerName, mcpClient);
+      await discoverPrompts(mcpServerName, mcpClient, promptRegistry);
 
       const tools = await discoverTools(
         mcpServerName,
@@ -503,6 +493,7 @@ export async function discoverTools(
 export async function discoverPrompts(
   mcpServerName: string,
   mcpClient: Client,
+  promptRegistry: PromptRegistry,
 ): Promise<void> {
   try {
     const response = await mcpClient.request(
@@ -510,10 +501,15 @@ export async function discoverPrompts(
       ListPromptsResultSchema,
     );
 
-    const prompts = response.prompts;
-    mcpServerPromptsInternal.set(mcpServerName, prompts);
+    for (const prompt of response.prompts) {
+      promptRegistry.registerPrompt({
+        ...prompt,
+        serverName: mcpServerName,
+        invoke: (params: Record<string, unknown>) =>
+          invokeMcpPrompt(mcpServerName, mcpClient, prompt.name, params),
+      });
+    }
   } catch (error) {
-    mcpServerPromptsInternal.delete(mcpServerName);
     // It's okay if this fails, not all servers will have prompts.
     // Don't log an error if the method is not found, which is a common case.
     if (
