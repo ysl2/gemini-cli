@@ -7,7 +7,7 @@
 import { fileURLToPath } from 'url';
 import {
   Config,
-  ideModeManager,
+  ideClient,
   IDEConnectionStatus,
 } from '@google/gemini-cli-core';
 import {
@@ -53,7 +53,8 @@ export const ideCommand = (config: Config | null): SlashCommand | null => {
         description: 'check status of IDE integration',
         kind: CommandKind.BUILT_IN,
         action: (_context: CommandContext): SlashCommandActionReturn => {
-          switch (ideModeManager.getConnectionStatus()) {
+          const connection = ideClient.getConnectionStatus();
+          switch (connection.status) {
             case IDEConnectionStatus.Connected:
               return {
                 type: 'message',
@@ -66,12 +67,17 @@ export const ideCommand = (config: Config | null): SlashCommand | null => {
                 messageType: 'info',
                 content: `🟡 Connecting...`,
               } as const;
-            default:
+            default: {
+              let content = `🔴 Disconnected`;
+              if (connection.details) {
+                content += `: ${connection.details}`;
+              }
               return {
                 type: 'message',
                 messageType: 'error',
-                content: `🔴 Disconnected`,
+                content,
               } as const;
+            }
           }
         },
       },

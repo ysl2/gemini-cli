@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-  ideContext,
-  OpenFilesNotificationSchema,
-} from '../services/ideContext.js';
+import { ideContext, OpenFilesNotificationSchema } from '../ide/ideContext.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
@@ -26,13 +23,13 @@ export enum IDEConnectionStatus {
 /**
  * Manages the connection to and interaction with the IDE server.
  */
-export class IdeModeManager {
+export class IdeClient {
   client: Client | undefined = undefined;
   connectionStatus: IDEConnectionStatus = IDEConnectionStatus.Disconnected;
 
   constructor() {
     this.connectToMcpServer().catch((err) => {
-      logger.debug('Failed to initialize IdeModeManager:', err);
+      logger.debug('Failed to initialize IdeClient:', err);
     });
   }
   getConnectionStatus(): IDEConnectionStatus {
@@ -53,6 +50,7 @@ export class IdeModeManager {
     try {
       this.client = new Client({
         name: 'streamable-http-client',
+        // TODO(#3487): use the CLI version here.
         version: '1.0.0',
       });
       const transport = new StreamableHTTPClientTransport(
@@ -65,6 +63,17 @@ export class IdeModeManager {
           ideContext.setOpenFilesContext(notification.params);
         },
       );
+      this.client.onerror = (error) => {
+        logger.debug('IDE MCP client error:', error);
+        this.connectionStatus = IDEConnectionStatus.Disconnected;
+        ideContext.clearOpenFilesContext();
+      };
+      this.client.onclose = () => {
+        logger.debug('IDE MCP client connection closed.');
+        this.connectionStatus = IDEConnectionStatus.Disconnected;
+        ideContext.clearOpenFilesContext();
+      };
+
       this.connectionStatus = IDEConnectionStatus.Connected;
     } catch (error) {
       this.connectionStatus = IDEConnectionStatus.Disconnected;
@@ -73,4 +82,4 @@ export class IdeModeManager {
   }
 }
 
-export const ideModeManager = new IdeModeManager();
+export const ideClient = new IdeClient();

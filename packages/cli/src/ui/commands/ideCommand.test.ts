@@ -19,7 +19,7 @@ import { type Config } from '@google/gemini-cli-core';
 import * as child_process from 'child_process';
 import { glob } from 'glob';
 
-import { ideModeManager } from '@google/gemini-cli-core';
+import { ideClient } from '@google/gemini-cli-core';
 import { IDEConnectionStatus } from '@google/gemini-cli-core/index.js';
 
 vi.mock('child_process');
@@ -60,7 +60,7 @@ describe('ideCommand', () => {
     execSyncSpy = vi.spyOn(child_process, 'execSync');
     globSyncSpy = vi.spyOn(glob, 'sync');
     platformSpy = vi.spyOn(process, 'platform', 'get');
-    getConnectionStatusSpy = vi.mocked(ideModeManager.getConnectionStatus);
+    getConnectionStatusSpy = vi.mocked(ideClient.getConnectionStatus);
   });
 
   afterEach(() => {
@@ -89,7 +89,9 @@ describe('ideCommand', () => {
     });
 
     it('should show connected status', () => {
-      getConnectionStatusSpy.mockReturnValue(IDEConnectionStatus.Connected);
+      getConnectionStatusSpy.mockReturnValue({
+        status: IDEConnectionStatus.Connected,
+      });
       const command = ideCommand(mockConfig);
       const result = command!.subCommands![0].action!(mockContext, '');
       expect(getConnectionStatusSpy).toHaveBeenCalled();
@@ -101,7 +103,9 @@ describe('ideCommand', () => {
     });
 
     it('should show connecting status', () => {
-      getConnectionStatusSpy.mockReturnValue(IDEConnectionStatus.Connecting);
+      getConnectionStatusSpy.mockReturnValue({
+        status: IDEConnectionStatus.Connecting,
+      });
       const command = ideCommand(mockConfig);
       const result = command!.subCommands![0].action!(mockContext, '');
       expect(getConnectionStatusSpy).toHaveBeenCalled();
@@ -111,8 +115,10 @@ describe('ideCommand', () => {
         content: `🟡 Connecting...`,
       });
     });
-    it('should show connecting status', () => {
-      getConnectionStatusSpy.mockReturnValue(IDEConnectionStatus.Disconnected);
+    it('should show disconnected status', () => {
+      getConnectionStatusSpy.mockReturnValue({
+        status: IDEConnectionStatus.Disconnected,
+      });
       const command = ideCommand(mockConfig);
       const result = command!.subCommands![0].action!(mockContext, '');
       expect(getConnectionStatusSpy).toHaveBeenCalled();
@@ -120,6 +126,22 @@ describe('ideCommand', () => {
         type: 'message',
         messageType: 'error',
         content: `🔴 Disconnected`,
+      });
+    });
+
+    it('should show disconnected status with details', () => {
+      const details = 'Something went wrong';
+      getConnectionStatusSpy.mockReturnValue({
+        status: IDEConnectionStatus.Disconnected,
+        details,
+      });
+      const command = ideCommand(mockConfig);
+      const result = command!.subCommands![0].action!(mockContext, '');
+      expect(getConnectionStatusSpy).toHaveBeenCalled();
+      expect(result).toEqual({
+        type: 'message',
+        messageType: 'error',
+        content: `🔴 Disconnected: ${details}`,
       });
     });
   });
