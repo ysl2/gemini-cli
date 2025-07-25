@@ -98,7 +98,7 @@ export class LoopDetectionService {
         this.loopDetected = this.checkContentLoop(event.value);
         break;
       default:
-        this.loopDetected = false;
+        break;
     }
     return this.loopDetected;
   }
