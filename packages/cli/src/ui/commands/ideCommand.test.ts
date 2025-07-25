@@ -15,11 +15,10 @@ import {
 } from 'vitest';
 import { ideCommand } from './ideCommand.js';
 import { type CommandContext } from './types.js';
-import { type Config } from '@google/gemini-cli-core';
+import { ideClient, type Config } from '@google/gemini-cli-core';
 import * as child_process from 'child_process';
 import { glob } from 'glob';
 
-import { ideClient } from '@google/gemini-cli-core';
 import { IDEConnectionStatus } from '@google/gemini-cli-core/index.js';
 
 vi.mock('child_process');
@@ -29,8 +28,9 @@ vi.mock('@google/gemini-cli-core', async (importOriginal) => {
     await importOriginal<typeof import('@google/gemini-cli-core')>();
   return {
     ...original,
-    getMCPServerStatus: vi.fn(),
-    getMCPDiscoveryState: vi.fn(),
+    ideClient: {
+      getConnectionStatus: vi.fn(),
+    },
   };
 });
 
@@ -44,7 +44,6 @@ describe('ideCommand', () => {
   let execSyncSpy: MockInstance;
   let globSyncSpy: MockInstance;
   let platformSpy: MockInstance;
-  let getConnectionStatusSpy: MockInstance;
 
   beforeEach(() => {
     mockContext = {
@@ -60,7 +59,6 @@ describe('ideCommand', () => {
     execSyncSpy = vi.spyOn(child_process, 'execSync');
     globSyncSpy = vi.spyOn(glob, 'sync');
     platformSpy = vi.spyOn(process, 'platform', 'get');
-    getConnectionStatusSpy = vi.mocked(ideClient.getConnectionStatus);
   });
 
   afterEach(() => {
@@ -89,12 +87,12 @@ describe('ideCommand', () => {
     });
 
     it('should show connected status', () => {
-      getConnectionStatusSpy.mockReturnValue({
+      ideClient.getConnectionStatus.mockReturnValue({
         status: IDEConnectionStatus.Connected,
       });
       const command = ideCommand(mockConfig);
       const result = command!.subCommands![0].action!(mockContext, '');
-      expect(getConnectionStatusSpy).toHaveBeenCalled();
+      expect(ideClient.getConnectionStatus).toHaveBeenCalled();
       expect(result).toEqual({
         type: 'message',
         messageType: 'info',
@@ -103,12 +101,12 @@ describe('ideCommand', () => {
     });
 
     it('should show connecting status', () => {
-      getConnectionStatusSpy.mockReturnValue({
+      ideClient.getConnectionStatus.mockReturnValue({
         status: IDEConnectionStatus.Connecting,
       });
       const command = ideCommand(mockConfig);
       const result = command!.subCommands![0].action!(mockContext, '');
-      expect(getConnectionStatusSpy).toHaveBeenCalled();
+      expect(ideClient.getConnectionStatus).toHaveBeenCalled();
       expect(result).toEqual({
         type: 'message',
         messageType: 'info',
@@ -116,12 +114,12 @@ describe('ideCommand', () => {
       });
     });
     it('should show disconnected status', () => {
-      getConnectionStatusSpy.mockReturnValue({
+      ideClient.getConnectionStatus.mockReturnValue({
         status: IDEConnectionStatus.Disconnected,
       });
       const command = ideCommand(mockConfig);
       const result = command!.subCommands![0].action!(mockContext, '');
-      expect(getConnectionStatusSpy).toHaveBeenCalled();
+      expect(ideClient.getConnectionStatus).toHaveBeenCalled();
       expect(result).toEqual({
         type: 'message',
         messageType: 'error',
@@ -131,13 +129,13 @@ describe('ideCommand', () => {
 
     it('should show disconnected status with details', () => {
       const details = 'Something went wrong';
-      getConnectionStatusSpy.mockReturnValue({
+      ideClient.getConnectionStatus.mockReturnValue({
         status: IDEConnectionStatus.Disconnected,
         details,
       });
       const command = ideCommand(mockConfig);
       const result = command!.subCommands![0].action!(mockContext, '');
-      expect(getConnectionStatusSpy).toHaveBeenCalled();
+      expect(ideClient.getConnectionStatus).toHaveBeenCalled();
       expect(result).toEqual({
         type: 'message',
         messageType: 'error',

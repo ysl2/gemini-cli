@@ -14,6 +14,11 @@ const logger = {
     console.debug('[DEBUG] [ImportProcessor]', ...args),
 };
 
+export type IDEConnectionState = {
+  status: IDEConnectionStatus;
+  details?: string;
+};
+
 export enum IDEConnectionStatus {
   Connected = 'connected',
   Disconnected = 'disconnected',
@@ -32,8 +37,20 @@ export class IdeClient {
       logger.debug('Failed to initialize IdeClient:', err);
     });
   }
-  getConnectionStatus(): IDEConnectionStatus {
-    return this.connectionStatus;
+  getConnectionStatus(): {
+    status: IDEConnectionStatus;
+    details?: string;
+  } {
+    let details: string | undefined;
+    if (this.connectionStatus === IDEConnectionStatus.Disconnected) {
+      if (!process.env['GEMINI_CLI_IDE_SERVER_PORT']) {
+        details = 'GEMINI_CLI_IDE_SERVER_PORT environment variable is not set.';
+      }
+    }
+    return {
+      status: this.connectionStatus,
+      details,
+    };
   }
 
   async connectToMcpServer(): Promise<void> {
