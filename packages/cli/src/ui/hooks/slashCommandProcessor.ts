@@ -23,6 +23,7 @@ import { type CommandContext, type SlashCommand } from '../commands/types.js';
 import { CommandService } from '../../services/CommandService.js';
 import { BuiltinCommandLoader } from '../../services/BuiltinCommandLoader.js';
 import { FileCommandLoader } from '../../services/FileCommandLoader.js';
+import { McpPromptLoader } from '../../services/McpPromptLoader.js';
 
 /**
  * Hook to define and process slash commands (e.g., /help, /clear).
@@ -166,6 +167,7 @@ export const useSlashCommandProcessor = (
       const loaders = [
         new BuiltinCommandLoader(config),
         new FileCommandLoader(config),
+        new McpPromptLoader(config),
       ];
       const commandService = await CommandService.create(
         loaders,

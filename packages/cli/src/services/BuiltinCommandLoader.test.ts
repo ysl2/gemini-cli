@@ -19,9 +19,6 @@ vi.mock('../ui/commands/ideCommand.js', () => ({ ideCommand: vi.fn() }));
 vi.mock('../ui/commands/restoreCommand.js', () => ({
   restoreCommand: vi.fn(),
 }));
-vi.mock('../ui/commands/promptCommands.js', () => ({
-  createPromptCommands: vi.fn(),
-}));
 
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { BuiltinCommandLoader } from './BuiltinCommandLoader.js';
@@ -30,7 +27,6 @@ import { CommandKind } from '../ui/commands/types.js';
 
 import { ideCommand } from '../ui/commands/ideCommand.js';
 import { restoreCommand } from '../ui/commands/restoreCommand.js';
-import { createPromptCommands } from '../ui/commands/promptCommands.js';
 
 vi.mock('../ui/commands/authCommand.js', () => ({ authCommand: {} }));
 vi.mock('../ui/commands/bugCommand.js', () => ({ bugCommand: {} }));
@@ -63,7 +59,6 @@ describe('BuiltinCommandLoader', () => {
 
   const ideCommandMock = ideCommand as Mock;
   const restoreCommandMock = restoreCommand as Mock;
-  const createPromptCommandsMock = createPromptCommands as Mock;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -79,13 +74,6 @@ describe('BuiltinCommandLoader', () => {
       description: 'Restore command',
       kind: CommandKind.BUILT_IN,
     });
-    createPromptCommandsMock.mockReturnValue([
-      {
-        name: 'prompt',
-        description: 'prompt command',
-        kind: CommandKind.BUILT_IN,
-      },
-    ]);
   });
 
   it('should correctly pass the config object to command factory functions', async () => {
@@ -96,8 +84,6 @@ describe('BuiltinCommandLoader', () => {
     expect(ideCommandMock).toHaveBeenCalledWith(mockConfig);
     expect(restoreCommandMock).toHaveBeenCalledTimes(1);
     expect(restoreCommandMock).toHaveBeenCalledWith(mockConfig);
-    expect(createPromptCommandsMock).toHaveBeenCalledTimes(1);
-    expect(createPromptCommandsMock).toHaveBeenCalledWith(mockConfig);
   });
 
   it('should filter out null command definitions returned by factories', async () => {
@@ -122,8 +108,6 @@ describe('BuiltinCommandLoader', () => {
     expect(ideCommandMock).toHaveBeenCalledWith(null);
     expect(restoreCommandMock).toHaveBeenCalledTimes(1);
     expect(restoreCommandMock).toHaveBeenCalledWith(null);
-    expect(createPromptCommandsMock).toHaveBeenCalledTimes(1);
-    expect(createPromptCommandsMock).toHaveBeenCalledWith(null);
   });
 
   it('should return a list of all loaded commands', async () => {
