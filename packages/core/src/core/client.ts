@@ -42,6 +42,7 @@ import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { DEFAULT_GEMINI_FLASH_MODEL } from '../config/models.js';
 import { LoopDetectionService } from '../services/loopDetectionService.js';
 import { ideContext } from '../services/ideContext.js';
+import { jsonFromText } from 'extract-json-from-text';
 
 function isThinkingSupported(model: string) {
   if (model.startsWith('gemini-2.5')) return true;
@@ -420,7 +421,7 @@ This is the cursor position in the file:
         throw error;
       }
       try {
-        return JSON.parse(text);
+        return jsonFromText(text);
       } catch (parseError) {
         await reportError(
           parseError,

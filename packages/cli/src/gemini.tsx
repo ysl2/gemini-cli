@@ -136,6 +136,18 @@ export async function main() {
         'selectedAuthType',
         AuthType.CLOUD_SHELL,
       );
+    } else if (process.env.OPENAI_API_KEY && process.env.OPENAI_BASE_URL) {
+      settings.setValue(
+        SettingScope.User,
+        'selectedAuthType',
+        AuthType.USE_OPENAI,
+      );
+    } else if (process.env.DEEPSEEK_API_KEY) {
+      settings.setValue(
+        SettingScope.User,
+        'selectedAuthType',
+        AuthType.USE_DEEPSEEK,
+      );
     }
   }
 
@@ -331,14 +343,17 @@ async function validateNonInterActiveAuth(
   // making a special case for the cli. many headless environments might not have a settings.json set
   // so if GEMINI_API_KEY is set, we'll use that. However since the oauth things are interactive anyway, we'll
   // still expect that exists
-  if (!selectedAuthType && !process.env.GEMINI_API_KEY) {
+  const hasOpenAI = process.env.OPENAI_API_KEY && process.env.OPENAI_BASE_URL;
+  if (!selectedAuthType && !process.env.GEMINI_API_KEY && !hasOpenAI && !process.env.DEEPSEEK_API_KEY) {
     console.error(
       `Please set an Auth method in your ${USER_SETTINGS_PATH} OR specify GEMINI_API_KEY env variable file before running`,
     );
     process.exit(1);
   }
 
-  selectedAuthType = selectedAuthType || AuthType.USE_GEMINI;
+  selectedAuthType = selectedAuthType ||
+    (hasOpenAI ? AuthType.USE_OPENAI :
+     (process.env.DEEPSEEK_API_KEY ? AuthType.USE_DEEPSEEK : AuthType.USE_GEMINI));
   const err = validateAuthMethod(selectedAuthType);
   if (err != null) {
     console.error(err);
