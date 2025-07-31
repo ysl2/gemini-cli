@@ -66,6 +66,7 @@ export function createContentGeneratorConfig(
   const googleApiKey = process.env.GOOGLE_API_KEY || undefined;
   const googleCloudProject = process.env.GOOGLE_CLOUD_PROJECT || undefined;
   const googleCloudLocation = process.env.GOOGLE_CLOUD_LOCATION || undefined;
+  const geminiBaseUrl = process.env.GEMINI_BASE_URL || undefined;
   const openaiApiKey = process.env.OPENAI_API_KEY || undefined;
   const openaiBaseUrl = process.env.OPENAI_BASE_URL || undefined;
   const openaiModel = process.env.OPENAI_MODEL || undefined;
@@ -92,11 +93,15 @@ export function createContentGeneratorConfig(
   if (authType === AuthType.USE_GEMINI && geminiApiKey) {
     contentGeneratorConfig.apiKey = geminiApiKey;
     contentGeneratorConfig.vertexai = false;
-    getEffectiveModel(
-      contentGeneratorConfig.apiKey,
-      contentGeneratorConfig.model,
-      contentGeneratorConfig.proxy,
-    );
+    if (geminiBaseUrl) {
+      contentGeneratorConfig.baseUrl = geminiBaseUrl;
+    } else {
+      getEffectiveModel(
+        contentGeneratorConfig.apiKey,
+        contentGeneratorConfig.model,
+        contentGeneratorConfig.proxy,
+      );
+    }
 
     return contentGeneratorConfig;
   }
